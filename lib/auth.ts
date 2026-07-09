@@ -44,11 +44,12 @@ export function useAuth() {
   }, [user]);
 
   // Magic Link: 发送登录邮件(登录/注册同一入口)
-  const signInWithEmail = useCallback(async (email: string, redirectPath = '/app') => {
+  // 邮件链接必须指向 /api/auth/callback(那里做 code→session 交换), 经 next 参数告诉 callback 最终跳哪
+  const signInWithEmail = useCallback(async (email: string, finalPath = '/app') => {
     const supabase = getSupabaseBrowser();
     const { error } = await supabase.auth.signInWithOtp({
       email,
-      options: { emailRedirectTo: `${window.location.origin}${redirectPath}` },
+      options: { emailRedirectTo: `${window.location.origin}/api/auth/callback?next=${encodeURIComponent(finalPath)}` },
     });
     if (error) throw error;
   }, []);
