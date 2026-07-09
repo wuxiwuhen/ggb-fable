@@ -54,15 +54,16 @@ export function useAuth() {
     if (error) throw error;
   }, []);
 
-  // 邮箱+密码注册(若开启邮箱确认, 会发确认邮件, 点链接后才能登录)
+  // 邮箱+密码注册(若开启邮箱确认, 会发确认邮件; 若未开启则直接返回 session 登录)
   const signUpWithPassword = useCallback(async (email: string, password: string) => {
     const supabase = getSupabaseBrowser();
-    const { error } = await supabase.auth.signUp({
+    const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: { emailRedirectTo: `${window.location.origin}/api/auth/callback?next=${encodeURIComponent('/app')}` },
     });
     if (error) throw error;
+    return data;
   }, []);
 
   // 忘记密码: 发重置邮件(点链接后登录并跳设置页改新密码)

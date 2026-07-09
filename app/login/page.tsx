@@ -38,8 +38,13 @@ export default function LoginPage() {
         await signInWithPassword(email.trim(), password);
         window.location.href = '/app'; // 登录成功 → 工作台
       } else if (mode === 'register') {
-        await signUpWithPassword(email.trim(), password);
-        setInfo('注册成功! 请到邮箱点击确认链接完成激活, 然后回来登录。');
+        const data = await signUpWithPassword(email.trim(), password);
+        if (data?.session) {
+          // 未开启邮箱确认 → 已直接登录, 进工作台
+          window.location.href = '/app';
+        } else {
+          setInfo('注册成功! 请到邮箱点击确认链接完成激活, 然后回来登录。');
+        }
       } else {
         await resetPassword(email.trim());
         setInfo('重置邮件已发送, 请到邮箱查收(点链接后会进入设置页改新密码)。');
