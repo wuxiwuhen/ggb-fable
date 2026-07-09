@@ -1,0 +1,119 @@
+// 会话持久化(替代本地 log/jsonl) + 迭代数据收集
+// 所有写入用 service_role(绕过 RLS), 读自己走 RLS
+//
+// POST 多用途(body.action):
+//   create  { action, mode, model?, title? }              → 新建会话, 返回 { id }
+//   append  { action, sessionId, events: [...] }          → 追加事件为 messages 行(会话不存在自动建)
+//   update  { action, id, title? }                        → 改标题
+// GET:
+//   (无参)            → 当前用户会话列表(倒序)
+//   ?id=UUID          → 单会话全部 messages(按 id 升序)
+//
+// events → messages 映射: user_input→user, turn_end→assistant, tool_call→tool(含 args/result),
+//           其余(llm_request/response/ggb_exec/error/session_start)也存, 用于迭代分析
+
+import { getUserFromCookie, getSupabaseAdmin } from '@/lib/supabase';
+
+export const runtime = 'edge';
+
+export async function GET(req: Request) {
+  const user = await getUserFromCookie(req);
+  if (!user) return json(401, { error: '未登录' });
+  const url = new URL(req.url);
+  const id = url.searchParams.get('id');
+  const admin = getSupabaseAdmin();
+
+  if (id) {
+    // 鉴权: 确认会话属于该用户(走 service_role 查, 避免 RLS 复杂性)
+    const { data: sess } = await admin.from('sessions').select('id, user_id').eq('id', id).maybeSingle();
+    if (!sess || sess.user_id !== user.id) return json(404, { error: '会话不存在' });
+    const { data: msgs } = await admin.from('messages').select('*').eq('session_id', id).order('id', { ascending: true });
+    return json(200, { messages: msgs || [] });
+  }
+
+  const { data } = await admin
+    .from('sessions')
+    .select('id, title, mode, model, created_at, updated_at')
+    .eq('user_id', user.id)
+    .order('updated_at', { ascending: false });
+  return json(200, { sessions: data || [] });
+}
+
+export async function POST(req: Request) {
+  const user = await getUserFromCookie(req);
+  if (!user) return json(401, { error: '未登录' });
+
+  let body: any;
+  try { body = await req.json(); } catch { return json(400, { error: '请求体解析失败' }); }
+  const admin = getSupabaseAdmin();
+
+  if (body.action === 'create') {
+    const { data } = await admin.from('sessions').insert({
+      user_id: user.id, mode: body.mode || 'trial', model: body.model || null, title: body.title || null,
+    }).select('id').single();
+    return json(200, { id: data?.id });
+  }
+
+  if (body.action === 'update') {
+    const patch: any = { updated_at: new Date().toISOString() };
+    if (body.title != null) patch.title = body.title;
+    await admin.from('sessions').update(patch).eq('id', body.id).eq('user_id', user.id);
+    return json(200, { ok: true });
+  }
+
+  if (body.action === 'append') {
+    const events: any[] = body.events || [];
+    if (!events.length) return json(200, { ok: true, n: 0 });
+
+    // 确保 session 存在(不存在则建; 校验归属)
+    let sessionId: string = body.sessionId;
+    if (sessionId) {
+      const { data: existing } = await admin.from('sessions').select('id, user_id').eq('id', sessionId).maybeSingle();
+      if (existing && existing.user_id !== user.id) return json(403, { error: '无权操作' });
+      if (!existing) {
+        await admin.from('sessions').insert({ id: sessionId, user_id: user.id, mode: body.mode || 'trial' });
+      }
+    } else {
+      const { data: created } = await admin.from('sessions').insert({ user_id: user.id, mode: body.mode || 'trial' }).select('id').single();
+      sessionId = created?.id;
+    }
+
+    // events → messages 行
+    const rows = events.map((ev) => eventToRow(sessionId, user.id, ev));
+    if (rows.length) {
+      await admin.from('messages').insert(rows);
+    }
+    // 更新会话 updated_at
+    await admin.from('sessions').update({ updated_at: new Date().toISOString() }).eq('id', sessionId);
+    return json(200, { ok: true, n: rows.length, sessionId });
+  }
+
+  return json(400, { error: '未知 action' });
+}
+
+// 单事件 → messages 行
+function eventToRow(sessionId: string, userId: string, ev: any) {
+  const base: any = {
+    session_id: sessionId,
+    user_id: userId,
+    created_at: new Date(ev.ts || Date.now()).toISOString(),
+  };
+  switch (ev.type) {
+    case 'user_input':
+      return { ...base, role: 'user', content: ev.text || '', round: null };
+    case 'turn_end':
+      return { ...base, role: 'assistant', content: ev.finalText || '', round: null };
+    case 'tool_call':
+      return {
+        ...base, role: 'tool', tool_name: ev.name, tool_args: ev.args,
+        tool_result: ev.result, round: ev.round, content: null,
+      };
+    default:
+      // llm_request/llm_response/ggb_exec/error/session_start —— 存为 system, content 为 JSON 摘要(迭代分析用)
+      return { ...base, role: 'system', tool_name: ev.type, tool_args: null, tool_result: ev, round: ev.round || null, content: JSON.stringify(ev).slice(0, 8000) };
+  }
+}
+
+function json(status: number, payload: any): Response {
+  return new Response(JSON.stringify(payload), { status, headers: { 'Content-Type': 'application/json' } });
+}
