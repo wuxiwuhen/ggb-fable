@@ -15,7 +15,7 @@ interface UsageRow {
 }
 
 export default function AdminPage() {
-  const { user, loading } = useAuth();
+  const { user, loading, isAdmin } = useAuth();
   const [rows, setRows] = useState<UsageRow[]>([]);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
@@ -61,6 +61,18 @@ export default function AdminPage() {
 
   if (loading) return <main style={S.wrap}><p>加载中…</p></main>;
   if (!user) { if (typeof window !== 'undefined') window.location.href = '/login'; return null; }
+  // 前端提前拦截非管理员(后端 requireAdmin 仍是真鉴权, 这里只优化体验, 避免闪表头)
+  if (!isAdmin) {
+    return (
+      <main style={S.wrap}>
+        <div style={S.card}>
+          <h1 style={S.h1}>🛠 管理后台</h1>
+          <p style={S.error}>当前账号没有管理员权限。</p>
+          <a href="/app" style={S.back}>← 返回工作台</a>
+        </div>
+      </main>
+    );
+  }
 
   return (
     <main style={S.wrap}>
@@ -100,7 +112,7 @@ export default function AdminPage() {
           </tbody>
         </table>
 
-        <a href="/" style={S.back}>← 返回应用</a>
+        <a href="/app" style={S.back}>← 返回工作台</a>
       </div>
     </main>
   );

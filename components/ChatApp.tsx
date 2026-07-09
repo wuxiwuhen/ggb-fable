@@ -39,7 +39,7 @@ const EXAMPLES = [
 let msgId = 0;
 
 export default function ChatApp() {
-  const { user, signOut } = useAuth();
+  const { user, isAdmin, signOut } = useAuth();
   const config = useConfigStore();
 
   // ── 引擎实例(单例) ──
@@ -310,6 +310,7 @@ export default function ChatApp() {
               剩余 {remaining}/{usage.limit}
             </span>
           )}
+          {isAdmin && <a className="btn ghost" href="/admin">🛠 管理</a>}
           <a className="btn ghost" href="/settings">⚙ 设置</a>
           <button className="btn ghost" onClick={() => exportPng(ggbRef.current)}>⬇ PNG</button>
           <button className="btn ghost" onClick={() => signOut()}>退出</button>

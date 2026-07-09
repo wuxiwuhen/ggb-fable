@@ -112,7 +112,7 @@ export default function SettingsPage() {
           </label>
         </section>
 
-        <a href="/" style={S.back}>← 返回应用</a>
+        <a href="/app" style={S.back}>← 返回工作台</a>
       </div>
     </main>
   );

@@ -144,3 +144,39 @@ button { font-family: inherit; cursor: pointer; }
 ::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 4px; }
 ::-webkit-scrollbar-thumb:hover { background: #9ca3af; }
+
+/* ── 落地页 ── */
+@keyframes fadeInUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes float { 0%,100% { transform: translateY(0) rotate(0); } 50% { transform: translateY(-18px) rotate(8deg); } }
+@keyframes floatSlow { 0%,100% { transform: translateY(0); } 50% { transform: translateY(22px); } }
+
+.landing { position: relative; min-height: 100vh; overflow: hidden; background: linear-gradient(135deg,#f0f4ff,#fef6f0); }
+.landing .blob { position: absolute; border-radius: 50%; filter: blur(64px); opacity: 0.55; pointer-events: none; z-index: 0; }
+.landing .shape { position: absolute; opacity: 0.7; pointer-events: none; z-index: 0; }
+
+.landing-nav { position: relative; z-index: 2; display: flex; align-items: center; justify-content: space-between; padding: 18px 32px; }
+.landing-hero { position: relative; z-index: 2; text-align: center; padding: 56px 24px 72px; max-width: 820px; margin: 0 auto; }
+.landing-title { font-size: 48px; font-weight: 800; letter-spacing: -1px; margin: 14px 0; line-height: 1.2; background: linear-gradient(135deg,#4f46e5,#ec4899); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.landing-sub { font-size: 18px; color: #555; line-height: 1.7; margin-bottom: 32px; }
+.landing-cta { display: inline-flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
+.landing .btn.lg { padding: 14px 30px; font-size: 16px; border-radius: 10px; }
+.landing .btn.primary.lg { box-shadow: 0 8px 24px rgba(79,70,229,0.3); }
+
+.landing-features { position: relative; z-index: 2; display: grid; grid-template-columns: repeat(auto-fit,minmax(240px,1fr)); gap: 20px; max-width: 1000px; margin: 0 auto; padding: 0 24px 72px; }
+.feature-card { background: rgba(255,255,255,0.72); backdrop-filter: blur(8px); border: 1px solid rgba(255,255,255,0.8); border-radius: 16px; padding: 26px 22px; box-shadow: 0 4px 20px rgba(0,0,0,0.05); transition: transform 0.2s, box-shadow 0.2s; }
+.feature-card:hover { transform: translateY(-6px); box-shadow: 0 12px 32px rgba(79,70,229,0.12); }
+.feature-card .ico { font-size: 30px; }
+.feature-card h3 { margin: 12px 0 8px; font-size: 17px; }
+.feature-card p { margin: 0; color: #666; font-size: 14px; line-height: 1.6; }
+
+.landing-footer { position: relative; z-index: 2; text-align: center; color: #999; font-size: 13px; padding: 24px; }
+
+.fade-up { animation: fadeInUp 0.7s ease both; }
+.fade-up.d1 { animation-delay: 0.1s; }
+.fade-up.d2 { animation-delay: 0.2s; }
+.fade-up.d3 { animation-delay: 0.3s; }
+
+@media (max-width: 600px) {
+  .landing-title { font-size: 34px; }
+  .landing-hero { padding: 32px 18px 48px; }
+}

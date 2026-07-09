@@ -59,6 +59,7 @@ export default function LoginPage() {
 
         <div style={styles.footer}>
           <span>免费试用 5 次 · 也可配置自己的 API Key 无限使用</span>
+          <div style={{ marginTop: 10 }}><a href="/" style={{ color: '#4f46e5', fontSize: 13 }}>← 返回首页</a></div>
         </div>
       </div>
     </main>
