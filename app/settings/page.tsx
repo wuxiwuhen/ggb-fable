@@ -6,6 +6,7 @@
 import { useState } from 'react';
 import { useConfigStore, PRESETS } from '@/lib/config-store';
 import { useAuth } from '@/lib/auth';
+import { getSupabaseBrowser } from '@/lib/supabase';
 
 export default function SettingsPage() {
   const { user } = useAuth();
@@ -15,6 +16,18 @@ export default function SettingsPage() {
   const [baseUrl, setBaseUrl] = useState(config.getActiveByok()?.base_url || '');
   const [modelName, setModelName] = useState(config.getActiveByok()?.model_name || '');
   const [saved, setSaved] = useState(false);
+  const [newPassword, setNewPassword] = useState('');
+  const [pwMsg, setPwMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  async function changePassword() {
+    if (newPassword.length < 6) { setPwMsg({ ok: false, text: '密码至少 6 位' }); return; }
+    setPwMsg(null);
+    const { error } = await getSupabaseBrowser().auth.updateUser({ password: newPassword });
+    if (error) { setPwMsg({ ok: false, text: error.message }); return; }
+    setNewPassword('');
+    setPwMsg({ ok: true, text: '✓ 密码已更新' });
+    setTimeout(() => setPwMsg(null), 2000);
+  }
 
   function save() {
     if (!name) return;
@@ -110,6 +123,17 @@ export default function SettingsPage() {
           <label style={S.label}>最大工具轮数(单次请求, 默认 30)
             <input style={S.input} type="number" min={1} max={100} value={config.maxToolRounds} onChange={(e) => config.setMaxToolRounds(+e.target.value)} />
           </label>
+        </section>
+
+        <section style={S.section}>
+          <h2 style={S.h2}>修改密码</h2>
+          <label style={S.label}>新密码(至少 6 位)
+            <input style={S.input} type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="设置新密码" />
+          </label>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <button style={S.saveBtn} onClick={changePassword}>更新密码</button>
+            {pwMsg && <span style={{ color: pwMsg.ok ? '#16a34a' : '#dc2626', fontSize: 13 }}>{pwMsg.text}</span>}
+          </div>
         </section>
 
         <a href="/app" style={S.back}>← 返回工作台</a>

@@ -54,10 +54,23 @@ export function useAuth() {
     if (error) throw error;
   }, []);
 
-  // 邮箱+密码(备用, 若 Supabase 项目开了密码登录)
+  // 邮箱+密码注册(若开启邮箱确认, 会发确认邮件, 点链接后才能登录)
   const signUpWithPassword = useCallback(async (email: string, password: string) => {
     const supabase = getSupabaseBrowser();
-    const { error } = await supabase.auth.signUp({ email, password });
+    const { error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: { emailRedirectTo: `${window.location.origin}/api/auth/callback?next=${encodeURIComponent('/app')}` },
+    });
+    if (error) throw error;
+  }, []);
+
+  // 忘记密码: 发重置邮件(点链接后登录并跳设置页改新密码)
+  const resetPassword = useCallback(async (email: string) => {
+    const supabase = getSupabaseBrowser();
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/api/auth/callback?next=${encodeURIComponent('/settings')}`,
+    });
     if (error) throw error;
   }, []);
 
@@ -73,5 +86,5 @@ export function useAuth() {
     setUser(null);
   }, []);
 
-  return { user, loading, isAdmin, signInWithEmail, signUpWithPassword, signInWithPassword, signOut };
+  return { user, loading, isAdmin, signInWithEmail, signUpWithPassword, signInWithPassword, resetPassword, signOut };
 }
