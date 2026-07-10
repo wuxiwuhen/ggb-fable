@@ -232,7 +232,7 @@ export default function ChatApp() {
   const send = useCallback(async () => {
     const text = input.trim();
     if (!text || sending) return;
-    if (sessionsLoading || !currentSessionId) { setError('会话加载中, 请稍候'); return; }
+    if (sessionsLoading || !currentSessionId) return;
     if (!ggbRef.current || !agentRef.current) { setError('画布未就绪'); return; }
 
     // 校验
