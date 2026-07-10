@@ -67,6 +67,7 @@ export default function ChatApp() {
   const config = useConfigStore();
   const { sessions, currentSessionId, setSessions, setCurrent, upsert, patchCurrent } = useSessionStore();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sessionsLoading, setSessionsLoading] = useState(true);  // 首次加载中, 禁止发送
 
   // ── 引擎实例(单例) ──
   const loggerRef = useRef<Logger>(new Logger());
@@ -193,15 +194,17 @@ export default function ChatApp() {
         const res = await fetch('/api/sessions');
         const data = await res.json();
         const list: any[] = data.sessions || [];
-        if (cancelled) return;
+        if (cancelled) { setSessionsLoading(false); return; }
         setSessions(list);
         if (list.length === 0) {
-          await newSession();          // 无会话 → 建空会话
+          await newSession();
         } else {
-          await switchSession(list[0].id);   // 有 → 进最近会话
+          await switchSession(list[0].id);
         }
+        setSessionsLoading(false);
       } catch (e) {
         console.warn('加载会话失败:', e);
+        setSessionsLoading(false);
       }
     })();
     return () => { cancelled = true; };
@@ -229,6 +232,7 @@ export default function ChatApp() {
   const send = useCallback(async () => {
     const text = input.trim();
     if (!text || sending) return;
+    if (sessionsLoading || !currentSessionId) { setError('会话加载中, 请稍候'); return; }
     if (!ggbRef.current || !agentRef.current) { setError('画布未就绪'); return; }
 
     // 校验
