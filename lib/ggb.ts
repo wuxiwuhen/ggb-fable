@@ -144,6 +144,7 @@ export class GGB {
         scaleContainerClass: 'canvas-wrap',
         enableRightClick: true,
         enableShiftDragZoom: true,
+        showAnimationButton: true,
         errorDialogsActive: false,
         useBrowserForJS: true,
         language: 'zh',
