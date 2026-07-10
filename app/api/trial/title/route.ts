@@ -55,7 +55,7 @@ export async function POST(req: Request) {
 
   const data = await upstream.json();
   const title = (data.choices?.[0]?.message?.content || '').trim().slice(0, 15).replace(/["""''。]/g, '');
-  return json(200, { title: title || '新对话' });
+  return json(200, { title });
 }
 
 function json(status: number, payload: any): Response {
