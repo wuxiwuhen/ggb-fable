@@ -257,8 +257,9 @@ export default function ChatApp() {
     setInput('');
     setSending(true);
     // 首条消息后, 后台生成会话标题(当前会话无标题时)
-    if (currentSessionId && !useSessionStore.getState().sessions.find((s) => s.id === currentSessionId)?.title) {
-      generateTitle(text, currentSessionId);
+    const sid = useSessionStore.getState().currentSessionId;
+    if (sid && !useSessionStore.getState().sessions.find((s) => s.id === sid)?.title) {
+      generateTitle(text, sid);
     }
     loggerRef.current.userTurn(text);
 
