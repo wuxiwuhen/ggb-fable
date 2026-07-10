@@ -98,12 +98,19 @@ export default function ChatApp() {
     }
   }, [ggbReady, embedFn, ggbRef]);
 
-  // 画布自适应: 全屏/拖动分割线 → 通知 GGB applet resize
+  // 画布自适应: 全屏/拖动分割线 → GGB setSize(仅扩展像素区域, 不缩放坐标系)
   useEffect(() => {
-    requestAnimationFrame(() => {
-      window.dispatchEvent(new Event('resize'));
-    });
-  }, [canvasMaximized, chatWidth]);
+    const el = document.getElementById('ggb-container');
+    const api = ggbRef.current?.getAPI();
+    if (el && api) {
+      // 双 rAF: 等待布局计算 + 渲染完成
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          api.setSize?.(el.clientWidth, el.clientHeight);
+        });
+      });
+    }
+  }, [canvasMaximized, chatWidth, ggbReady]);
 
   // ── UI 状态 ──
   const [messages, setMessages] = useState<Msg[]>([]);
