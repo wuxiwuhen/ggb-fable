@@ -348,14 +348,15 @@ export default function ChatApp() {
       const cmds = res.commands.length ? res.commands : null;
       setRecipe(cmds);
       // 持久化 recipe 到当前会话(供切换重放)
-      if (cmds && currentSessionId) {
+      const sid = useSessionStore.getState().currentSessionId;
+      if (cmds && sid) {
         fetch('/api/sessions', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'update', id: currentSessionId, recipe: cmds }),
+          body: JSON.stringify({ action: 'update', id: sid, recipe: cmds }),
         }).catch(() => {});
       }
     } catch (e) { /* 静默 */ } finally { setRecipeLoading(false); }
-  }, [ggbRef, currentSessionId]);
+  }, [ggbRef]);
 
   // 后台生成标题并更新会话(trial 走 /api/trial/title 不扣次数; byok 用用户 key)
   const generateTitle = useCallback(async (text: string, sessionId: string) => {
