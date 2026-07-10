@@ -43,7 +43,7 @@ export async function POST(req: Request) {
         { role: 'user', content: text },
       ],
       temperature: 0.2,
-      max_tokens: 40,
+      max_tokens: 4000,
       stream: false,
     }),
   });
