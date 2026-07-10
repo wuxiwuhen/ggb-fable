@@ -24,11 +24,11 @@ export async function GET(req: Request) {
   const admin = getSupabaseAdmin();
 
   if (id) {
-    // 鉴权: 确认会话属于该用户(走 service_role 查, 避免 RLS 复杂性)
-    const { data: sess } = await admin.from('sessions').select('id, user_id').eq('id', id).maybeSingle();
+    // 鉴权 + 取完整 session(含 recipe); 走 service_role 查避免 RLS 复杂性
+    const { data: sess } = await admin.from('sessions').select('*').eq('id', id).maybeSingle();
     if (!sess || sess.user_id !== user.id) return json(404, { error: '会话不存在' });
     const { data: msgs } = await admin.from('messages').select('*').eq('session_id', id).order('id', { ascending: true });
-    return json(200, { messages: msgs || [] });
+    return json(200, { session: sess, messages: msgs || [] });
   }
 
   const { data } = await admin
@@ -57,6 +57,7 @@ export async function POST(req: Request) {
   if (body.action === 'update') {
     const patch: any = { updated_at: new Date().toISOString() };
     if (body.title != null) patch.title = body.title;
+    if (body.recipe !== undefined) patch.recipe = body.recipe;   // 历史会话: 持久化重建脚本
     await admin.from('sessions').update(patch).eq('id', body.id).eq('user_id', user.id);
     return json(200, { ok: true });
   }
