@@ -200,7 +200,6 @@ export default function ChatApp() {
         const list: any[] = data.sessions || [];
         if (cancelled) { setSessionsLoading(false); return; }
         setSessions(list);
-        await newSession();  // 始终新建空会话, 不自动恢复历史画布
         setSessionsLoading(false);
       } catch (e) {
         console.warn('加载会话失败:', e);
@@ -232,7 +231,8 @@ export default function ChatApp() {
   const send = useCallback(async () => {
     const text = input.trim();
     if (!text || sending) return;
-    if (sessionsLoading || !currentSessionId) return;
+    if (sessionsLoading) return;
+    if (!currentSessionId) await newSession();  // 首次发送 → 自动建会话
     if (!ggbRef.current || !agentRef.current) { setError('画布未就绪'); return; }
 
     // 校验
