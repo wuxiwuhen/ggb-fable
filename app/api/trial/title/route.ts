@@ -54,9 +54,10 @@ export async function POST(req: Request) {
   }
 
   const data = await upstream.json();
+  console.log('[title API] text:', text.slice(0, 80), '| choices:', JSON.stringify(data.choices).slice(0, 300));
   const raw = (data.choices?.[0]?.message?.content || '');
   const title = raw.trim().slice(0, 15).replace(/["""''。]/g, '');
-  console.log('[title API] text:', text.slice(0, 80), '| raw:', JSON.stringify(raw), '| title:', JSON.stringify(title));
+  console.log('[title API] raw:', JSON.stringify(raw), '| title:', JSON.stringify(title));
   return json(200, { title });
 }
 
