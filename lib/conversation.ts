@@ -42,3 +42,14 @@ export function extractReplayCommands(apiMsgs: ApiMessage[]): string[] {
   }
   return cmds;
 }
+
+// 重建执行历史: 从 role='system' + tool_name='ggb_exec' 的消息提取命令+状态
+import type { ExecLine } from '@/components/TracePanel';
+export function rebuildExecLines(apiMsgs: ApiMessage[]): ExecLine[] {
+  return apiMsgs
+    .filter((m) => m.role === 'system' && m.tool_name === 'ggb_exec' && m.tool_result)
+    .map((m) => {
+      const ev = m.tool_result as any;
+      return { cmd: ev.command || '', result: { ok: !!ev.ok, labels: ev.labels || '', error: ev.error || '' } };
+    });
+}

@@ -22,7 +22,7 @@ import MessageContent from './MessageContent';
 import TracePanel, { type TraceItem, type ExecLine } from './TracePanel';
 import CommandBar from './CommandBar';
 import { useSessionStore } from '@/lib/session-store';
-import { rebuildChatMessages, rebuildTrace, rebuildHistory, extractReplayCommands, type ApiMessage } from '@/lib/conversation';
+import { rebuildChatMessages, rebuildTrace, rebuildHistory, extractReplayCommands, rebuildExecLines, type ApiMessage } from '@/lib/conversation';
 import SessionSidebar from './SessionSidebar';
 
 interface Msg {
@@ -67,7 +67,9 @@ export default function ChatApp() {
   const config = useConfigStore();
   const { sessions, currentSessionId, setSessions, setCurrent, upsert, patchCurrent } = useSessionStore();
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [sessionsLoading, setSessionsLoading] = useState(true);  // 首次加载中, 禁止发送
+  const [sessionsLoading, setSessionsLoading] = useState(true);
+  const [canvasMaximized, setCanvasMaximized] = useState(false);
+  const [chatWidth, setChatWidth] = useState(44); // %
 
   // ── 引擎实例(单例) ──
   const loggerRef = useRef<Logger>(new Logger());
@@ -169,8 +171,7 @@ export default function ChatApp() {
       setMessages(chatMsgs.map((m, i) => ({ id: ++msgId, role: m.role, content: m.content })));
       setTrace(rebuildTrace(messages).map((t) => ({ id: ++msgId, ...t })));
       setHistory(rebuildHistory(messages));
-      setExecLines([]);
-      setCommandLog([]);
+      setExecLines(rebuildExecLines(messages));
       // 恢复画布: recipe 优先, 没有则回退重放 execute_command 命令
       await ggbRef.current?.clearAll();
       const recipe: string[] | null = session?.recipe ? (Array.isArray(session.recipe) ? session.recipe : null) : null;
@@ -179,6 +180,7 @@ export default function ChatApp() {
       if (cmds.length) {
         try { await ggbRef.current?.execBatch(cmds.join('\n')); } catch (e) { console.warn('画布重放失败:', e); }
       }
+      setCommandLog(ggbRef.current?.getCommandLog() || []);
       setCurrent(id);
       loggerRef.current.setSession(id);
     } catch (e) {
@@ -417,6 +419,19 @@ export default function ChatApp() {
   const remaining = config.mode === 'trial' ? (usage?.remaining ?? null) : null;
   const canSend = config.mode === 'trial' ? (isAdmin || remaining === null || remaining > 0) : config.isByokValid();
 
+  const onResizerDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startW = chatWidth;
+    const onMove = (ev: MouseEvent) => {
+      const dx = ((ev.clientX - startX) / window.innerWidth) * 100;
+      setChatWidth(Math.max(20, Math.min(70, startW + dx)));
+    };
+    const onUp = () => { document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp); };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  }, [chatWidth]);
+
   return (
     <div className="app">
       <header className="topbar">
@@ -424,6 +439,10 @@ export default function ChatApp() {
           <span className="logo">📐</span>
           <span className="title">GGB Fable</span>
           <button className="btn ghost" title="对话列表" onClick={() => setSidebarOpen(true)}>☰</button>
+          <button className="btn ghost" title="新建对话" onClick={newSession}>+</button>
+          <button className="btn ghost" title={canvasMaximized ? "显示对话" : "专注画布"} onClick={() => setCanvasMaximized(!canvasMaximized)}>
+            {canvasMaximized ? '◧' : '◨'}
+          </button>
         </div>
         <div className="top-actions">
           {/* 模式切换 */}
@@ -448,7 +467,7 @@ export default function ChatApp() {
 
       <SessionSidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} onNew={newSession} onSwitch={switchSession} />
       <main className="layout">
-        <section className="pane chat-pane">
+        <section className="pane chat-pane" style={canvasMaximized ? { display: 'none' } : { width: `${chatWidth}%` }}>
           <CommandBar
             commandLog={commandLog}
             recipe={recipe}
@@ -510,6 +529,8 @@ export default function ChatApp() {
             </div>
           </div>
         </section>
+
+        {!canvasMaximized && <div className="pane-resizer" onMouseDown={onResizerDown} />}
 
         <section className="pane canvas-pane">
           <div className="canvas-wrap" ref={containerRef as any}>

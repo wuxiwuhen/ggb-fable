@@ -136,11 +136,15 @@ button { font-family: inherit; cursor: pointer; }
 .cmd-tab.active { background: #fff; font-weight: 600; }
 .cmd-list { max-height: 220px; overflow-y: auto; font-size: 12px; }
 .cmd-empty, .cmd-bar-hint { color: #aaa; padding: 6px 0; }
-.cmd-row { padding: 4px 8px; border-radius: 4px; margin-bottom: 3px; }
+.cmd-row { padding: 4px 8px; border-radius: 4px; margin-bottom: 3px; display: flex; gap: 6px; align-items: baseline; flex-wrap: wrap; }
 .cmd-row.ok { background: #f0fdf4; }
 .cmd-row.fail { background: #fef2f2; }
-.cmd-row code { font-family: 'SF Mono', Menlo, monospace; color: #333; }
-.cmd-meta { display: block; color: #666; margin-top: 2px; font-size: 11px; }
+.cmd-idx { color: #adb5bd; font-size: 11px; min-width: 18px; text-align: right; flex-shrink: 0; }
+.cmd-row code { font-family: 'SF Mono', Menlo, monospace; color: #333; flex: 1; min-width: 0; }
+.cmd-status { font-size: 11px; font-weight: 600; flex-shrink: 0; }
+.cmd-row.ok .cmd-status { color: #10b981; }
+.cmd-row.fail .cmd-status { color: #ef4444; }
+.cmd-meta { color: #868e96; font-size: 11px; }
 .recipe-editor {
   width: 100%; font-family: 'SF Mono', Menlo, monospace; font-size: 12px;
   border: 1px solid #ddd; border-radius: 6px; padding: 8px; resize: vertical;
@@ -149,6 +153,10 @@ button { font-family: inherit; cursor: pointer; }
 /* ── KaTeX 微调 ── */
 .katex { font-size: 1.05em; }
 .msg-content .katex-display { margin: 8px 0; overflow-x: auto; overflow-y: hidden; }
+
+/* ── 分割线(可拖动调整 chat/canvas 宽度) ── */
+.pane-resizer { width: 5px; background: #e5e7eb; cursor: col-resize; flex-shrink: 0; transition: background 0.15s; }
+.pane-resizer:hover { background: #4f46e5; }
 
 /* 滚动条 */
 ::-webkit-scrollbar { width: 8px; height: 8px; }
