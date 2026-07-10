@@ -27,6 +27,7 @@ create table if not exists public.sessions (
   mode text not null,                    -- 'trial' | 'byok'
   title text,
   model text,                            -- 用了哪个模型(trial) 或 BYOK 的 model_name
+  recipe jsonb,                          -- 该会话精简重建脚本命令数组(切换时重放恢复画布)
   created_at timestamptz default now(),
   updated_at timestamptz default now()
 );
@@ -164,3 +165,6 @@ security definer set search_path = public
 as $$
   update public.usage set trial_limit = new_limit, updated_at = now() where user_id = target_user;
 $$;
+
+-- ── 历史会话功能: 兼容已建库补 recipe 列 ──
+alter table public.sessions add column if not exists recipe jsonb;
