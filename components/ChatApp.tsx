@@ -98,19 +98,25 @@ export default function ChatApp() {
     }
   }, [ggbReady, embedFn, ggbRef]);
 
-  // 画布自适应: 全屏/拖动分割线 → GGB setSize(仅扩展像素区域, 不缩放坐标系)
+  // 画布自适应: 全屏/拖动分割线 → 记住坐标系 → resize → 恢复(仅扩展区域, 不缩放)
   useEffect(() => {
-    const el = document.getElementById('ggb-container');
     const api = ggbRef.current?.getAPI();
-    if (el && api) {
-      // 双 rAF: 等待布局计算 + 渲染完成
+    if (!api || !ggbReady) return;
+    // 记住当前视图的坐标系
+    const el = document.getElementById('ggb-container');
+    const w = el?.clientWidth || 600;
+    const h = el?.clientHeight || 500;
+    const xmin = api.getXcoord(0);
+    const xmax = api.getXcoord(w);
+    const ymin = api.getYcoord(h);
+    const ymax = api.getYcoord(0);
+    requestAnimationFrame(() => {
+      window.dispatchEvent(new Event('resize'));
       requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          api.setSize?.(el.clientWidth, el.clientHeight);
-        });
+        api.setCoordSystem?.(xmin, xmax, ymin, ymax);
       });
-    }
-  }, [canvasMaximized, chatWidth, ggbReady]);
+    });
+  }, [canvasMaximized, chatWidth]);
 
   // ── UI 状态 ──
   const [messages, setMessages] = useState<Msg[]>([]);
