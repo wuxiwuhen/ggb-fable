@@ -146,7 +146,7 @@ export class GGB {
         enableShiftDragZoom: true,
         errorDialogsActive: false,
         useBrowserForJS: true,
-        language: 'en',
+        language: 'zh',
         ...params,
         appletOnLoad: (api: GgbApi) => {
           this.applet = api || (window as any).ggbApplet;
