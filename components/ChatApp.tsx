@@ -137,8 +137,8 @@ export default function ChatApp() {
 
   // 新建空会话: create → 清空 state + 画布 → 设为当前
   const newSession = useCallback(async () => {
-    // 当前已是空画布+无消息 → 无需新建
-    if (messages.length === 0 && !ggbRef.current?.getCommandLog().length) return;
+    // 已有会话且当前是空画布+无消息 → 无需重复新建
+    if (currentSessionId && messages.length === 0 && !(ggbRef.current?.getCommandLog() || []).length) return;
     abortRef.current?.abort();
     setError('');
     const res = await fetch('/api/sessions', {
