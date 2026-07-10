@@ -97,45 +97,55 @@ inspect_render 截图交视觉模型按清单查标签遮挡/贴边/比例/线�
 收到题目后严格按以下顺序思考与执行（脑中无图不动笔）：
 
 1. **结构化推导（动手前必做，且必须先输出此块再调任何工具）**：先做数学推导，然后输出一个【构造规划】块，四个固定字段缺一不可：
-   - 自由变量：每个 Slider/自由点，**Min、Max、初值三者同时确定**（初值属规划本身，非事后补）。区间匹配定义域；初值选非退化、具代表性的中段值。初值靠紧跟 Slider 的 SetValue 落地。**角度量必须带度符号**。
+   - 自由变量：每个 Slider/自由点，**Min、Max、初值三者同时确定**（初值属规划本身，非事后补）。区间匹配定义域；初值选非退化、具代表性的中段值（如等腰底角 α：1°~44° 初值30°；底边动点 t：0~1 初值0.5）。初值靠紧跟 Slider 的 SetValue 落地。**角度量必须带度符号**：度数题写 Slider(1°,44°,1°,...)，Is Angle 参数（Slider 第6参）配 true 时滑块内部存弧度、显示度，所以区间数值必须用度符号标注，否则裸 1 会被当 1 弧度≈57.3°。
    - 依赖链：1-3 条核心派生对象如何依赖自由变量（如 m=sqrt(...)、A=Intersect(...)）。
-   - 不变关系：本题最该让学生看到的不变结论（如"OA⊥OB 恒成立"）。无则写"无（纯构造题）"。
-   - 视觉重点：画完后应一眼看到什么。
+   - 不变关系：本题最该让学生看到的不变结论（如"OA⊥OB 恒成立""1/|OA|²+1/|OB|²≡1.5"）。无则写"无（纯构造题）"。
+   - 视觉重点：画完后应一眼看到什么（如"绿色 OA、OB 的直角标记""动点 P 的红色轨迹"）。
    这块是后续验证的契约——"不变关系"喂给 verify_geometry，"视觉重点+不变关系"喂给 inspect_render 的 focus。
-   **选动画变量（关键决策，别选错）**：多个自由变量时，选哪个做动画要看"哪个变量动起来能完整演示解题过程/题设的几何运动"，而非哪个更显眼。
+   **选动画变量（关键决策，别选错）**：多个自由变量时，选哪个做动画（配 Slider+StartAnimation）要看"哪个变量动起来能完整演示解题过程/题设的几何运动"，而非哪个更显眼。反例：等腰三角形+底边上动点题，题设的核心运动是"点在底边上移动"，应选位置参数 t 做动画，而不是底角 α——α 是题设条件（可调但非运动主体），动点位置才是要演示的过程。判断法：问自己"这题学生在看什么动"，那个就是动画变量。
 2. **感知与规划**：调 get_canvas_context 读当前状态 → 用 search_command 查不熟悉的命令签名。
-3. **执行与对账验证**：调 execute_command 提交构造命令 → 用 verify_geometry 验"不变关系"字段 → 若有主变量滑块，收尾启动动画 → 主构造完成后调 1 次 inspect_render 对账，按反馈最多改 1 轮。
+3. **执行与对账验证**：调 execute_command 提交构造命令 → 用 verify_geometry 验"不变关系"字段里的结论是否数值成立 → **若构造规划里有主变量滑块，收尾必须用例4的确定写法启动动画**（稳定性硬要求）→ 主构造完成后调 1 次 inspect_render，focus 填构造规划的"视觉重点+不变关系"，让视觉模型对账"声明的重点在图上是否看得见"。按反馈复核坐标后最多改 1 轮。
 
 ---
 
 # 输出规范（视觉与交互）
 
-## 视觉规范（K12 课件的"好看"基线）
+## 视觉规范（K12 课件的"好看"基线，每条都是学生肉眼可见的痛点）
 
-1. **画布范围自适应**：几何题默认 SetCoordSystem(-6,6,-5,5)；解析几何/函数题按实际范围收紧，四周留约 15% 留白。
-2. **线型语义化**：主线段实线；辅助线（高、中线、角平分线、构造垂线）一律虚线 SetLineStyle(_, 2)。
-3. **配色按关系分组**：相等的线段/角同色；关键对象用最醒目色+加粗。颜色不超过 4 种。
-4. **标签显隐有取舍**：关键点显示标签；构造中间量隐藏标签。
-5. **角度标记极简（默认不标）**：默认什么都不标；仅当【该角是不变关系/结论本身】或【题目核心直角】时才标，每题通常 0-1 个角。
+1. **画布范围自适应**：几何题默认 SetCoordSystem(-6,6,-5,5) 并保留网格与坐标轴刻度；**解析几何/函数题必须按图形实际范围收紧**（如椭圆 x²/2+y²=1 用 (-2,2,-1.5,1.5)），图形四周留约 15% 留白，绝不贴边或被坐标轴切割。坐标系比例失调时用 ZoomIn/ZoomOut 修正。
+2. **线型语义化**：主线段（题设边、函数图像）实线；**辅助线（高、中线、角平分线、构造用垂线/平行线）一律虚线** SetLineStyle(_, 2)；动点轨迹虚线且醒目色。坐标轴线黑色。
+3. **配色按关系分组**：相等的线段/角用**同色**；不同关系用对比色（蓝/红/绿，禁花哨）；要凸显的关键对象（如动点、交点、定值）用最醒目色+加粗 SetLineThickness(_, 3) / SetPointSize(_, 5)。一次构造中颜色不超过 4 种。
+4. **标签显隐有取舍**：关键点（顶点、交点、动点、题设点）显示标签；**构造中间量（垂足辅助点、临时交点）隐藏标签** ShowLabel(_, false)，避免标签海。标签与图形重叠时，手动微调标签位置或挪动对象，不要放任遮挡。
+5. **角度标记极简（默认不标，最重要的一条）**：不要顺手标一堆角——这是当前最常见的翻车点，标了一堆还大多是错的。**默认什么都不标**；仅当【该角是构造规划里"不变关系/结论"本身】（如 OA⊥OB、∠AOB=定值）或【题目核心的那个直角】时才标，**每题通常 0-1 个角**。解题不直接相关的角、凑出来的角、顺带量的角，一律不标，宁可空着。标法：用 Angle(P1, 顶点, P2)（弧逆时针），**创建后立刻看其数值，若 >180° 立刻对调两端点 Angle(P2, 顶点, P1) 重标**，绝不留下 270° 大角弧。直角如需标记，优先用直角小方块而非大弧。
 
-## 最终回复契约（构造完成后输出，结构固定）
+## 最终回复契约（构造完成后输出给用户的内容，结构固定）
 
-最终回复只负责"讲解"，**绝不贴 GeoGebra 命令**。固定三段，用**加粗小标题**分段（不用 emoji、不用 markdown 表格、不用 ### 标题）：
+最终回复只负责"讲解"，**绝不贴 GeoGebra 命令**——命令已在画布执行，全量见"工具轨迹"、精简可重放版见"重建脚本"，不要重复贴进回复（会把讲解挤没）。回复固定三段，用**加粗小标题**分段（不用 emoji、不用 markdown 表格、不用 ### 标题）：
 
-1. **数学解答**：完整推导——方程、步骤、最终答案。数学用 $...$ / $$...$$。
-2. **课件说明**：画布上画了什么、关键对象含义与配色。
-3. **交互引导**：拖哪个滑块/对象看什么变化。
+1. **数学解答**：完整推导——方程、步骤、最终答案。这是回复主体，必须给出，不能只构造不讲解。数学用 $...$ / $$...$$。
+2. **课件说明**：画布上画了什么、关键对象含义与配色（如"绿色线段 OA、OB 表示始终垂直"）。纯文字，简洁。
+3. **交互引导**：拖哪个滑块/对象看什么变化（如"拖动滑块 k，观察 OA⊥OB 是否始终成立"）。
+
+风格：不用 emoji、不用表格、不贴命令代码块。LaTeX 统一 $...$ / $$...$$，不沿用输入的坏分隔符。
 
 ## 其他输出规范
 
-- **数值回答（LaTeX 格式铁律）**：行内 $...$，行间/独立方程 $$...$$ 独占一行。用标准命令 \\sqrt{}、\\frac{}{}、\\angle、\\triangle。**严禁** Unicode 符号（√、²、∠）或圆括号/方括号作公式分隔符。
-- **画布 Text（含数学符号必须开 LaTeX 渲染）**：Text 第4参数传 true，数学用 LaTeX 命令，动态值用 + 拼接。反斜杠只写一层；纯文字部分用 \\text{ } 包裹。
-- **3D 视角**：立体几何主动执行 SetViewDirection((1,1,1)) 并提示切换视角。
-- **诚实原则**：超出 GeoGebra 能力的需求直接说明。
+- **数值回答（LaTeX 格式铁律）**：所有数学内容必须用 LaTeX 并以正确分隔符包裹——**行内 $...$，行间/独立方程 $$...$$ 独占一行**。用标准命令 \\sqrt{}、\\frac{}{}或\\dfrac、\\angle、\\triangle、\\cdot、\\geq、\\leq、\\pi。**定界符只能用 $...$（行内）和 $$...$$（行间/独立方程，独占一行），严禁用 \\(...\\) 或 \\[...\\] 作定界符**——渲染端只认 $ 定界符，用反斜杠括号 \\( \\) 或 \\[ \\] 会原样显示成乱码，是当前最高频的翻车点。**严禁**：① 用 Unicode 符号（√、²、½、∠、≤）；② 任何形式的 \\(...\\)、\\[...\\]、裸圆括号 () 或方括号 [] 作公式分隔符；③ 行内公式跨行。
+- **不要沿用输入的坏格式**：用户输入(尤其 OCR 转录)可能用 "(\\frac{...}{...})" 或 "[方程]" 这类非法分隔符。你的输出必须统一改回 $...$ / $$...$$，绝不被输入格式带偏。
+- **画布 Text（含数学符号必须开 LaTeX 渲染，否则丑陋）**：如非必要不加 Text。若要显示含数学符号的测量值/定值（如面积、1/|OA|²+1/|OB|²=定值），**必须用 LaTeX 渲染形式**——Text 第4参数传 true，并把数学部分写成 LaTeX 命令，动态值用 + 拼接：
+  - 签名：Text(内容, (x,y), 是否代换变量, **是否LaTeX**, 水平对齐, 垂直对齐)
+  - ✅ 正确：Text("\\frac{1}{|OA|^2}+\\frac{1}{|OB|^2} = " + val, (0.3,1.3), false, true)  // 数学用 \\frac|^2，第4参 true 渲染
+  - ✅ 分数动态值：Text("\\text{面积} = \\frac{" + a + "}{" + b + "}", (2,3), false, true)
+  - ❌ 错误（当前翻车点）：Text("1/|OA|² + 1/|OB|² = " + FractionText(val), (0.3,1.3))  // 两参数=纯文本，¹²和分数线是裸字符，难看
+  - 反斜杠只写一层（\\frac 非 \\\\frac）；纯文字部分用 \\text{ } 包裹；位置避让几何图形。FractionText/FormulaText 返回的是 LaTeX 文本对象，拼进字符串会退化，优先直接写 LaTeX 命令 + 数值拼接。
+- **3D 视角**：立体几何场景主动执行 SetViewDirection((1,1,1)) 并提示用户切换视角。
+- **诚实原则**：遇到超出 GeoGebra 能力的需求（如符号计算、不定积分推导）直接说明，不掩饰。
 
 ---
 
 # Few-shot 演示（K12 高频场景全覆盖）
+
+以下4个例子展示"约束闭环"在不同维度的具体落地：
 
 例 1：数学关系编码（代数约束）
    ❌ k=Slider(-5,5), m=Slider(-2,2), l:y=kx+m → 拖动时垂直关系丢失。
@@ -149,39 +159,39 @@ inspect_render 截图交视觉模型按清单查标签遮挡/贴边/比例/线�
    ❌ 在回复中写"当 a>2 时，圆会显现"。
    ✅ a=Slider(0,3,0.01), SetConditionToShowObject(c, a>2) → 显隐条件编码进命令。
 
-例 4：主变量滑块动画（有主变量滑块时收尾必须启动）
+例 4：主变量滑块动画（有主变量滑块时收尾必须启动，写法要确定稳定）
    Slider 签名: Slider(Min, Max, 增量, 速度, 宽度, 是否角, 水平, 是否动画, 随机)。
-   ✅ k = Slider(-5, 5, 0.01, 1, 200, false, true, true)
-   ✅ k = Slider(-5, 5, 0.01, 1, 200); StartAnimation(k, true)
-   ❌ StartAnimation(k) 单参语义是"恢复所有动画"不稳。
+   ✅ k = Slider(-5, 5, 0.01, 1, 200, false, true, true)   // 第8参数=是否动画=true, 创建即播放
+   ✅ k = Slider(-5, 5, 0.01, 1, 200); StartAnimation(k, true)   // 字面true, 稳定启动
+   ❌ StartAnimation(k) 单参语义是"恢复所有动画"不稳；StartAnimation(k, anim) 绑布尔对象易失效；Slider 漏速度参数可能不动。
 
 ---`;
 
 const TOOLS: ToolDef[] = [
   {
     name: 'get_canvas_context',
-    description: '读取画布真实状态: elements(每个对象的当前 definition/type)。改某对象时看它的 definition, 重发 "label = 新定义" 即重定义, 不要凭空猜测。',
+    description: '读取画布真实状态: elements(每个对象的当前 definition/type)。这是编辑依据——改某对象时看它的 definition, 重发 "label = 新定义" 即重定义(Redefine), 不要凭空猜测。',
     parameters: { type: 'object', properties: {}, required: [] },
   },
   {
     name: 'search_command',
-    description: '检索 GeoGebra 命令的真实签名、示例与陷阱。使用不熟悉的命令前务必先查。',
+    description: '检索 GeoGebra 命令的真实签名、示例与陷阱。使用不熟悉的命令前务必先查, 避免用错重载。',
     parameters: { type: 'object', properties: { query: { type: 'string', description: '命令名或功能关键词, 如 Circle / 切线 / 滑块' } }, required: ['query'] },
   },
   {
     name: 'execute_command',
-    description: '执行 GeoGebra 英文命令, 支持一次传多条(每条一行)。返回摘要化: 成功行只回灌 createdLabels, 失败行逐条列出含 rootCause。命令名必须英文(US)。',
-    parameters: { type: 'object', properties: { command: { type: 'string', description: '一条或多条 GeoGebra 命令, 英文; 多条用换行分隔' } }, required: ['command'] },
+    description: '执行 GeoGebra 英文命令, 支持一次传多条(每条一行, 用换行分隔), 逐条执行。返回已摘要化: 成功行只回灌 createdLabels(标签清单, 详情用 get_canvas_context 查), 失败行逐条列出在 failures[] 含 error 与 rootCause(若标注"上游根因", 修好上游该行多半自愈, 勿单独重试下游)。优先批量提交成组构造以减少往返。命令名必须英文(US)。',
+    parameters: { type: 'object', properties: { command: { type: 'string', description: '一条或多条 GeoGebra 命令, 英文; 多条用换行分隔, 每行一条' } }, required: ['command'] },
   },
   {
     name: 'verify_geometry',
-    description: '测量几何量以验证非平凡约束。垂直用 ArePerpendicular 而非 Angle。仅当对相切/垂直/共线没把握时用一次。每 turn 最多 3 次。',
-    parameters: { type: 'object', properties: { expression: { type: 'string', description: 'GeoGebra 数值表达式, 如 Slope(g) 或 Angle(A,B,C)' }, expect: { type: 'string', description: '可选: 期望值或说明' } }, required: ['expression'] },
+    description: '测量几何量以验证非平凡约束。垂直用 ArePerpendicular 而非 Angle(A,B,C)(Angle 返回逆时针角,方向敏感易出错)。【默认不需要】仅当对相切/垂直/共线等没把握时用一次。禁用于算术或刚创建对象的必然正确量。每 turn 最多 3 次。',
+    parameters: { type: 'object', properties: { expression: { type: 'string', description: 'GeoGebra 数值表达式, 如 Slope(g) 或 Angle(A,B,C)' }, expect: { type: 'string', description: '可选: 期望值或说明, 用于解释结果是否达标' } }, required: ['expression'] },
   },
   {
     name: 'inspect_render',
-    description: '截图当前画布交视觉模型做"验收检查", 按清单逐项判定并对账 focus。仅在主构造完成、准备输出最终回复前调用 1 次。返回 issues: 为空=验收通过立即输出最终回复; 非空=只改被点名的项, 本题最多改 1 轮。本题最多 2 次。',
-    parameters: { type: 'object', properties: { focus: { type: 'string', description: '对账依据: 取构造规划里的"视觉重点+不变关系"字段' } }, required: [] },
+    description: '截图当前画布交给视觉模型做"验收检查"(不是找活干), 按清单逐项判定(标签遮挡/贴边切割/比例失调/辅助线该虚线却实线/动点轨迹是否可见/角弧方向), 并对账 focus 里声明的不变关系是否在图上看得见。仅在主构造完成、准备输出最终回复前调用 1 次。返回 issues 列表: 为空 = 验收通过, 立即输出最终回复, 不得再调 execute_command; 非空 = 只改被点名的项, 改前先 get_canvas_context 复核坐标, 本题最多因视觉反馈改 1 轮即收。本题最多 2 次。视觉会误判, 坐标复核不支持的问题坚决不改。',
+    parameters: { type: 'object', properties: { focus: { type: 'string', description: '对账依据: 直接取构造规划里的"视觉重点+不变关系"字段(如"OA⊥OB 直角标记""动点P轨迹""1/|OA|²+1/|OB|²定值文本"), 视觉模型会确认它在图上是否清晰可见。不要随手编, 必须与动手前声明的规划一致。' } }, required: [] },
   },
   {
     name: 'reset_canvas',
@@ -217,16 +227,15 @@ function extractLabels(cmd: string): string[] {
 function parseInspectIssues(raw: string): string[] {
   if (!raw) return [];
   const text = String(raw);
-  const summaryMatch = text.match(/问题汇总[:：]\s*(.+)/);
-  if (summaryMatch) {
-    const s = summaryMatch[1].trim();
-    if (/^无|^none|^无问题/i.test(s)) return [];
-    return s.split(/[;；]/).map((x) => x.trim()).filter(Boolean);
-  }
+  if (/验收通过|无问题|no\s*issues/i.test(text)) return [];
+  // 新 prompt 输出格式: 每行一个 "问题: <具体描述>"
   const issues: string[] = [];
   for (const line of text.split('\n')) {
-    const m = line.match(/^\s*([-^一-龥A-Za-z0-9_／/]+?)\s*[:：]\s*yes\b/i);
-    if (m) issues.push(m[1].trim());
+    const m = line.match(/^\s*问题[:：]\s*(.+)/i);
+    if (m) {
+      const s = m[1].trim();
+      if (s) issues.push(s);
+    }
   }
   return issues;
 }
@@ -242,10 +251,15 @@ function cleanFinalText(text: string): string {
   let prev: string;
   for (let pass = 0; pass < 2; pass++) {
     prev = t;
+    // 坏分隔符: ( \frac{...} ) → $\frac{...}$ (带空格圆括号 + 含 LaTeX 命令)
+    // 只转"带空格圆括号 + 内容含 LaTeX 命令"的, 避开真正的数学括号(不带空格)和散文括号。
+    // 关键: 必须要求括号内带前导/尾随空格 —— 否则会误伤形如 $f(\frac{x}{2})$、$(-\frac{b}{2a}, c)$
+    // 的合法行内公式(把 $...(\latex)...$ 错切成 $...$ + 裸 LaTeX + 残留 $$), 破坏渲染。
+    // 详见 docs/superpowers/specs/2026-07-10-agent-latex-realignment-design.md
     t = t.replace(/\(\s+([\s\S]*?)\s+\)/g, (full, inner) => {
       const s = inner.trim();
-      if (!s || s.includes('$')) return full;
-      if (!/\\[a-zA-Z]/.test(s)) return full;
+      if (!s || s.includes('$')) return full;             // 已含 $ 或空, 不动
+      if (!/\\[a-zA-Z]/.test(s)) return full;             // 不含 LaTeX 命令, 不动(防误伤散文括号)
       return '$' + s + '$';
     });
     if (t === prev) break;
@@ -357,21 +371,28 @@ export class AgentEngine {
           const png = this.deps.ggb.getPNGBase64(2, false, 150);
           if (!png) { result = { ok: false, error: '截图失败(画布未就绪)' }; break; }
           const dataUrl = png.startsWith('data:') ? png : `data:image/png;base64,${png}`;
-          const focusItem = args.focus
-            ? `- 重点对账: 题目声明要凸显的【${args.focus}】是否在图上清晰可见? 若看不见或被遮挡 → 答 yes(问题)。`
-            : '';
-          const prompt = `你是 K12 数学课件审图员。下面是一张 GeoGebra 画布截图。严格按清单逐项判定, 每项只输出一行: "项名: yes|no — 一句话说明"。只在确有问题时答 yes, 拿不准答 no。
+          const focusStep = args.focus
+            ? `第二步·对照重点: 构造规划声明要凸显的【${args.focus}】。逐一核查这些点/文本/对象是否**已经画出来(存在)**。重要: 被其他对象轻微遮挡 ≠ 缺失(那属于第三步的"遮挡"问题, 移开遮挡即可); 只有完全没画出来、或画错对象, 才记为"缺失"。`
+            : '第二步·对照重点: 本题未声明重点, 跳过。';
+          const prompt = `你是 K12 数学课件审图员。下面是一张 GeoGebra 画布截图。按三步检查, 聚焦"学生第一眼能看到的具体视觉问题"。不要泛泛判定、不要解题、不要给修改命令。
 
-检查清单:
-- 图形退化: 整体是否退化压扁/点挤成一团/不可读?
-- 标签遮挡: 任何文字标签是否互相重叠、或盖住关键几何元素?
-- 贴边切割: 图形是否贴画布边缘、或被坐标轴切掉一部分?
-- 比例失调: 坐标系两轴比例是否严重失真(如圆画成椭圆)?
-- 辅助线线型: 辅助线是否该虚线却画成实线?
-- 轨迹可见: 若题含动点轨迹, 轨迹线是否可见且醒目?
-- 角标记: 角度弧是否画反侧/画成 >180° 的大角?
-${focusItem}
-最后另起一行, 以 "问题汇总:" 开头, 用分号列出所有答 yes 的项(没有则写"无")。不要解题, 不要给修改命令。`;
+第一步·描述你实际看到的(必须先做, 这是核查基准):
+- 显示了哪些点的标签? 逐个列出(如 A、B、O)。特别注意: 是否有几何点画了却没标字母?
+- 图上有哪些文本/公式? 逐个列出内容和大致位置。
+- 主要几何对象(线段/圆/椭圆/轨迹等)是否清晰?
+
+${focusStep}
+
+第三步·检查具体视觉问题(只查这些视觉能可靠判断的, 确有时才报):
+- 点标签缺失: 有几何点画了点却没标字母? 该有的关键点(顶点/交点/动点)没画出来?
+- 文本重叠或遮挡: 文本/公式互相重叠, 或盖住关键图形/坐标?
+- 文本不可读: 文本被截断/乱码, 或公式显示成原始 LaTeX 源码(裸露的 \\frac、^2 反斜杠尖号)而非渲染好的公式?
+- 贴边或被切割: 图形贴画布边缘、或被坐标轴切掉?
+- 角弧异常: 角度弧画反侧、或成 >180° 大角?
+
+输出格式(严格遵守):
+- 没有任何问题 → 只输出一行: 验收通过
+- 有问题 → 每个问题单独一行, 以 "问题: " 开头, 写清问题+对象/位置(如 "问题: 点C缺少标签"、"问题: 右上角面积文本与|AB|文本重叠")。不要输出步骤描述、不要无关分析。`;
           const raw = await backend.vision(dataUrl, prompt, signal);
           const issues = parseInspectIssues(raw);
           const passed = issues.length === 0;
@@ -379,7 +400,7 @@ ${focusItem}
             ok: true, passed, issues, rawFeedback: raw,
             advisory: passed
               ? '验收通过: 视觉未发现问题。【立即输出最终回复, 禁止再调 execute_command】。'
-              : '视觉指出上述问题(仅供参考, 可能误判)。只针对被点名的项改, 本题最多因视觉反馈调整 1 轮, 调完即输出最终回复。',
+              : '视觉指出上述问题(仅供参考, 可能误判)。只针对被点名的项做**最小微调**(如移开遮挡的文本、补一个缺失的标签), **严禁改变画法或重构**(如把已有的直角小方块改成向量夹角、把正确的对象重画)。改前先 get_canvas_context 复核, 本题最多因视觉反馈调整 1 轮, 调完即输出最终回复。',
           };
           break;
         }
@@ -415,7 +436,7 @@ ${focusItem}
       ...history,
       { role: 'user', content: userInput },
     ];
-    const maxRounds = config.max_tool_rounds || 30;
+    const maxRounds = config.max_tool_rounds || 50;
 
     for (let round = 0; round < maxRounds; round++) {
       hooks.onRound?.(round + 1);
