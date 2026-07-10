@@ -169,11 +169,13 @@ export default function ChatApp() {
       setMessages(chatMsgs.map((m, i) => ({ id: ++msgId, role: m.role, content: m.content })));
       setTrace(rebuildTrace(messages).map((t) => ({ id: ++msgId, ...t })));
       setHistory(rebuildHistory(messages));
-      setRecipe(null);
+      setExecLines([]);
+      setCommandLog([]);
       // 恢复画布: recipe 优先, 没有则回退重放 execute_command 命令
       await ggbRef.current?.clearAll();
       const recipe: string[] | null = session?.recipe ? (Array.isArray(session.recipe) ? session.recipe : null) : null;
       const cmds = recipe && recipe.length ? recipe : extractReplayCommands(messages);
+      setRecipe(recipe && recipe.length ? recipe : null);
       if (cmds.length) {
         try { await ggbRef.current?.execBatch(cmds.join('\n')); } catch (e) { console.warn('画布重放失败:', e); }
       }
