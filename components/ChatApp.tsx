@@ -38,6 +38,27 @@ const EXAMPLES = [
 
 let msgId = 0;
 
+// 工具名 → 用户友好的进度文案(发送后到首条有效文本之间, 据当前正在执行的工具显示进度)
+const TOOL_STATUS: Record<string, string> = {
+  get_canvas_context: '正在读取画布',
+  search_command: '正在检索命令',
+  execute_command: '正在构造图形',
+  verify_geometry: '正在验证几何关系',
+  inspect_render: '正在检查渲染效果',
+  reset_canvas: '正在清空画布',
+};
+
+function ThinkingIndicator({ trace }: { trace: TraceItem[] }) {
+  const last = trace[trace.length - 1];
+  const busy = !!(last && last.result == null && TOOL_STATUS[last.name]);
+  return (
+    <div className="thinking">
+      <span className="thinking-dots"><i /><i /><i /></span>
+      <span>{(busy && last && TOOL_STATUS[last.name]) || '正在思考'}…</span>
+    </div>
+  );
+}
+
 export default function ChatApp() {
   const { user, isAdmin, signOut } = useAuth();
   const config = useConfigStore();
@@ -344,7 +365,13 @@ export default function ChatApp() {
             )}
             {messages.map((m) => (
               <div key={m.id} className={`msg ${m.role}`}>
-                {m.role === 'system' ? <div className="msg-content">{m.content}</div> : <MessageContent content={m.content || (m.streaming ? '思考中…' : '')} />}
+                {m.role === 'system' ? (
+                  <div className="msg-content">{m.content}</div>
+                ) : m.role === 'assistant' && m.streaming && !m.content ? (
+                  <ThinkingIndicator trace={trace} />
+                ) : (
+                  <MessageContent content={m.content || ''} />
+                )}
               </div>
             ))}
           </div>
