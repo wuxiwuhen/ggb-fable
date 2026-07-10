@@ -62,21 +62,6 @@ export default function SettingsPage() {
           <a href="/app" style={S.backBtn}>← 返回工作台</a>
         </div>
 
-        {/* 使用模式(全局, 影响下方配置) */}
-        <section style={{ marginBottom: 20, paddingBottom: 16, borderBottom: '1px solid #eee' }}>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button style={config.mode === 'trial' ? S.modeActive : S.modeBtn} onClick={() => config.setMode('trial')}>
-              免费试用
-            </button>
-            <button style={config.mode === 'byok' ? S.modeActive : S.modeBtn} onClick={() => config.setMode('byok')}>
-              自带 Key
-            </button>
-          </div>
-          {config.mode === 'byok' && (
-            <p style={S.note}>BYOK 模式下, 你的 API Key 仅存在本浏览器, 永不发送到服务器。</p>
-          )}
-        </section>
-
         {/* 主体: 左侧 Tab + 右侧内容 */}
         <div style={{ display: 'flex', gap: 28 }}>
           {/* 左侧 Tab 导航 */}
