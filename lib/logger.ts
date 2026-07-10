@@ -44,7 +44,7 @@ export class Logger {
       const resp = await fetch('/api/sessions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionId: this.sessionId, events: batch }),
+        body: JSON.stringify({ action: 'append', sessionId: this.sessionId, events: batch }),
         keepalive: true,
       });
       if (!resp.ok) {
