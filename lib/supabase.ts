@@ -3,7 +3,7 @@
 // - 后端(serverless): service_role 客户端, 绕过 RLS 做原子扣减/管理员操作
 // 两个实例绝不能混用: service_role key 只在 API Route 里用, 不进前端 bundle
 
-import { createBrowserClient } from '@supabase/ssr';
+import { createBrowserClient, createServerClient } from '@supabase/ssr';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -38,22 +38,21 @@ export async function getUserFromRequest(req: Request) {
   return data.user;
 }
 
-// cookie 方式从请求解出当前用户(@supabase/ssr 把 access_token 存 httpOnly cookie)
+// cookie 方式从请求解出当前用户(@supabase/ssr 把 session 存 httpOnly cookie, 可能分片+JSON)
+// 用 createServerClient 读 cookie(它知道自己的编码格式), 再 getUser 验签
 // 用于 trial 代理路由: 同源 fetch 自动带 cookie, 这里读取并验签
 export async function getUserFromCookie(req: Request) {
-  // 解析 cookie, 找 sb-<ref>-auth-token
   const cookieHeader = req.headers.get('cookie') || '';
-  const cookies = Object.fromEntries(
-    cookieHeader.split(';').map((c) => {
+  const all = cookieHeader
+    .split(';')
+    .map((c) => {
       const i = c.indexOf('=');
-      return [c.slice(0, i).trim(), c.slice(i + 1).trim()];
-    }),
-  );
-  const tokenKey = Object.keys(cookies).find((k) => k.startsWith('sb-') && k.endsWith('-auth-token'));
-  if (!tokenKey) return null;
-  const token = cookies[tokenKey];
-  const admin = getSupabaseAdmin();
-  const { data, error } = await admin.auth.getUser(token);
-  if (error || !data.user) return null;
+      return { name: c.slice(0, i).trim(), value: c.slice(i + 1).trim() };
+    })
+    .filter((c) => c.name);
+  const supabase = createServerClient(SUPABASE_URL, ANON_KEY, {
+    cookies: { getAll: () => all, setAll: () => {} },
+  });
+  const { data } = await supabase.auth.getUser();
   return data.user;
 }

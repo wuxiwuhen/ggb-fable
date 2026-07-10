@@ -21,6 +21,9 @@ import { useGeogebra } from '@/hooks/useGeogebra';
 import MessageContent from './MessageContent';
 import TracePanel, { type TraceItem, type ExecLine } from './TracePanel';
 import CommandBar from './CommandBar';
+import { useSessionStore } from '@/lib/session-store';
+import { rebuildChatMessages, rebuildTrace, rebuildHistory, extractReplayCommands, rebuildExecLines, type ApiMessage } from '@/lib/conversation';
+import SessionSidebar from './SessionSidebar';
 
 interface Msg {
   id: number;
@@ -38,9 +41,33 @@ const EXAMPLES = [
 
 let msgId = 0;
 
+// 工具名 → 用户友好的进度文案(发送后到首条有效文本之间, 据当前正在执行的工具显示进度)
+const TOOL_STATUS: Record<string, string> = {
+  get_canvas_context: '正在读取画布',
+  search_command: '正在检索命令',
+  execute_command: '正在构造图形',
+  verify_geometry: '正在验证几何关系',
+  inspect_render: '正在检查渲染效果',
+  reset_canvas: '正在清空画布',
+};
+
+function ThinkingIndicator({ trace }: { trace: TraceItem[] }) {
+  const last = trace[trace.length - 1];
+  const busy = !!(last && last.result == null && TOOL_STATUS[last.name]);
+  return (
+    <div className="thinking">
+      <span className="thinking-dots"><i /><i /><i /></span>
+      <span>{(busy && last && TOOL_STATUS[last.name]) || '正在思考'}…</span>
+    </div>
+  );
+}
+
 export default function ChatApp() {
   const { user, isAdmin, signOut } = useAuth();
   const config = useConfigStore();
+  const { sessions, currentSessionId, setSessions, setCurrent, upsert, patchCurrent } = useSessionStore();
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sessionsLoading, setSessionsLoading] = useState(true);
 
   // ── 引擎实例(单例) ──
   const loggerRef = useRef<Logger>(new Logger());
@@ -107,33 +134,96 @@ export default function ChatApp() {
   }), []);
 
   // ── 会话管理(云端) ──
-  const [sessionId, setSessionId] = useState<string | null>(null);
+
+  // 新建空会话: create → 清空 state + 画布 → 设为当前
   const newSession = useCallback(async () => {
-    // 保存当前 + 新建云端会话
-    const st = useConfigStore.getState();
-    try {
-      const resp = await fetch('/api/sessions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'create', mode: st.mode, title: '新会话' }),
-      });
-      const data = await resp.json();
-      if (data.id) {
-        setSessionId(data.id);
-        loggerRef.current.setSession(data.id);
-      }
-    } catch (e) { /* 静默, 日志非关键 */ }
+    // 已有会话且当前是空画布+无消息 → 无需重复新建
+    if (currentSessionId && messages.length === 0 && !(ggbRef.current?.getCommandLog() || []).length) return;
+    abortRef.current?.abort();
+    setError('');
+    const res = await fetch('/api/sessions', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'create', mode: config.mode, model: config.mode === 'trial' ? 'deepseek' : config.getActiveByok()?.model_name }),
+    });
+    const data = await res.json();
+    const id: string = data.id;
+    setMessages([]); setTrace([]); setExecLines([]); setCommandLog([]); setRecipe(null); setHistory([]);
+    await ggbRef.current?.clearAll();
+    const now = new Date().toISOString();
+    upsert({ id, title: null, mode: config.mode, model: null, created_at: now, updated_at: now });
+    setCurrent(id);
+    loggerRef.current.setSession(id);          // 修复: logger 绑定 sessionId
+    setSidebarOpen(false);
+    return id;
+  }, [config, setSessions, setCurrent, upsert]);
+
+  // 清空工作区(不建新会话): 保留当前 sessionId, 只清画布+聊天, 侧边栏不变
+  const clearWorkspace = useCallback(async () => {
+    if (!currentSessionId) return;
+    if (messages.length === 0 && !(ggbRef.current?.getCommandLog() || []).length) return;
+    abortRef.current?.abort();
+    setError('');
     setMessages([]);
     setTrace([]);
     setExecLines([]);
     setCommandLog([]);
     setRecipe(null);
     setHistory([]);
-    trialTokenRef.current = null;
-    ggbRef.current?.clearAll();
-  }, [ggbRef]);
+    await ggbRef.current?.clearAll();
+  }, [currentSessionId, messages]);
 
-  useEffect(() => { newSession(); /* eslint-disable-next-line */ }, []);
+  // 切换会话: 加载 → 重建 chat/trace/history → 重放画布 → 设为当前
+  const switchSession = useCallback(async (id: string) => {
+    if (id === currentSessionId) return;
+    abortRef.current?.abort();
+    setError('');
+    try {
+      const res = await fetch(`/api/sessions?id=${id}`);
+      if (!res.ok) return;
+      const { session, messages }: { session: any; messages: ApiMessage[] } = await res.json();
+      // 重建运行态
+      const chatMsgs = rebuildChatMessages(messages);
+      setMessages(chatMsgs.map((m, i) => ({ id: ++msgId, role: m.role, content: m.content })));
+      setTrace(rebuildTrace(messages).map((t) => ({ id: ++msgId, ...t })));
+      setHistory(rebuildHistory(messages));
+      setExecLines(rebuildExecLines(messages));
+      // 恢复画布: recipe 优先, 没有则回退重放 execute_command 命令
+      await ggbRef.current?.clearAll();
+      const recipe: string[] | null = session?.recipe ? (Array.isArray(session.recipe) ? session.recipe : null) : null;
+      const cmds = recipe && recipe.length ? recipe : extractReplayCommands(messages);
+      setRecipe(recipe && recipe.length ? recipe : null);
+      if (cmds.length) {
+        try { await ggbRef.current?.execBatch(cmds.join('\n')); } catch (e) { console.warn('画布重放失败:', e); }
+      }
+      setCommandLog(ggbRef.current?.getCommandLog() || []);
+      setCurrent(id);
+      loggerRef.current.setSession(id);
+    } catch (e) {
+      setError('切换会话失败: ' + (e as any).message);
+    }
+    setSidebarOpen(false);
+  }, [currentSessionId, setCurrent]);
+
+  // 首次进入: 加载会话列表, 无则建空会话; 绑定 logger sessionId
+  useEffect(() => {
+    if (!ggbReady) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('/api/sessions');
+        const data = await res.json();
+        const list: any[] = data.sessions || [];
+        if (cancelled) { setSessionsLoading(false); return; }
+        setSessions(list);
+        setSessionsLoading(false);
+      } catch (e) {
+        console.warn('加载会话失败:', e);
+        setSessionsLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ggbReady]);
 
   // ── 额度(仅 trial 模式) ──
   const fetchUsage = useCallback(async () => {
@@ -156,11 +246,13 @@ export default function ChatApp() {
   const send = useCallback(async () => {
     const text = input.trim();
     if (!text || sending) return;
+    if (sessionsLoading) return;
+    if (!useSessionStore.getState().currentSessionId) await newSession();  // 惰性创建
     if (!ggbRef.current || !agentRef.current) { setError('画布未就绪'); return; }
 
     // 校验
     if (config.mode === 'trial') {
-      if (usage && usage.remaining <= 0) {
+      if (!isAdmin && usage && usage.remaining <= 0) {
         setError('试用次数已用完, 可切换到"自带 Key"模式继续使用');
         return;
       }
@@ -179,6 +271,11 @@ export default function ChatApp() {
     setMessages((prev) => [...prev, userMsg, assistantMsg]);
     setInput('');
     setSending(true);
+    // 首条消息后, 后台生成会话标题(当前会话无标题时)
+    const sid = useSessionStore.getState().currentSessionId;
+    if (sid && !useSessionStore.getState().sessions.find((s) => s.id === sid)?.title) {
+      generateTitle(text, sid);
+    }
     loggerRef.current.userTurn(text);
 
     streamBuf.current = { id: assistantMsg.id, text: '' };
@@ -248,9 +345,52 @@ export default function ChatApp() {
     setRecipeLoading(true);
     try {
       const res = await Condenser.run(log, (p) => backend.chat(p));
-      setRecipe(res.commands.length ? res.commands : null);
+      const cmds = res.commands.length ? res.commands : null;
+      setRecipe(cmds);
+      // 持久化 recipe 到当前会话(供切换重放)
+      const sid = useSessionStore.getState().currentSessionId;
+      if (cmds && sid) {
+        fetch('/api/sessions', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'update', id: sid, recipe: cmds }),
+        }).catch(() => {});
+      }
     } catch (e) { /* 静默 */ } finally { setRecipeLoading(false); }
   }, [ggbRef]);
+
+  // 后台生成标题并更新会话(trial 走 /api/trial/title 不扣次数; byok 用用户 key)
+  const generateTitle = useCallback(async (text: string, sessionId: string) => {
+    try {
+      let title = '';
+      if (config.mode === 'trial') {
+        const res = await fetch('/api/trial/title', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text }),
+        });
+        if (res.ok) title = (await res.json()).title || '';
+      } else {
+        const prof = config.getActiveByok();
+        if (prof) {
+          const { chatByok } = await import('@/lib/llm');
+          const msg = await chatByok({
+            messages: [
+              { role: 'system', content: '给下面这段数学问题生成一个不超过15字的中文标题, 只输出标题文本。' },
+              { role: 'user', content: text.slice(0, 500) },
+            ],
+            config: { api_key: prof.api_key, base_url: prof.base_url, model_name: prof.model_name },
+          });
+          title = (msg.content || '').trim().slice(0, 15);
+        }
+      }
+      if (title) {
+        await fetch('/api/sessions', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'update', id: sessionId, title }),
+        });
+        patchCurrent({ title });
+      }
+    } catch (e) { /* 标题失败不阻塞 */ }
+  }, [config, patchCurrent]);
 
   const stop = useCallback(() => { abortRef.current?.abort(); }, []);
 
@@ -290,14 +430,18 @@ export default function ChatApp() {
   }, [config, trialCtx]);
 
   const remaining = config.mode === 'trial' ? (usage?.remaining ?? null) : null;
-  const canSend = config.mode === 'trial' ? (remaining === null || remaining > 0) : config.isByokValid();
+  const canSend = config.mode === 'trial' ? (isAdmin || remaining === null || remaining > 0) : config.isByokValid();
 
   return (
     <div className="app">
       <header className="topbar">
         <div className="brand">
-          <span className="logo">📐</span>
-          <span className="title">GGB Fable</span>
+          <a href="/" className="brand-link">
+            <span className="logo">📐</span>
+            <span className="title">GGB Fable</span>
+          </a>
+          <button className="btn ghost" title="对话列表" onClick={() => setSidebarOpen(true)}>☰</button>
+          <button className="btn ghost" title="清空工作区" onClick={clearWorkspace}>+</button>
         </div>
         <div className="top-actions">
           {/* 模式切换 */}
@@ -305,10 +449,13 @@ export default function ChatApp() {
             <button className={config.mode === 'trial' ? 'active' : ''} onClick={() => config.setMode('trial')}>免费试用</button>
             <button className={config.mode === 'byok' ? 'active' : ''} onClick={() => config.setMode('byok')}>自带 Key</button>
           </div>
-          {config.mode === 'trial' && usage && (
+          {config.mode === 'trial' && usage && !isAdmin && (
             <span className={`usage-badge ${remaining === 0 ? 'exhausted' : ''}`} title="剩余试用次数">
               剩余 {remaining}/{usage.limit}
             </span>
+          )}
+          {config.mode === 'trial' && isAdmin && (
+            <span className="usage-badge" title="管理员不限次数">管理员 ∞</span>
           )}
           {isAdmin && <a className="btn ghost" href="/admin">🛠 管理</a>}
           <a className="btn ghost" href="/settings">⚙ 设置</a>
@@ -317,6 +464,7 @@ export default function ChatApp() {
         </div>
       </header>
 
+      <SessionSidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} onNew={clearWorkspace} onSwitch={switchSession} />
       <main className="layout">
         <section className="pane chat-pane">
           <CommandBar
@@ -341,7 +489,13 @@ export default function ChatApp() {
             )}
             {messages.map((m) => (
               <div key={m.id} className={`msg ${m.role}`}>
-                {m.role === 'user' ? <div className="msg-content">{m.content}</div> : <MessageContent content={m.content || (m.streaming ? '思考中…' : '')} />}
+                {m.role === 'system' ? (
+                  <div className="msg-content">{m.content}</div>
+                ) : m.role === 'assistant' && m.streaming && !m.content ? (
+                  <ThinkingIndicator trace={trace} />
+                ) : (
+                  <MessageContent content={m.content || ''} />
+                )}
               </div>
             ))}
           </div>
@@ -351,9 +505,6 @@ export default function ChatApp() {
             {ocrLoading && <div className="status">📷 识别图片中…</div>}
             {imgPreview && <img src={imgPreview} className="img-preview" alt="预览" />}
             <div className="input-row">
-              <button className="btn ghost img-btn" title="上传数学题图片(OCR)" onClick={() => document.getElementById('image-file-input')?.click()}>📷</button>
-              <input id="image-file-input" type="file" accept="image/*" style={{ display: 'none' }}
-                onChange={(e) => { const f = e.target.files?.[0]; if (f) handleImage(f); e.target.value = ''; }} />
               <textarea
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
@@ -361,11 +512,16 @@ export default function ChatApp() {
                 placeholder="描述你想画的数学图形, 例如: 画一个圆心在原点、半径为 3 的圆…"
                 rows={3}
               />
-              {!sending ? (
-                <button className="btn primary" onClick={send} disabled={!canSend || !input.trim()}>发送</button>
-              ) : (
-                <button className="btn danger" onClick={stop}>停止</button>
-              )}
+              <div className="send-col">
+                <button className="btn ghost img-btn" title="上传数学题图片(OCR)" onClick={() => document.getElementById('image-file-input')?.click()}>📷</button>
+                {!sending ? (
+                  <button className="btn primary" onClick={send} disabled={!canSend || !input.trim()}>发送</button>
+                ) : (
+                  <button className="btn danger" onClick={stop}>停止</button>
+                )}
+              </div>
+              <input id="image-file-input" type="file" accept="image/*" style={{ display: 'none' }}
+                onChange={(e) => { const f = e.target.files?.[0]; if (f) handleImage(f); e.target.value = ''; }} />
             </div>
             <div className="status">
               {config.mode === 'byok' && !config.isByokValid() ? '⚠ 未配置 BYOK 模型，请到设置页填写' : '就绪 · Cmd/Ctrl+Enter 发送'}
@@ -378,7 +534,7 @@ export default function ChatApp() {
             <div id="ggb-container" />
             {!ggbReady && <div className="canvas-loading">{ggbError || '正在加载 GeoGebra 画布…'}</div>}
           </div>
-          <TracePanel trace={trace} execLines={execLines} />
+          {isAdmin && <TracePanel trace={trace} execLines={execLines} />}
         </section>
       </main>
     </div>

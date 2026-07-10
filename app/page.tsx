@@ -8,6 +8,8 @@ const FEATURES = [
   { ico: '🆓', title: '免费试用 5 次', desc: '邮箱注册即享 5 次免费画布，无需信用卡，开箱即用。' },
   { ico: '🔑', title: '自带 Key 无限用', desc: '配置你自己的 API Key，无限次生成；Key 仅存浏览器，永不上传服务器。' },
   { ico: '🔍', title: '命令智能检索', desc: '内置 GeoGebra 命令知识库 + 混合检索，精准调用数百条命令与别名。' },
+  { ico: '✅', title: '数值关系校验', desc: 'AI 主动验证垂直、共线、定值等几何约束是否成立，确保构造正确可推敲。' },
+  { ico: '👁️', title: '视觉渲染检查', desc: '截图交视觉模型检查标签遮挡、辅助线型、角弧方向，闭合"画得满不满意"最后一环。' },
 ];
 
 export default function LandingPage() {
@@ -39,13 +41,13 @@ export default function LandingPage() {
 
       {/* 顶部导航 */}
       <nav className="landing-nav">
-        <div className="brand">
-          <span className="logo">📐</span>
-          <span className="title">GGB Fable</span>
+        <div className="brand" style={{ fontSize: 20 }}>
+          <span className="logo" style={{ fontSize: 28 }}>📐</span>
+          <span className="title" style={{ fontSize: 22 }}>GGB Fable</span>
         </div>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-          {isAdmin && <a className="btn ghost sm" href="/admin">管理后台</a>}
-          <a className={user ? 'btn ghost sm' : 'btn primary sm'} href={ctaHref}>{user ? '工作台' : '登录'}</a>
+          {isAdmin && <a className="btn ghost" href="/admin" style={{ fontSize: 15, padding: '8px 16px' }}>管理后台</a>}
+          <a className={user ? 'btn ghost' : 'btn primary'} href={ctaHref} style={{ fontSize: 15, padding: '8px 18px' }}>{user ? '工作台' : '登录'}</a>
         </div>
       </nav>
 
@@ -57,8 +59,7 @@ export default function LandingPage() {
           GGB Fable 是面向 K12 的 GeoGebra AI 画布助手 —— 描述即生成，可拖动、可探究。
         </p>
         <div className="landing-cta fade-up d3">
-          <a className="btn primary lg" href={ctaHref}>{ctaLabel} →</a>
-          <a className="btn ghost lg" href="#features">了解功能</a>
+          <a className="btn primary lg" href={ctaHref} style={{ padding: '14px 40px', fontSize: 17 }}>{ctaLabel} →</a>
         </div>
         <p className="fade-up d3" style={{ marginTop: 18, color: '#999', fontSize: 13 }}>
           免费试用 5 次 · 也可配置自己的 API Key 无限使用

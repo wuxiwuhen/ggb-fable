@@ -69,13 +69,15 @@ export default function CommandBar({ commandLog, recipe, onGenerateRecipe, onRep
             {visibleLog.length === 0 && <div className="cmd-empty">尚无命令</div>}
             {visibleLog.map((e, i) => (
               <div key={i} className={`cmd-row ${e.ok ? 'ok' : 'fail'}`}>
+                <span className="cmd-idx">{i + 1}.</span>
                 <code>{e.cmd}</code>
-                <span className="cmd-meta">{e.ok ? `✓ ${e.labels}` : `✗ ${e.error}`}</span>
+                <span className="cmd-status">{e.ok ? '✓' : '✗'}</span>
+                <span className="cmd-meta">{e.ok ? e.labels : e.error}</span>
               </div>
             ))}
           </div>
         ) : (
-          <div className="cmd-list">
+          <div className={`cmd-list ${editing ? 'editing' : ''}`}>
             {editing ? (
               <textarea
                 className="recipe-editor"
@@ -85,7 +87,7 @@ export default function CommandBar({ commandLog, recipe, onGenerateRecipe, onRep
               />
             ) : recipe ? (
               recipe.map((c, i) => (
-                <div key={i} className="cmd-row ok"><code>{c}</code></div>
+                <div key={i} className="cmd-row ok"><span className="cmd-idx">{i + 1}.</span><code>{c}</code></div>
               ))
             ) : (
               <div className="cmd-empty">{recipeLoading ? '正在用模型精简…' : '点击"重新生成"产出最小重放脚本'}</div>

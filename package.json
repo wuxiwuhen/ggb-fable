@@ -12,6 +12,7 @@
   "dependencies": {
     "@supabase/ssr": "^0.5.2",
     "@supabase/supabase-js": "^2.45.4",
+    "markdown-it": "^14.3.0",
     "next": "15.5.20",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
@@ -21,6 +22,8 @@
     "zustand": "^5.0.3"
   },
   "devDependencies": {
+    "@types/katex": "^0.16.8",
+    "@types/markdown-it": "^14.1.2",
     "@types/node": "^22.10.7",
     "@types/react": "^19.0.7",
     "@types/react-dom": "^19.0.3",
