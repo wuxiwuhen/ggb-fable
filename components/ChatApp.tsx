@@ -157,6 +157,12 @@ export default function ChatApp() {
     return id;
   }, [config, setSessions, setCurrent, upsert]);
 
+  // UI 按钮的新建包装: 必须有当前会话才允许新建(防止首次空白时点+空建)
+  const handleNewSession = useCallback(() => {
+    if (!currentSessionId) return;
+    newSession();
+  }, [currentSessionId, newSession]);
+
   // 切换会话: 加载 → 重建 chat/trace/history → 重放画布 → 设为当前
   const switchSession = useCallback(async (id: string) => {
     if (id === currentSessionId) return;
@@ -232,7 +238,7 @@ export default function ChatApp() {
     const text = input.trim();
     if (!text || sending) return;
     if (sessionsLoading) return;
-    if (!currentSessionId) await newSession();  // 首次发送 → 自动建会话
+    if (!useSessionStore.getState().currentSessionId) await newSession();  // 惰性创建
     if (!ggbRef.current || !agentRef.current) { setError('画布未就绪'); return; }
 
     // 校验
@@ -425,7 +431,7 @@ export default function ChatApp() {
             <span className="title">GGB Fable</span>
           </a>
           <button className="btn ghost" title="对话列表" onClick={() => setSidebarOpen(true)}>☰</button>
-          <button className="btn ghost" title="新建对话" onClick={newSession}>+</button>
+          <button className="btn ghost" title="新建对话" onClick={handleNewSession}>+</button>
         </div>
         <div className="top-actions">
           {/* 模式切换 */}
@@ -448,7 +454,7 @@ export default function ChatApp() {
         </div>
       </header>
 
-      <SessionSidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} onNew={newSession} onSwitch={switchSession} />
+      <SessionSidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} onNew={handleNewSession} onSwitch={switchSession} />
       <main className="layout">
         <section className="pane chat-pane">
           <CommandBar
