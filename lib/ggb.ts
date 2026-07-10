@@ -156,7 +156,7 @@ export class GGB {
               this.applet.registerAddListener?.(this.addListener);
               this.applet.registerRemoveListener?.(this.removeListener);
               this.applet.registerUpdateListener?.(this.updateListener);
-              try { this.applet.setPerspective?.('AG'); } catch (e) { console.warn('setPerspective 失败:', e); }
+              try { this.applet.setPerspective?.('G'); } catch (e) { console.warn('setPerspective 失败:', e); }
               try { this.applet.setAxesVisible?.(true, true); } catch (e) {}
               try { this.applet.setGridVisible?.(true); } catch (e) {}
               try { this.applet.setAxisLabels?.(1, 'x', 'y'); } catch (e) {}

@@ -92,21 +92,24 @@ alter table public.usage enable row level security;
 alter table public.sessions enable row level security;
 alter table public.messages enable row level security;
 
+-- 管理员判定函数(security definer, 以定义者权限绕过 RLS 查 profiles,
+-- 避免 policy 里直接 exists(profiles) 造成无限递归错误 42P17)
+create or replace function public.is_current_user_admin()
+returns boolean
+language sql security definer set search_path = public
+as $$
+  select exists(select 1 from public.profiles p where p.user_id = auth.uid() and p.is_admin);
+$$;
+
 -- profiles: 用户读自己; 管理员读全部
 drop policy if exists "profiles_select_self_or_admin" on public.profiles;
 create policy "profiles_select_self_or_admin" on public.profiles
-  for select using (
-    auth.uid() = user_id
-    or exists(select 1 from public.profiles p where p.user_id = auth.uid() and p.is_admin)
-  );
+  for select using (auth.uid() = user_id or public.is_current_user_admin());
 
 -- usage: 用户只能读自己(扣减走 service_role, 不让前端自己改)
 drop policy if exists "usage_select_self_or_admin" on public.usage;
 create policy "usage_select_self_or_admin" on public.usage
-  for select using (
-    auth.uid() = user_id
-    or exists(select 1 from public.profiles p where p.user_id = auth.uid() and p.is_admin)
-  );
+  for select using (auth.uid() = user_id or public.is_current_user_admin());
 
 -- sessions: 用户增/读/改自己的; 管理员读全部
 drop policy if exists "sessions_owner_all" on public.sessions;
@@ -116,9 +119,7 @@ create policy "sessions_owner_all" on public.sessions
 
 drop policy if exists "sessions_admin_read" on public.sessions;
 create policy "sessions_admin_read" on public.sessions
-  for select using (
-    exists(select 1 from public.profiles p where p.user_id = auth.uid() and p.is_admin)
-  );
+  for select using (public.is_current_user_admin());
 
 -- messages: 用户增/读自己的; 管理员读全部
 drop policy if exists "messages_owner_all" on public.messages;
@@ -128,9 +129,7 @@ create policy "messages_owner_all" on public.messages
 
 drop policy if exists "messages_admin_read" on public.messages;
 create policy "messages_admin_read" on public.messages
-  for select using (
-    exists(select 1 from public.profiles p where p.user_id = auth.uid() and p.is_admin)
-  );
+  for select using (public.is_current_user_admin());
 
 -- ── 原子扣减(免费模式核心): 仅当 used < trial_limit 时 used+1, 返回新状态; 否则返回空 → 402 ──
 -- 用 service_role 调用。RETURNING 保证扣减成功才继续(防并发超扣)

@@ -76,7 +76,8 @@ button { font-family: inherit; cursor: pointer; }
 /* ── 输入区 ── */
 .composer { border-top: 1px solid #e5e7eb; padding: 12px 16px; flex-shrink: 0; }
 .input-row { display: flex; gap: 8px; align-items: flex-end; }
-.img-btn { flex-shrink: 0; height: 40px; }
+.send-col { display: flex; flex-direction: column; gap: 6px; flex-shrink: 0; }
+.img-btn { flex-shrink: 0; }
 .composer textarea {
   flex: 1; resize: none; border: 1px solid #ddd; border-radius: 8px; padding: 10px 12px;
   font-size: 14px; line-height: 1.5; outline: none; font-family: inherit; min-height: 40px; max-height: 160px;
@@ -95,10 +96,10 @@ button { font-family: inherit; cursor: pointer; }
 }
 
 /* ── 工具轨迹 ── */
-.trace-panel { border-top: 1px solid #e5e7eb; background: #fff; max-height: 40%; overflow: hidden; display: flex; flex-direction: column; }
+.trace-panel { border-top: 1px solid #e5e7eb; background: #fff; }
 .trace-panel summary { padding: 10px 16px; cursor: pointer; font-size: 13px; font-weight: 600; }
 .count { background: #eee; border-radius: 10px; padding: 1px 8px; font-size: 11px; margin-left: 4px; }
-.trace-list { overflow-y: auto; padding: 0 16px 12px; font-size: 12px; }
+.trace-list { max-height: 30vh; overflow-y: auto; padding: 0 16px 12px; font-size: 12px; }
 .trace-empty { color: #aaa; padding: 8px 0; }
 .trace-item { background: #f9fafb; border-radius: 6px; padding: 8px 10px; margin-bottom: 6px; border-left: 3px solid #10b981; }
 .trace-item.fail { border-left-color: #ef4444; }

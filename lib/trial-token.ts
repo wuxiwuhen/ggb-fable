@@ -49,10 +49,12 @@ export async function verifyToken(token: string, expectedUid: string): Promise<T
   const [body, sigB64] = parts;
   try {
     const key = await getKey();
-    const sigBytes = Uint8Array.from(b64urlDecode(sigB64), (c) => c.charCodeAt(0));
+    // 签名是二进制, 必须用 atob 重建原始字节; 不能走 b64urlDecode(它用 UTF-8 解码会损坏二进制 → 永远验签失败)
+    const pad = '='.repeat((4 - (sigB64.length % 4)) % 4);
+    const sigBytes = Uint8Array.from(atob(sigB64.replace(/-/g, '+').replace(/_/g, '/') + pad), (c) => c.charCodeAt(0));
     const ok = await crypto.subtle.verify('HMAC', key, sigBytes, enc.encode(body));
     if (!ok) return null;
-    const payload = JSON.parse(b64urlDecode(body)) as TrialPayload;
+    const payload = JSON.parse(b64urlDecode(body)) as TrialPayload;   // body 是 JSON 文本, UTF-8 解码 OK
     if (payload.uid !== expectedUid) return null;   // 跨用户复用 → 拒
     if (Date.now() > payload.exp) return null;       // 超时 → 拒(当作新意图)
     return payload;

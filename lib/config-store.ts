@@ -50,7 +50,7 @@ export const useConfigStore = create<ConfigState>()(
       byokProfiles: [],
       activeProfileName: '',
       vision: {},
-      maxToolRounds: 30,
+      maxToolRounds: 50,
 
       setMode: (m) => set({ mode: m }),
       addOrUpdateProfile: (p) => set((s) => {

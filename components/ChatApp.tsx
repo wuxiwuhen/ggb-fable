@@ -160,7 +160,7 @@ export default function ChatApp() {
 
     // 校验
     if (config.mode === 'trial') {
-      if (usage && usage.remaining <= 0) {
+      if (!isAdmin && usage && usage.remaining <= 0) {
         setError('试用次数已用完, 可切换到"自带 Key"模式继续使用');
         return;
       }
@@ -290,7 +290,7 @@ export default function ChatApp() {
   }, [config, trialCtx]);
 
   const remaining = config.mode === 'trial' ? (usage?.remaining ?? null) : null;
-  const canSend = config.mode === 'trial' ? (remaining === null || remaining > 0) : config.isByokValid();
+  const canSend = config.mode === 'trial' ? (isAdmin || remaining === null || remaining > 0) : config.isByokValid();
 
   return (
     <div className="app">
@@ -305,10 +305,13 @@ export default function ChatApp() {
             <button className={config.mode === 'trial' ? 'active' : ''} onClick={() => config.setMode('trial')}>免费试用</button>
             <button className={config.mode === 'byok' ? 'active' : ''} onClick={() => config.setMode('byok')}>自带 Key</button>
           </div>
-          {config.mode === 'trial' && usage && (
+          {config.mode === 'trial' && usage && !isAdmin && (
             <span className={`usage-badge ${remaining === 0 ? 'exhausted' : ''}`} title="剩余试用次数">
               剩余 {remaining}/{usage.limit}
             </span>
+          )}
+          {config.mode === 'trial' && isAdmin && (
+            <span className="usage-badge" title="管理员不限次数">管理员 ∞</span>
           )}
           {isAdmin && <a className="btn ghost" href="/admin">🛠 管理</a>}
           <a className="btn ghost" href="/settings">⚙ 设置</a>
@@ -341,7 +344,7 @@ export default function ChatApp() {
             )}
             {messages.map((m) => (
               <div key={m.id} className={`msg ${m.role}`}>
-                {m.role === 'user' ? <div className="msg-content">{m.content}</div> : <MessageContent content={m.content || (m.streaming ? '思考中…' : '')} />}
+                {m.role === 'system' ? <div className="msg-content">{m.content}</div> : <MessageContent content={m.content || (m.streaming ? '思考中…' : '')} />}
               </div>
             ))}
           </div>
@@ -351,9 +354,6 @@ export default function ChatApp() {
             {ocrLoading && <div className="status">📷 识别图片中…</div>}
             {imgPreview && <img src={imgPreview} className="img-preview" alt="预览" />}
             <div className="input-row">
-              <button className="btn ghost img-btn" title="上传数学题图片(OCR)" onClick={() => document.getElementById('image-file-input')?.click()}>📷</button>
-              <input id="image-file-input" type="file" accept="image/*" style={{ display: 'none' }}
-                onChange={(e) => { const f = e.target.files?.[0]; if (f) handleImage(f); e.target.value = ''; }} />
               <textarea
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
@@ -361,11 +361,16 @@ export default function ChatApp() {
                 placeholder="描述你想画的数学图形, 例如: 画一个圆心在原点、半径为 3 的圆…"
                 rows={3}
               />
-              {!sending ? (
-                <button className="btn primary" onClick={send} disabled={!canSend || !input.trim()}>发送</button>
-              ) : (
-                <button className="btn danger" onClick={stop}>停止</button>
-              )}
+              <div className="send-col">
+                <button className="btn ghost img-btn" title="上传数学题图片(OCR)" onClick={() => document.getElementById('image-file-input')?.click()}>📷</button>
+                {!sending ? (
+                  <button className="btn primary" onClick={send} disabled={!canSend || !input.trim()}>发送</button>
+                ) : (
+                  <button className="btn danger" onClick={stop}>停止</button>
+                )}
+              </div>
+              <input id="image-file-input" type="file" accept="image/*" style={{ display: 'none' }}
+                onChange={(e) => { const f = e.target.files?.[0]; if (f) handleImage(f); e.target.value = ''; }} />
             </div>
             <div className="status">
               {config.mode === 'byok' && !config.isByokValid() ? '⚠ 未配置 BYOK 模型，请到设置页填写' : '就绪 · Cmd/Ctrl+Enter 发送'}
@@ -378,7 +383,7 @@ export default function ChatApp() {
             <div id="ggb-container" />
             {!ggbReady && <div className="canvas-loading">{ggbError || '正在加载 GeoGebra 画布…'}</div>}
           </div>
-          <TracePanel trace={trace} execLines={execLines} />
+          {isAdmin && <TracePanel trace={trace} execLines={execLines} />}
         </section>
       </main>
     </div>

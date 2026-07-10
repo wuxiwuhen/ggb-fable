@@ -18,7 +18,7 @@ export default function TracePanel({
   trace, execLines,
 }: { trace: TraceItem[]; execLines: ExecLine[] }) {
   return (
-    <details className="trace-panel" open>
+    <details className="trace-panel">
       <summary>🛠 Agent 工具轨迹 <span className="count">{trace.length}</span></summary>
       <div className="trace-list">
         {trace.length === 0 && execLines.length === 0 && (

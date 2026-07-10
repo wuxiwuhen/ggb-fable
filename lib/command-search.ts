@@ -59,20 +59,21 @@ const ALIASES: Record<string, string[]> = {
 // 陷阱提示(教学实践积累)
 const PITFALLS: Record<string, string> = {
   Intersect: '多交点时务必带索引(第三个参数), 否则自动命名 B_1,B_2 导致后续引用失败',
-  Angle: '默认不标角! 只标解题强相关的角(每题0-1个)。视觉弧始终逆时针, 值0-360°。',
-  StartAnimation: '启动单滑块用 StartAnimation(k, true) 两参数(字面true), 别用单参。',
+  Angle: '默认不标角! 只标解题强相关的角(每题0-1个)。视觉弧始终逆时针, 值0-360°——A在左B在右时弧画在270°大角侧。创建后看值, >180°立刻对调两端点 Angle(P2, 顶点, P1) 重标。两线式 Angle(Line,Line) 值0-180°但弧仍逆时针。验证垂直用 ArePerpendicular, 别用 Angle。',
+  StartAnimation: '启动单滑块用 StartAnimation(k, true) 两参数(字面true), 别用单参 StartAnimation(k)(语义是"恢复所有动画", 不稳)。或直接用 Slider 第8参数 Animating=true 让滑块创建即播放。不要绑定额外布尔对象(易忘定义/改名失效)。',
   Circle: 'Circle(A,3) 是半径数值; Circle(A,B) 是过点 B。7 种重载最易混淆',
   Ellipse: '第3参数是半长轴长度(数值), 不是点',
   SetColor: 'RGB 分量范围是 0~1 浮点(如 0.12, 0.47, 1), 不是 0~255',
-  Tangent: '多切点时需带索引', Rotate: '角度默认度; 旋转中心常忘传第三参数',
-  Slider: '9参数: (Min,Max,增量,速度,宽度,是否角,水平,是否动画,随机)。角度量必须带度符号。',
+  Tangent: '多切点时需带索引',
+  Rotate: '角度默认度; 旋转中心常忘传第三参数',
+  Slider: '9参数: (Min,Max,增量,速度,宽度,是否角,水平,是否动画,随机)。角度量必须带度符号: 度数题写 Slider(1°,44°,1°,...)——Is Angle(第6参)为true时内部存弧度、显示度, 裸数值1会被当1弧度≈57.3°。动画用第8参=true或紧跟 StartAnimation(k, true)。',
   Locus: '第一个点必须在某路径上, 不能是自由点',
   Sequence: '批量生成用 Sequence; 字符串表达式用 %1 占位符',
   Execute: 'Execute 列表内的命令必须是英文 (US)',
   Delete: '删依赖对象前确认无子对象引用',
   Function: '乘法必须显式写 *, 不要写 3x; 幂用 ^',
   If: '分段函数/条件对象必用 If',
-  Text: '含数学符号必须开LaTeX渲染: 第4参传true, 即 Text(内容,(x,y),false,true)。',
+  Text: '含数学符号必须开LaTeX渲染: 第4参传true, 即 Text(内容,(x,y),false,true)。数学用 \\frac|^2|\\sqrt 等, 纯文字用 \\text{}, 动态数值用 + 拼接(Text("\\frac{" + a + "}{" + b + "}",(2,3),false,true))。反斜杠只写一层。两参数形式 Text(s,(x,y)) 是纯文本不渲染, 数学符号会丑陋。FormulaText/FractionText 返回 LaTeX 对象, 拼进字符串会退化, 优先直接写 LaTeX 命令。位置避开图形。',
   SetCaption: '中文标签需配合 ShowLabel(true) 用 SetCaption',
 };
 

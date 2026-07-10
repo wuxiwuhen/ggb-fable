@@ -37,20 +37,19 @@ export function useGeogebra(logger: Logger | null) {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    if (initialized.current) return;       // StrictMode 防重入
+    if (initialized.current) return;       // StrictMode 防重入(applet 只 init 一次)
     initialized.current = true;
-    let cancelled = false;
 
     (async () => {
       try {
         await loadDeployScript();
-        if (cancelled || !containerRef.current) return;
+        if (!containerRef.current) return;
         const ggb = new GGB(logger || undefined);
         ggbRef.current = ggb;
         await ggb.init('ggb-container', {});
-        if (!cancelled) setReady(true);
+        setReady(true);
       } catch (e: any) {
-        if (!cancelled) setError(e.message || String(e));
+        setError(e.message || String(e));
       }
     })();
 
@@ -63,10 +62,7 @@ export function useGeogebra(logger: Logger | null) {
     });
     if (containerRef.current) ro.observe(containerRef.current);
 
-    return () => {
-      cancelled = true;
-      ro.disconnect();
-    };
+    return () => ro.disconnect();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

@@ -9,7 +9,7 @@ import { signToken, verifyToken, newIntentId } from '@/lib/trial-token';
 
 export const runtime = 'edge';
 
-const MAX_ROUNDS = Number(process.env.TRIAL_MAX_ROUNDS || 30);
+const MAX_ROUNDS = Number(process.env.TRIAL_MAX_ROUNDS || 50);
 const MAX_TOKENS = Number(process.env.TRIAL_MAX_TOKENS || 100000);
 const TOKEN_TTL = Number(process.env.TRIAL_TOKEN_TTL || 900) * 1000;
 
@@ -62,7 +62,8 @@ export async function POST(req: Request) {
   const wantModel = body.model;
   const cfg = getModelCfg(wantModel);
 
-  // 2) 扣减 / 验 token
+  // 2) 扣减 / 验 token(管理员不限次数)
+  const isAdmin = await checkIsAdmin(user.id);
   let iid = '';
   let roundsDone = 0;       // 本意图已完成的轮数
   let tokensUsed = 0;        // 本意图已消费的输入 token
@@ -76,17 +77,21 @@ export async function POST(req: Request) {
       roundsDone = payload.r;
       tokensUsed = payload.t;
     } else {
-      // token 无效/超时 → 视为新意图, 走扣减
-      const fresh = await deduct(user.id);
-      if (!fresh) return json(402, { error: '试用次数已用完', remaining: 0 });
-      deductResult = fresh;
+      // token 无效/超时 → 视为新意图, 走扣减(管理员跳过)
+      if (!isAdmin) {
+        const fresh = await deduct(user.id);
+        if (!fresh) return json(402, { error: '试用次数已用完', remaining: 0 });
+        deductResult = fresh;
+      }
       iid = newIntentId();
     }
   } else {
-    // 首次: 扣 1 次
-    const fresh = await deduct(user.id);
-    if (!fresh) return json(402, { error: '试用次数已用完', remaining: 0 });
-    deductResult = fresh;
+    // 首次: 扣 1 次(管理员跳过)
+    if (!isAdmin) {
+      const fresh = await deduct(user.id);
+      if (!fresh) return json(402, { error: '试用次数已用完', remaining: 0 });
+      deductResult = fresh;
+    }
     iid = newIntentId();
   }
 
@@ -151,6 +156,13 @@ async function deduct(userId: string): Promise<{ used: number; trial_limit: numb
   const { data, error } = await admin.rpc('deduct_usage', { target_user: userId });
   if (error || !data || !Array.isArray(data) || data.length === 0) return null;
   return { used: data[0].used, trial_limit: data[0].trial_limit };
+}
+
+// 管理员不限次数(方便测试/管理) —— is_admin=true 的用户跳过扣减
+async function checkIsAdmin(userId: string): Promise<boolean> {
+  const admin = getSupabaseAdmin();
+  const { data } = await admin.from('profiles').select('is_admin').eq('user_id', userId).maybeSingle();
+  return !!data?.is_admin;
 }
 
 function json(status: number, payload: any): Response {
