@@ -155,10 +155,6 @@ button { font-family: inherit; cursor: pointer; }
 .katex { font-size: 1.05em; }
 .msg-content .katex-display { margin: 8px 0; overflow-x: auto; overflow-y: hidden; }
 
-/* ── 分割线(可拖动调整 chat/canvas 宽度) ── */
-.pane-resizer { width: 5px; background: #e5e7eb; cursor: col-resize; flex-shrink: 0; transition: background 0.15s; }
-.pane-resizer:hover { background: #4f46e5; }
-
 /* 滚动条 */
 ::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 4px; }

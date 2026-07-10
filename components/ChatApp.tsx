@@ -68,8 +68,6 @@ export default function ChatApp() {
   const { sessions, currentSessionId, setSessions, setCurrent, upsert, patchCurrent } = useSessionStore();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sessionsLoading, setSessionsLoading] = useState(true);
-  const [canvasMaximized, setCanvasMaximized] = useState(false);
-  const [chatWidth, setChatWidth] = useState(44); // %
 
   // ── 引擎实例(单例) ──
   const loggerRef = useRef<Logger>(new Logger());
@@ -97,26 +95,6 @@ export default function ChatApp() {
       agentRef.current = new AgentEngine({ ggb: ggbRef.current, commandSearch: csRef.current, logger: loggerRef.current });
     }
   }, [ggbReady, embedFn, ggbRef]);
-
-  // 画布自适应: 全屏/拖动分割线 → 记住坐标系 → resize → 恢复(仅扩展区域, 不缩放)
-  useEffect(() => {
-    const api = ggbRef.current?.getAPI();
-    if (!api || !ggbReady) return;
-    // 记住当前视图的坐标系
-    const el = document.getElementById('ggb-container');
-    const w = el?.clientWidth || 600;
-    const h = el?.clientHeight || 500;
-    const xmin = api.getXcoord(0);
-    const xmax = api.getXcoord(w);
-    const ymin = api.getYcoord(h);
-    const ymax = api.getYcoord(0);
-    requestAnimationFrame(() => {
-      window.dispatchEvent(new Event('resize'));
-      requestAnimationFrame(() => {
-        api.setCoordSystem?.(xmin, xmax, ymin, ymax);
-      });
-    });
-  }, [canvasMaximized, chatWidth]);
 
   // ── UI 状态 ──
   const [messages, setMessages] = useState<Msg[]>([]);
@@ -220,11 +198,7 @@ export default function ChatApp() {
         const list: any[] = data.sessions || [];
         if (cancelled) { setSessionsLoading(false); return; }
         setSessions(list);
-        if (list.length === 0) {
-          await newSession();
-        } else {
-          await switchSession(list[0].id);
-        }
+        await newSession();  // 始终新建空会话, 不自动恢复历史画布
         setSessionsLoading(false);
       } catch (e) {
         console.warn('加载会话失败:', e);
@@ -439,31 +413,15 @@ export default function ChatApp() {
   const remaining = config.mode === 'trial' ? (usage?.remaining ?? null) : null;
   const canSend = config.mode === 'trial' ? (isAdmin || remaining === null || remaining > 0) : config.isByokValid();
 
-  const onResizerDown = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    const startX = e.clientX;
-    const startW = chatWidth;
-    const onMove = (ev: MouseEvent) => {
-      const dx = ((ev.clientX - startX) / window.innerWidth) * 100;
-      setChatWidth(Math.max(20, Math.min(70, startW + dx)));
-    };
-    const onUp = () => { document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp); };
-    document.addEventListener('mousemove', onMove);
-    document.addEventListener('mouseup', onUp);
-  }, [chatWidth]);
-
   return (
     <div className="app">
       <header className="topbar">
-        <div className="brand">
+        <a href="/" className="brand">
           <span className="logo">📐</span>
           <span className="title">GGB Fable</span>
-          <button className="btn ghost" title="对话列表" onClick={() => setSidebarOpen(true)}>☰</button>
-          <button className="btn ghost" title="新建对话" onClick={newSession}>+</button>
-          <button className="btn ghost" title={canvasMaximized ? "显示对话" : "专注画布"} onClick={() => setCanvasMaximized(!canvasMaximized)}>
-            {canvasMaximized ? '◧' : '◨'}
-          </button>
-        </div>
+        </a>
+        <button className="btn ghost" title="对话列表" onClick={() => setSidebarOpen(true)}>☰</button>
+        <button className="btn ghost" title="新建对话" onClick={newSession}>+</button>
         <div className="top-actions">
           {/* 模式切换 */}
           <div className="mode-switch">
@@ -487,7 +445,7 @@ export default function ChatApp() {
 
       <SessionSidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} onNew={newSession} onSwitch={switchSession} />
       <main className="layout">
-        <section className="pane chat-pane" style={canvasMaximized ? { display: 'none' } : { width: `${chatWidth}%` }}>
+        <section className="pane chat-pane">
           <CommandBar
             commandLog={commandLog}
             recipe={recipe}
@@ -549,8 +507,6 @@ export default function ChatApp() {
             </div>
           </div>
         </section>
-
-        {!canvasMaximized && <div className="pane-resizer" onMouseDown={onResizerDown} />}
 
         <section className="pane canvas-pane">
           <div className="canvas-wrap" ref={containerRef as any}>
