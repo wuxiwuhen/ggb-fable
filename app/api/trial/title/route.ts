@@ -37,13 +37,13 @@ export async function POST(req: Request) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${cfg.api_key}` },
     body: JSON.stringify({
-      model: cfg.model_name,
+      model: 'deepseek-chat',       // 标题只需简略总结, 不用 reasoning 模型(快+省)
       messages: [
         { role: 'system', content: TITLE_PROMPT },
         { role: 'user', content: text },
       ],
       temperature: 0.2,
-      max_tokens: 4000,
+      max_tokens: 60,
       stream: false,
     }),
   });
@@ -54,10 +54,8 @@ export async function POST(req: Request) {
   }
 
   const data = await upstream.json();
-  console.log('[title API] text:', text.slice(0, 80), '| choices:', JSON.stringify(data.choices).slice(0, 300));
   const raw = (data.choices?.[0]?.message?.content || '');
   const title = raw.trim().slice(0, 15).replace(/["""''。]/g, '');
-  console.log('[title API] raw:', JSON.stringify(raw), '| title:', JSON.stringify(title));
   return json(200, { title });
 }
 
