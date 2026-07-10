@@ -41,13 +41,13 @@ export default function LandingPage() {
 
       {/* 顶部导航 */}
       <nav className="landing-nav">
-        <div className="brand">
-          <span className="logo">📐</span>
-          <span className="title">GGB Fable</span>
+        <div className="brand" style={{ fontSize: 20 }}>
+          <span className="logo" style={{ fontSize: 28 }}>📐</span>
+          <span className="title" style={{ fontSize: 22 }}>GGB Fable</span>
         </div>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-          {isAdmin && <a className="btn ghost sm" href="/admin">管理后台</a>}
-          <a className={user ? 'btn ghost sm' : 'btn primary sm'} href={ctaHref}>{user ? '工作台' : '登录'}</a>
+          {isAdmin && <a className="btn ghost" href="/admin" style={{ fontSize: 15, padding: '8px 16px' }}>管理后台</a>}
+          <a className={user ? 'btn ghost' : 'btn primary'} href={ctaHref} style={{ fontSize: 15, padding: '8px 18px' }}>{user ? '工作台' : '登录'}</a>
         </div>
       </nav>
 
