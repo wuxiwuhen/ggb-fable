@@ -21,6 +21,9 @@ import { useGeogebra } from '@/hooks/useGeogebra';
 import MessageContent from './MessageContent';
 import TracePanel, { type TraceItem, type ExecLine } from './TracePanel';
 import CommandBar from './CommandBar';
+import { useSessionStore } from '@/lib/session-store';
+import { rebuildChatMessages, rebuildTrace, rebuildHistory, extractReplayCommands, type ApiMessage } from '@/lib/conversation';
+import SessionSidebar from './SessionSidebar';
 
 interface Msg {
   id: number;
@@ -62,6 +65,8 @@ function ThinkingIndicator({ trace }: { trace: TraceItem[] }) {
 export default function ChatApp() {
   const { user, isAdmin, signOut } = useAuth();
   const config = useConfigStore();
+  const { sessions, currentSessionId, setSessions, setCurrent, upsert, patchCurrent } = useSessionStore();
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   // ── 引擎实例(单例) ──
   const loggerRef = useRef<Logger>(new Logger());
@@ -128,33 +133,80 @@ export default function ChatApp() {
   }), []);
 
   // ── 会话管理(云端) ──
-  const [sessionId, setSessionId] = useState<string | null>(null);
-  const newSession = useCallback(async () => {
-    // 保存当前 + 新建云端会话
-    const st = useConfigStore.getState();
-    try {
-      const resp = await fetch('/api/sessions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'create', mode: st.mode, title: '新会话' }),
-      });
-      const data = await resp.json();
-      if (data.id) {
-        setSessionId(data.id);
-        loggerRef.current.setSession(data.id);
-      }
-    } catch (e) { /* 静默, 日志非关键 */ }
-    setMessages([]);
-    setTrace([]);
-    setExecLines([]);
-    setCommandLog([]);
-    setRecipe(null);
-    setHistory([]);
-    trialTokenRef.current = null;
-    ggbRef.current?.clearAll();
-  }, [ggbRef]);
 
-  useEffect(() => { newSession(); /* eslint-disable-next-line */ }, []);
+  // 新建空会话: create → 清空 state + 画布 → 设为当前
+  const newSession = useCallback(async () => {
+    abortRef.current?.abort();
+    setError('');
+    const res = await fetch('/api/sessions', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'create', mode: config.mode, model: config.mode === 'trial' ? 'deepseek' : config.getActiveByok()?.model_name }),
+    });
+    const data = await res.json();
+    const id: string = data.id;
+    setMessages([]); setTrace([]); setExecLines([]); setCommandLog([]); setRecipe(null); setHistory([]);
+    await ggbRef.current?.clearAll();
+    const now = new Date().toISOString();
+    upsert({ id, title: null, mode: config.mode, model: null, created_at: now, updated_at: now });
+    setCurrent(id);
+    loggerRef.current.setSession(id);          // 修复: logger 绑定 sessionId
+    setSidebarOpen(false);
+    return id;
+  }, [config, setSessions, setCurrent, upsert]);
+
+  // 切换会话: 加载 → 重建 chat/trace/history → 重放画布 → 设为当前
+  const switchSession = useCallback(async (id: string) => {
+    if (id === currentSessionId) return;
+    abortRef.current?.abort();
+    setError('');
+    try {
+      const res = await fetch(`/api/sessions?id=${id}`);
+      if (!res.ok) return;
+      const { session, messages }: { session: any; messages: ApiMessage[] } = await res.json();
+      // 重建运行态
+      const chatMsgs = rebuildChatMessages(messages);
+      setMessages(chatMsgs.map((m, i) => ({ id: ++msgId, role: m.role, content: m.content })));
+      setTrace(rebuildTrace(messages).map((t) => ({ id: ++msgId, ...t })));
+      setHistory(rebuildHistory(messages));
+      setRecipe(null);
+      // 恢复画布: recipe 优先, 没有则回退重放 execute_command 命令
+      await ggbRef.current?.clearAll();
+      const recipe: string[] | null = session?.recipe ? (Array.isArray(session.recipe) ? session.recipe : null) : null;
+      const cmds = recipe && recipe.length ? recipe : extractReplayCommands(messages);
+      if (cmds.length) {
+        try { await ggbRef.current?.execBatch(cmds.join('\n')); } catch (e) { console.warn('画布重放失败:', e); }
+      }
+      setCurrent(id);
+      loggerRef.current.setSession(id);
+    } catch (e) {
+      setError('切换会话失败: ' + (e as any).message);
+    }
+    setSidebarOpen(false);
+  }, [currentSessionId, setCurrent]);
+
+  // 首次进入: 加载会话列表, 无则建空会话; 绑定 logger sessionId
+  useEffect(() => {
+    if (!ggbReady) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('/api/sessions');
+        const data = await res.json();
+        const list: any[] = data.sessions || [];
+        if (cancelled) return;
+        setSessions(list);
+        if (list.length === 0) {
+          await newSession();          // 无会话 → 建空会话
+        } else {
+          await switchSession(list[0].id);   // 有 → 进最近会话
+        }
+      } catch (e) {
+        console.warn('加载会话失败:', e);
+      }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ggbReady]);
 
   // ── 额度(仅 trial 模式) ──
   const fetchUsage = useCallback(async () => {
@@ -200,6 +252,10 @@ export default function ChatApp() {
     setMessages((prev) => [...prev, userMsg, assistantMsg]);
     setInput('');
     setSending(true);
+    // 首条消息后, 后台生成会话标题(当前会话无标题时)
+    if (currentSessionId && !useSessionStore.getState().sessions.find((s) => s.id === currentSessionId)?.title) {
+      generateTitle(text, currentSessionId);
+    }
     loggerRef.current.userTurn(text);
 
     streamBuf.current = { id: assistantMsg.id, text: '' };
@@ -269,9 +325,51 @@ export default function ChatApp() {
     setRecipeLoading(true);
     try {
       const res = await Condenser.run(log, (p) => backend.chat(p));
-      setRecipe(res.commands.length ? res.commands : null);
+      const cmds = res.commands.length ? res.commands : null;
+      setRecipe(cmds);
+      // 持久化 recipe 到当前会话(供切换重放)
+      if (cmds && currentSessionId) {
+        fetch('/api/sessions', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'update', id: currentSessionId, recipe: cmds }),
+        }).catch(() => {});
+      }
     } catch (e) { /* 静默 */ } finally { setRecipeLoading(false); }
-  }, [ggbRef]);
+  }, [ggbRef, currentSessionId]);
+
+  // 后台生成标题并更新会话(trial 走 /api/trial/title 不扣次数; byok 用用户 key)
+  const generateTitle = useCallback(async (text: string, sessionId: string) => {
+    try {
+      let title = '';
+      if (config.mode === 'trial') {
+        const res = await fetch('/api/trial/title', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text }),
+        });
+        if (res.ok) title = (await res.json()).title || '';
+      } else {
+        const prof = config.getActiveByok();
+        if (prof) {
+          const { chatByok } = await import('@/lib/llm');
+          const msg = await chatByok({
+            messages: [
+              { role: 'system', content: '给下面这段数学问题生成一个不超过15字的中文标题, 只输出标题文本。' },
+              { role: 'user', content: text.slice(0, 500) },
+            ],
+            config: { api_key: prof.api_key, base_url: prof.base_url, model_name: prof.model_name },
+          });
+          title = (msg.content || '').trim().slice(0, 15);
+        }
+      }
+      if (title) {
+        await fetch('/api/sessions', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'update', id: sessionId, title }),
+        });
+        patchCurrent({ title });
+      }
+    } catch (e) { /* 标题失败不阻塞 */ }
+  }, [config, patchCurrent]);
 
   const stop = useCallback(() => { abortRef.current?.abort(); }, []);
 
@@ -319,6 +417,7 @@ export default function ChatApp() {
         <div className="brand">
           <span className="logo">📐</span>
           <span className="title">GGB Fable</span>
+          <button className="btn ghost" title="对话列表" onClick={() => setSidebarOpen(true)}>☰</button>
         </div>
         <div className="top-actions">
           {/* 模式切换 */}
@@ -341,6 +440,7 @@ export default function ChatApp() {
         </div>
       </header>
 
+      <SessionSidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} onNew={newSession} onSwitch={switchSession} />
       <main className="layout">
         <section className="pane chat-pane">
           <CommandBar
