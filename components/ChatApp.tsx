@@ -416,12 +416,14 @@ export default function ChatApp() {
   return (
     <div className="app">
       <header className="topbar">
-        <a href="/" className="brand">
-          <span className="logo">📐</span>
-          <span className="title">GGB Fable</span>
-        </a>
-        <button className="btn ghost" title="对话列表" onClick={() => setSidebarOpen(true)}>☰</button>
-        <button className="btn ghost" title="新建对话" onClick={newSession}>+</button>
+        <div className="brand">
+          <a href="/" className="brand-link">
+            <span className="logo">📐</span>
+            <span className="title">GGB Fable</span>
+          </a>
+          <button className="btn ghost" title="对话列表" onClick={() => setSidebarOpen(true)}>☰</button>
+          <button className="btn ghost" title="新建对话" onClick={newSession}>+</button>
+        </div>
         <div className="top-actions">
           {/* 模式切换 */}
           <div className="mode-switch">
