@@ -100,12 +100,10 @@ export default function ChatApp() {
 
   // 画布自适应: 全屏/拖动分割线 → 通知 GGB applet resize
   useEffect(() => {
-    const api = ggbRef.current?.getAPI();
-    const el = document.getElementById('ggb-container');
-    if (api && el) {
-      setTimeout(() => api.setSize?.(el.clientWidth, el.clientHeight), 50);
-    }
-  }, [canvasMaximized, chatWidth, ggbRef, ggbReady]);
+    requestAnimationFrame(() => {
+      window.dispatchEvent(new Event('resize'));
+    });
+  }, [canvasMaximized, chatWidth]);
 
   // ── UI 状态 ──
   const [messages, setMessages] = useState<Msg[]>([]);

@@ -77,7 +77,7 @@ export default function CommandBar({ commandLog, recipe, onGenerateRecipe, onRep
             ))}
           </div>
         ) : (
-          <div className="cmd-list">
+          <div className={`cmd-list ${editing ? 'editing' : ''}`}>
             {editing ? (
               <textarea
                 className="recipe-editor"
