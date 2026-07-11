@@ -100,6 +100,10 @@ button { font-family: inherit; cursor: pointer; }
 /* ── 画布 ── */
 .canvas-wrap { flex: 1; position: relative; overflow: hidden; min-height: 300px; }
 #ggb-container { width: 100%; height: 100%; }
+/* GeoGebra 的 .applet_scaler 默认用 transform scale 做 autoScale; 真实应用初始加载(React 异步渲染)时
+   它会算出 scale<1, 导致画布右/下出现空白边距(re-inject 重建后才修正为 1)。尺寸已由 setSize 精确控制,
+   这里强制不缩放, 消除初始空白 */
+#ggb-container .applet_scaler { transform: none !important; }
 .canvas-loading {
   position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
   color: #888; background: #fafbfc; font-size: 14px;

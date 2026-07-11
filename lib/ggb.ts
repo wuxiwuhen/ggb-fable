@@ -139,9 +139,9 @@ export class GGB {
         showToolBar: true,
         showMenuBar: true,
         showAlgebraInput: true,
-        allowUpscale: true,
-        autoHeight: true,
-        scaleContainerClass: 'canvas-wrap',
+        // 不启用 scaleContainerClass/autoHeight/allowUpscale: 它们让 applet 按"自身宽高比"缩放,
+        // 当容器宽高比 ≠ applet 宽高比时会溢出(底部动画按钮被 overflow:hidden 裁掉)或填不满(横竖屏切换后画布很小)。
+        // 改由外层 useGeogebra 在每次容器尺寸变化时 setSize(w,h) 强制 applet ≡ 容器尺寸。
         enableRightClick: true,
         enableShiftDragZoom: true,
         showAnimationButton: true,
@@ -180,6 +180,29 @@ export class GGB {
         reject(e);
       }
     });
+  }
+
+  // 浏览器 zoom(DPR 变化)后 setSize 无法缩小 applet 根元素, 唯一可靠解是用当前 DPR 重建 applet。
+  // 流程: 保存画布 XML → 销毁旧 applet(DOM) → 重置状态 → 重新 init(读当前容器尺寸+当前 DPR) → 恢复 XML。
+  // 仅 client 调用; commandLog 保留(执行历史不丢)。
+  async reinit(containerId: string, params: Record<string, any> = {}): Promise<GgbApi> {
+    let xml = '';
+    try { if (this.applet?.getXML) xml = this.applet.getXML(); } catch {}
+    this.ready = false;
+    this.applet = null;
+    this.readyResolvers = [];
+    const container = document.getElementById(containerId);
+    if (container) {
+      // 释放旧 canvas 的 WebGL 上下文(避免频繁重建累积 GPU 内存), 再清 DOM
+      container.querySelectorAll('canvas').forEach((c) => { c.width = 0; c.height = 0; });
+      container.innerHTML = '';
+    }
+    const api = await this.init(containerId, params);
+    if (xml) {
+      try { await new Promise((r) => setTimeout(r, 120)); api.setXML?.(xml); }   // 等 applet 完全就绪再恢复
+      catch (e) { console.warn('reinit setXML 恢复失败:', e); }
+    }
+    return api;
   }
 
   private async ensureReady(): Promise<GgbApi> {
