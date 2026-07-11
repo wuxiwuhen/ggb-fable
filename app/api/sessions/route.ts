@@ -24,11 +24,14 @@ export async function GET(req: Request) {
   const admin = getSupabaseAdmin();
 
   if (id) {
-    // 鉴权 + 取完整 session(含 recipe); 走 service_role 查避免 RLS 复杂性
-    const { data: sess } = await admin.from('sessions').select('*').eq('id', id).maybeSingle();
+    // session + messages 并行查询(省一次跨区往返, 之前是串行 2 次)
+    const [sessRes, msgsRes] = await Promise.all([
+      admin.from('sessions').select('*').eq('id', id).maybeSingle(),
+      admin.from('messages').select('*').eq('session_id', id).order('id', { ascending: true }),
+    ]);
+    const sess = sessRes.data;
     if (!sess || sess.user_id !== user.id) return json(404, { error: '会话不存在' });
-    const { data: msgs } = await admin.from('messages').select('*').eq('session_id', id).order('id', { ascending: true });
-    return json(200, { session: sess, messages: msgs || [] });
+    return json(200, { session: sess, messages: msgsRes.data || [] });
   }
 
   const { data } = await admin
@@ -58,8 +61,9 @@ export async function POST(req: Request) {
     const patch: any = { updated_at: new Date().toISOString() };
     if (body.title != null) patch.title = body.title;
     if (body.recipe !== undefined) patch.recipe = body.recipe;   // 历史会话: 持久化重建脚本
-    await admin.from('sessions').update(patch).eq('id', body.id).eq('user_id', user.id);
-    return json(200, { ok: true });
+    const { data: rows } = await admin.from('sessions')
+      .update(patch).eq('id', body.id).eq('user_id', user.id).select('id');
+    return json(200, { ok: true, affected: rows?.length ?? 0 });
   }
 
   if (body.action === 'append') {
@@ -116,5 +120,8 @@ function eventToRow(sessionId: string, userId: string, ev: any) {
 }
 
 function json(status: number, payload: any): Response {
-  return new Response(JSON.stringify(payload), { status, headers: { 'Content-Type': 'application/json' } });
+  return new Response(JSON.stringify(payload), {
+    status,
+    headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
+  });
 }

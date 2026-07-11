@@ -10,20 +10,34 @@ interface Props {
   recipe: string[] | null;
   onGenerateRecipe: () => Promise<void>;
   onReplay: (lines: string[]) => Promise<void>;
+  onSaveRecipe: (lines: string[]) => Promise<void>;
   recipeLoading: boolean;
 }
 
-export default function CommandBar({ commandLog, recipe, onGenerateRecipe, onReplay, recipeLoading }: Props) {
+export default function CommandBar({ commandLog, recipe, onGenerateRecipe, onReplay, onSaveRecipe, recipeLoading }: Props) {
   const [mode, setMode] = useState<'history' | 'recipe'>('history');
   const [editing, setEditing] = useState(false);
   const [editText, setEditText] = useState('');
   const [replaying, setReplaying] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   const visibleLog = commandLog.filter((e) => !e.ephemeral);
 
   function startEdit() {
     setEditText((recipe || []).join('\n'));
     setEditing(true);
+  }
+
+  // 完成: 把编辑内容解析为命令行, 写回 recipe 并持久化, 再退出编辑态
+  async function finishEdit() {
+    const lines = editText.split('\n').map((s) => s.trim()).filter(Boolean);
+    setSaving(true);
+    try {
+      await onSaveRecipe(lines);
+      setEditing(false);
+    } finally {
+      setSaving(false);
+    }
   }
 
   async function replay() {
@@ -56,7 +70,7 @@ export default function CommandBar({ commandLog, recipe, onGenerateRecipe, onRep
                 {recipeLoading ? '生成中…' : '🔄 重新生成'}
               </button>
               {recipe && !editing && <button className="btn ghost sm" onClick={startEdit}>✏ 编辑</button>}
-              {editing && <button className="btn ghost sm" onClick={() => setEditing(false)}>完成</button>}
+              {editing && <button className="btn ghost sm" onClick={finishEdit} disabled={saving}>{saving ? '保存中…' : '✓ 完成'}</button>}
               <button className="btn ghost sm" onClick={replay} disabled={replaying || !recipe}>
                 {replaying ? '重放中…' : '▶ 重放'}
               </button>

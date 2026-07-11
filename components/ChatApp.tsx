@@ -178,7 +178,7 @@ export default function ChatApp() {
     abortRef.current?.abort();
     setError('');
     try {
-      const res = await fetch(`/api/sessions?id=${id}`);
+      const res = await fetch(`/api/sessions?id=${id}`, { cache: 'no-store' });
       if (!res.ok) return;
       const { session, messages }: { session: any; messages: ApiMessage[] } = await res.json();
       // 重建运行态
@@ -210,7 +210,7 @@ export default function ChatApp() {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch('/api/sessions');
+        const res = await fetch('/api/sessions', { cache: 'no-store' });
         const data = await res.json();
         const list: any[] = data.sessions || [];
         if (cancelled) { setSessionsLoading(false); return; }
@@ -358,6 +358,21 @@ export default function ChatApp() {
     } catch (e) { /* 静默 */ } finally { setRecipeLoading(false); }
   }, [ggbRef]);
 
+  // 手动保存编辑后的重建脚本: 写 state + 持久化到当前会话(供切换/刷新重放)
+  const saveRecipe = useCallback(async (lines: string[]) => {
+    setRecipe(lines.length ? lines : null);
+    const sid = useSessionStore.getState().currentSessionId;
+    if (!sid) return;
+    try {
+      await fetch('/api/sessions', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'update', id: sid, recipe: lines }),
+      });
+    } catch (e) {
+      console.warn('保存重建脚本失败:', e);
+    }
+  }, []);
+
   // 后台生成标题并更新会话(trial 走 /api/trial/title 不扣次数; byok 用用户 key)
   const generateTitle = useCallback(async (text: string, sessionId: string) => {
     try {
@@ -472,6 +487,7 @@ export default function ChatApp() {
             recipe={recipe}
             onGenerateRecipe={async () => { if (agentRef.current) generateRecipe(buildBackend()); }}
             onReplay={replay}
+            onSaveRecipe={saveRecipe}
             recipeLoading={recipeLoading}
           />
 
