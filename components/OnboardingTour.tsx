@@ -109,6 +109,9 @@ export default function OnboardingTour({ steps, onFinish, onContinueAdvanced }: 
   // 键盘: ESC 跳过, → 下一步, ← 上一步
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      // 输入框聚焦时不拦截方向键/ESC(避免光标移动同时触发引导)
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === 'TEXTAREA' || t.tagName === 'INPUT' || t.isContentEditable)) return;
       if (e.key === 'Escape') { onFinish(false); }
       else if (e.key === 'ArrowRight') {
         if (isLast) onFinish(true);
@@ -142,15 +145,15 @@ export default function OnboardingTour({ steps, onFinish, onContinueAdvanced }: 
       {/* 遮罩: 有 rect 时用 4 块挖洞, 否则整屏 */}
       {rect && ready ? (
         <>
-          <div className="tour-mask" style={{ left: 0, top: 0, width: '100%', height: rect.top }} />
-          <div className="tour-mask" style={{ left: 0, top: rect.bottom, width: '100%', height: `calc(100vh - ${rect.bottom}px)` }} />
-          <div className="tour-mask" style={{ left: 0, top: rect.top, width: rect.left, height: rect.height }} />
-          <div className="tour-mask" style={{ left: rect.right, top: rect.top, width: `calc(100vw - ${rect.right}px)`, height: rect.height }} />
+          <div className="tour-mask" style={{ left: 0, top: 0, width: '100%', height: rect.top }} onClick={() => onFinish(false)} />
+          <div className="tour-mask" style={{ left: 0, top: rect.bottom, width: '100%', height: `calc(100vh - ${rect.bottom}px)` }} onClick={() => onFinish(false)} />
+          <div className="tour-mask" style={{ left: 0, top: rect.top, width: rect.left, height: rect.height }} onClick={() => onFinish(false)} />
+          <div className="tour-mask" style={{ left: rect.right, top: rect.top, width: `calc(100vw - ${rect.right}px)`, height: rect.height }} onClick={() => onFinish(false)} />
           {/* 高亮描边框 */}
           <div className="tour-highlight" style={{ left: rect.left, top: rect.top, width: rect.width, height: rect.height }} />
         </>
       ) : (
-        <div className="tour-mask tour-mask-full" />
+        <div className="tour-mask tour-mask-full" onClick={() => onFinish(false)} />
       )}
 
       {/* 气泡 */}
