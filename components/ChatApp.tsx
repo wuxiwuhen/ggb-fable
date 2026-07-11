@@ -518,27 +518,47 @@ export default function ChatApp() {
 
           <div className="composer">
             {error && <div className="error-banner">{error}</div>}
-            {ocrLoading && <div className="status">📷 识别图片中…</div>}
-            {imgPreview && <img src={imgPreview} className="img-preview" alt="预览" />}
-            <div className="input-row">
+            <div className="input-box">
+              {(imgPreview || ocrLoading) && (
+                <div className="media-row">
+                  {imgPreview && <img src={imgPreview} className="img-preview" alt="预览" />}
+                  {ocrLoading && <span className="ocr-status"><span className="spinner" />识别图片中…</span>}
+                </div>
+              )}
               <textarea
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') send(); }}
-                placeholder="描述你想画的数学图形, 例如: 画一个圆心在原点、半径为 3 的圆…"
+                placeholder="描述你想画的数学图形，例如：画一个圆心在原点、半径为 3 的圆…"
                 rows={3}
               />
-              <div className="send-col">
-                <button className="btn ghost img-btn" title="上传数学题图片(OCR)" onClick={() => document.getElementById('image-file-input')?.click()}>📷</button>
+              <div className="toolbar">
+                <button className="icon-btn" title="上传数学题图片（OCR 识别）" aria-label="上传图片"
+                  onClick={() => document.getElementById('image-file-input')?.click()} disabled={ocrLoading}>
+                  <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="3" y="3" width="18" height="18" rx="3" />
+                    <circle cx="8.5" cy="8.5" r="1.6" />
+                    <path d="M21 15l-5-5L5 21" />
+                  </svg>
+                </button>
+                <div className="toolbar-spacer" />
                 {!sending ? (
-                  <button className="btn primary" onClick={send} disabled={!canSend || !input.trim()}>发送</button>
+                  <button className="send-btn" onClick={send} disabled={!canSend || !input.trim()} title="发送" aria-label="发送">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M12 19V6M6 12l6-6 6 6" />
+                    </svg>
+                  </button>
                 ) : (
-                  <button className="btn danger" onClick={stop}>停止</button>
+                  <button className="send-btn stop" onClick={stop} title="停止" aria-label="停止">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                      <rect x="5" y="5" width="14" height="14" rx="2.5" />
+                    </svg>
+                  </button>
                 )}
               </div>
-              <input id="image-file-input" type="file" accept="image/*" style={{ display: 'none' }}
-                onChange={(e) => { const f = e.target.files?.[0]; if (f) handleImage(f); e.target.value = ''; }} />
             </div>
+            <input id="image-file-input" type="file" accept="image/*" hidden
+              onChange={(e) => { const f = e.target.files?.[0]; if (f) handleImage(f); e.target.value = ''; }} />
             <div className="status">
               {config.mode === 'byok' && !config.isByokValid() ? '⚠ 未配置 BYOK 模型，请到设置页填写' : '就绪 · Cmd/Ctrl+Enter 发送'}
             </div>
