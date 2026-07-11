@@ -28,7 +28,7 @@ export default function SessionSidebar({ open, onClose, onNew, onSwitch }: Props
       <aside className="session-sidebar">
         <div className="sidebar-head">
           <span>对话</span>
-          <button className="btn sm ghost" onClick={onNew} title="新对话">+ 新建</button>
+          <button className="btn sm ghost" onClick={() => { onNew(); onClose(); }} title="新对话">+ 新建</button>
         </div>
         <div className="sidebar-list">
           {sessions.length === 0 && <div className="sidebar-empty">暂无对话</div>}
