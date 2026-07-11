@@ -55,14 +55,14 @@ export default function CommandBar({ commandLog, recipe, onGenerateRecipe, onRep
 
   return (
     <details className="cmd-bar">
-      <summary>
+      <summary data-tour="command-history">
         🧱 执行历史 / 重建脚本 <span className="count">{visibleLog.length}</span>
       </summary>
       <div className="cmd-bar-body">
         <div className="cmd-bar-actions">
           <div className="cmd-toggle">
             <button className={`cmd-tab ${mode === 'history' ? 'active' : ''}`} onClick={() => setMode('history')}>执行历史</button>
-            <button className={`cmd-tab ${mode === 'recipe' ? 'active' : ''}`} onClick={() => setMode('recipe')}>重建脚本</button>
+            <button className={`cmd-tab ${mode === 'recipe' ? 'active' : ''}`} data-tour="recipe-tab" onClick={() => setMode('recipe')}>重建脚本</button>
           </div>
           {mode === 'recipe' && (
             <>

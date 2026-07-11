@@ -490,22 +490,22 @@ export default function ChatApp() {
             <span className="logo">📐</span>
             <span className="title">GGB Fable</span>
           </Link>
-          <button className="btn ghost" title="对话列表" onClick={() => setSidebarOpen(true)}>☰</button>
+          <button className="btn ghost" title="对话列表" data-tour="sessions-toggle" onClick={() => setSidebarOpen(true)}>☰</button>
           <button className="btn ghost" title="清空工作区" onClick={clearWorkspace}>+</button>
         </div>
         <div className="top-actions">
           {/* 模式切换 */}
-          <div className="mode-switch">
+          <div className="mode-switch" data-tour="mode-switch">
             <button className={config.mode === 'trial' ? 'active' : ''} onClick={() => config.setMode('trial')}>免费试用</button>
             <button className={config.mode === 'byok' ? 'active' : ''} onClick={() => config.setMode('byok')}>自带 Key</button>
           </div>
           {config.mode === 'trial' && usage && !adminLoading && !isAdmin && (
-            <span className={`usage-badge ${remaining === 0 ? 'exhausted' : ''}`} title="剩余试用次数">
+            <span className={`usage-badge ${remaining === 0 ? 'exhausted' : ''}`} title="剩余试用次数" data-tour="usage-badge">
               剩余 {remaining}/{usage.limit}
             </span>
           )}
           {config.mode === 'trial' && !adminLoading && isAdmin && (
-            <span className="usage-badge" title="管理员不限次数">管理员 ∞</span>
+            <span className="usage-badge" title="管理员不限次数" data-tour="usage-badge">管理员 ∞</span>
           )}
           {!adminLoading && isAdmin && <Link className="btn ghost" href="/admin">🛠 管理</Link>}
           <Link className="btn ghost" href="/settings">⚙ 设置</Link>
@@ -515,7 +515,7 @@ export default function ChatApp() {
             </button>
           ) : (
             <div className="export-wrap" ref={exportMenuRef}>
-              <button className="btn ghost" onClick={() => setExportOpen((v) => !v)}>
+              <button className="btn ghost" data-tour="export" onClick={() => setExportOpen((v) => !v)}>
                 导出 <span className="caret">▾</span>
               </button>
               {exportOpen && (
@@ -581,7 +581,7 @@ export default function ChatApp() {
 
           <div className="composer">
             {error && <div className="error-banner">{error}</div>}
-            <div className="input-box">
+            <div className="input-box" data-tour="composer">
               {(imgPreview || ocrLoading) && (
                 <div className="media-row">
                   {imgPreview && <img src={imgPreview} className="img-preview" alt="预览" />}
