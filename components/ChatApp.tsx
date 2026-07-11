@@ -19,6 +19,7 @@ import { chatTrial, visionTrial, visionByok, type TrialContext } from '@/lib/llm
 import { Vision } from '@/lib/vision';
 import { Condenser } from '@/lib/condenser';
 import { useGeogebra } from '@/hooks/useGeogebra';
+import { exportPng, startRecording, stopRecording, recordingFormat } from '@/lib/export-media';
 import MessageContent from './MessageContent';
 import TracePanel, { type TraceItem, type ExecLine } from './TracePanel';
 import CommandBar from './CommandBar';
@@ -111,6 +112,11 @@ export default function ChatApp() {
   const [ocrLoading, setOcrLoading] = useState(false);
   const [imgPreview, setImgPreview] = useState<string | null>(null);
 
+  // ── 导出菜单状态 ──
+  const [exportOpen, setExportOpen] = useState(false);
+  const [recording, setRecording] = useState(false);
+  const exportMenuRef = useRef<HTMLDivElement>(null);
+
   const [history, setHistory] = useState<any[]>([]);     // Agent 上下文(截断 8 条)
   const trialTokenRef = useRef<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -133,6 +139,34 @@ export default function ChatApp() {
     get token() { return trialTokenRef.current; },
     setToken: (t) => { trialTokenRef.current = t; },
   }), []);
+
+  // ── 导出菜单:点外部关闭 ──
+  useEffect(() => {
+    if (!exportOpen) return;
+    const onDown = (e: MouseEvent) => {
+      if (exportMenuRef.current && !exportMenuRef.current.contains(e.target as Node)) setExportOpen(false);
+    };
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [exportOpen]);
+
+  // ── 导出: 视频录制开始/停止(MP4 优先, WebM 兜底) ──
+  const toggleRecord = useCallback(() => {
+    if (recording) {
+      stopRecording(ggbRef.current);
+      setRecording(false);
+      setError('');
+    } else {
+      const ok = startRecording(ggbRef.current);
+      if (!ok) {
+        setError('当前浏览器不支持视频录制, 请换 Chrome/Edge/Firefox, 或画布未就绪。');
+        return;
+      }
+      setRecording(true);
+      setError('');
+      setExportOpen(false);
+    }
+  }, [recording]);
 
   // ── 会话管理(云端) ──
 
@@ -475,7 +509,35 @@ export default function ChatApp() {
           )}
           {!adminLoading && isAdmin && <Link className="btn ghost" href="/admin">🛠 管理</Link>}
           <Link className="btn ghost" href="/settings">⚙ 设置</Link>
-          <button className="btn ghost" onClick={() => exportPng(ggbRef.current)}>⬇ PNG</button>
+          {recording ? (
+            <button className="btn rec-stop" onClick={toggleRecord} title="停止录制并下载视频">
+              <span className="rec-dot" /> 停止录制
+            </button>
+          ) : (
+            <div className="export-wrap" ref={exportMenuRef}>
+              <button className="btn ghost" onClick={() => setExportOpen((v) => !v)}>
+                导出 <span className="caret">▾</span>
+              </button>
+              {exportOpen && (
+                <div className="export-menu">
+                  <button className="export-item" onClick={() => { exportPng(ggbRef.current); setExportOpen(false); }}>
+                    <span className="export-icon">🖼️</span>
+                    <span className="export-text">
+                      <span className="export-title">PNG 图片</span>
+                      <span className="export-desc">当前画面静态图</span>
+                    </span>
+                  </button>
+                  <button className="export-item" onClick={toggleRecord}>
+                    <span className="export-icon">🎬</span>
+                    <span className="export-text">
+                      <span className="export-title">{recordingFormat() === 'mp4' ? 'MP4 视频' : 'WebM 视频'}</span>
+                      <span className="export-desc">实时录屏, 点开始/停止</span>
+                    </span>
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
           <button className="btn ghost" onClick={() => signOut()}>退出</button>
         </div>
       </header>
@@ -576,14 +638,4 @@ export default function ChatApp() {
       </main>
     </div>
   );
-}
-
-function exportPng(ggb: any) {
-  if (!ggb) return;
-  const base64 = ggb.getPNGBase64(2, false, 200);
-  if (!base64) return;
-  const a = document.createElement('a');
-  a.href = base64.startsWith('data:') ? base64 : `data:image/png;base64,${base64}`;
-  a.download = `ggb-fable-${Date.now()}.png`;
-  a.click();
 }

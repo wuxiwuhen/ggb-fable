@@ -57,7 +57,7 @@ interface GgbApi {
   setGridVisible?: (v: boolean) => void;
   setAxisLabels?: (n: number, x: string, y: string) => void;
   setRepaintingActive?: (v: boolean) => void;
-  getXML?: () => string;
+  getXML?: (label?: string) => string;
   getDefinitionString?: (label: string) => string;
   getObjectType?: (label: string) => string;
   exists?: (label: string) => boolean;
@@ -363,6 +363,17 @@ export class GGB {
   getBase64(): string | null {
     if (!this.applet) return null;
     try { return this.applet.getBase64?.() || null; } catch (e) { return null; }
+  }
+
+  // 取 applet 渲染所用的 <canvas>(用于 MediaRecorder 录屏)。
+  // GeoGebra HTML5 applet 把图形画在 ggb-container 内的 canvas 上;可能有多层(EV/GV),
+  // 取面积最大的那张作为录制源(合成视图)。
+  getCanvas(): HTMLCanvasElement | null {
+    const container = document.getElementById('ggb-container');
+    if (!container) return null;
+    const canvases = Array.from(container.querySelectorAll('canvas'));
+    if (!canvases.length) return null;
+    return canvases.reduce((a, b) => (a.width * a.height >= b.width * b.height ? a : b));
   }
 
   isReady() { return this.ready; }
