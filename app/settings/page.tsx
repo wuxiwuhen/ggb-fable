@@ -4,6 +4,7 @@
 // BYOK 的 key 只存浏览器 localStorage(zustand persist), 永不上传后端
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { useConfigStore, PRESETS } from '@/lib/config-store';
 import { useAuth } from '@/lib/auth';
 import { getSupabaseBrowser } from '@/lib/supabase';
@@ -59,7 +60,7 @@ export default function SettingsPage() {
             <h1 style={S.h1}>⚙ 设置</h1>
             {user && <p style={S.sub}>已登录: {user.email}</p>}
           </div>
-          <a href="/app" style={S.backBtn}>← 返回工作台</a>
+          <Link href="/app" style={S.backBtn}>← 返回工作台</Link>
         </div>
 
         {/* 主体: 左侧 Tab + 右侧内容 */}

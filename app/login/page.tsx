@@ -2,6 +2,7 @@
 
 // 登录/注册页 —— 邮箱 + 密码(注册需邮箱确认一次, 之后密码登录无需邮件)
 import { useState } from 'react';
+import Link from 'next/link';
 import { useAuth } from '@/lib/auth';
 
 type Mode = 'login' | 'register' | 'reset';
@@ -92,7 +93,7 @@ export default function LoginPage() {
 
         <div style={styles.footer}>
           <span>免费试用 5 次 · 也可配置自己的 API Key 无限使用</span>
-          <div style={{ marginTop: 10 }}><a href="/" style={{ color: '#4f46e5', fontSize: 13 }}>← 返回首页</a></div>
+          <div style={{ marginTop: 10 }}><Link href="/" style={{ color: '#4f46e5', fontSize: 13 }}>← 返回首页</Link></div>
         </div>
       </div>
     </main>

@@ -1,6 +1,7 @@
 // 产品落地页(公开): 介绍 GGB Fable + 引导登录/进入工作台
 'use client';
 
+import Link from 'next/link';
 import { useAuth } from '@/lib/auth';
 
 const FEATURES = [
@@ -13,7 +14,10 @@ const FEATURES = [
 ];
 
 export default function LandingPage() {
-  const { user, isAdmin } = useAuth();
+  const { user, isAdmin, loading, adminLoading } = useAuth();
+  // loading/adminLoading 期间不按 user/isAdmin 切换文案, 用占位按钮避免闪现"未登录/非管理员"态
+  const authReady = !loading;
+  const adminReady = !loading && !adminLoading;
   // 已登录进工作台, 未登录去登录页(注册即享 5 次试用)
   const ctaHref = user ? '/app' : '/login';
   const ctaLabel = user ? '进入工作台' : '立即体验';
@@ -46,8 +50,12 @@ export default function LandingPage() {
           <span className="title" style={{ fontSize: 22 }}>GGB Fable</span>
         </div>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-          {isAdmin && <a className="btn ghost" href="/admin" style={{ fontSize: 15, padding: '8px 16px' }}>管理后台</a>}
-          <a className={user ? 'btn ghost' : 'btn primary'} href={ctaHref} style={{ fontSize: 15, padding: '8px 18px' }}>{user ? '工作台' : '登录'}</a>
+          {adminReady && isAdmin && <Link className="btn ghost" href="/admin" style={{ fontSize: 15, padding: '8px 16px' }}>管理后台</Link>}
+          {authReady ? (
+            <Link className={user ? 'btn ghost' : 'btn primary'} href={ctaHref} style={{ fontSize: 15, padding: '8px 18px' }}>{user ? '工作台' : '登录'}</Link>
+          ) : (
+            <span className="btn ghost" style={{ fontSize: 15, padding: '8px 18px', opacity: 0.6, cursor: 'default' }}>···</span>
+          )}
         </div>
       </nav>
 
@@ -59,7 +67,11 @@ export default function LandingPage() {
           GGB Fable 是面向 K12 的 GeoGebra AI 画布助手 —— 描述即生成，可拖动、可探究。
         </p>
         <div className="landing-cta fade-up d3">
-          <a className="btn primary lg" href={ctaHref} style={{ padding: '14px 40px', fontSize: 17 }}>{ctaLabel} →</a>
+          {authReady ? (
+            <Link className="btn primary lg" href={ctaHref} style={{ padding: '14px 40px', fontSize: 17 }}>{ctaLabel} →</Link>
+          ) : (
+            <span className="btn primary lg" style={{ padding: '14px 40px', fontSize: 17, opacity: 0.7, cursor: 'default' }}>···</span>
+          )}
         </div>
         <p className="fade-up d3" style={{ marginTop: 18, color: '#999', fontSize: 13 }}>
           免费试用 5 次 · 也可配置自己的 API Key 无限使用

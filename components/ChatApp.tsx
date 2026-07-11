@@ -7,6 +7,7 @@
 //   3) 模式切换(trial 后端代理+限额 / byok 前端直连)
 
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
+import Link from 'next/link';
 import { useAuth } from '@/lib/auth';
 import { useConfigStore } from '@/lib/config-store';
 import { Logger } from '@/lib/logger';
@@ -63,7 +64,7 @@ function ThinkingIndicator({ trace }: { trace: TraceItem[] }) {
 }
 
 export default function ChatApp() {
-  const { user, isAdmin, signOut } = useAuth();
+  const { user, isAdmin, adminLoading, signOut } = useAuth();
   const config = useConfigStore();
   const { sessions, currentSessionId, setSessions, setCurrent, upsert, patchCurrent } = useSessionStore();
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -451,10 +452,10 @@ export default function ChatApp() {
     <div className="app">
       <header className="topbar">
         <div className="brand">
-          <a href="/" className="brand-link">
+          <Link href="/" className="brand-link">
             <span className="logo">📐</span>
             <span className="title">GGB Fable</span>
-          </a>
+          </Link>
           <button className="btn ghost" title="对话列表" onClick={() => setSidebarOpen(true)}>☰</button>
           <button className="btn ghost" title="清空工作区" onClick={clearWorkspace}>+</button>
         </div>
@@ -464,16 +465,16 @@ export default function ChatApp() {
             <button className={config.mode === 'trial' ? 'active' : ''} onClick={() => config.setMode('trial')}>免费试用</button>
             <button className={config.mode === 'byok' ? 'active' : ''} onClick={() => config.setMode('byok')}>自带 Key</button>
           </div>
-          {config.mode === 'trial' && usage && !isAdmin && (
+          {config.mode === 'trial' && usage && !adminLoading && !isAdmin && (
             <span className={`usage-badge ${remaining === 0 ? 'exhausted' : ''}`} title="剩余试用次数">
               剩余 {remaining}/{usage.limit}
             </span>
           )}
-          {config.mode === 'trial' && isAdmin && (
+          {config.mode === 'trial' && !adminLoading && isAdmin && (
             <span className="usage-badge" title="管理员不限次数">管理员 ∞</span>
           )}
-          {isAdmin && <a className="btn ghost" href="/admin">🛠 管理</a>}
-          <a className="btn ghost" href="/settings">⚙ 设置</a>
+          {!adminLoading && isAdmin && <Link className="btn ghost" href="/admin">🛠 管理</Link>}
+          <Link className="btn ghost" href="/settings">⚙ 设置</Link>
           <button className="btn ghost" onClick={() => exportPng(ggbRef.current)}>⬇ PNG</button>
           <button className="btn ghost" onClick={() => signOut()}>退出</button>
         </div>
@@ -570,7 +571,7 @@ export default function ChatApp() {
             <div id="ggb-container" />
             {!ggbReady && <div className="canvas-loading">{ggbError || '正在加载 GeoGebra 画布…'}</div>}
           </div>
-          {isAdmin && <TracePanel trace={trace} execLines={execLines} />}
+          {!adminLoading && isAdmin && <TracePanel trace={trace} execLines={execLines} />}
         </section>
       </main>
     </div>

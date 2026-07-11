@@ -4,6 +4,7 @@
 // 仅 is_admin=true 可访问(后端 /api/admin/usage 二次鉴权)
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { useAuth } from '@/lib/auth';
 
 interface UsageRow {
@@ -15,7 +16,7 @@ interface UsageRow {
 }
 
 export default function AdminPage() {
-  const { user, loading, isAdmin } = useAuth();
+  const { user, loading, isAdmin, adminLoading } = useAuth();
   const [rows, setRows] = useState<UsageRow[]>([]);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
@@ -59,7 +60,8 @@ export default function AdminPage() {
     } finally { setBusy(null); }
   }
 
-  if (loading) return <main style={S.wrap}><p>加载中…</p></main>;
+  // 等 session + is_admin 都查清再决定: 未查清前一直显示"加载中", 避免先闪"不是管理员"再纠正
+  if (loading || adminLoading) return <main style={S.wrap}><p>加载中…</p></main>;
   if (!user) { if (typeof window !== 'undefined') window.location.href = '/login'; return null; }
   // 前端提前拦截非管理员(后端 requireAdmin 仍是真鉴权, 这里只优化体验, 避免闪表头)
   if (!isAdmin) {
@@ -68,7 +70,7 @@ export default function AdminPage() {
         <div style={S.card}>
           <h1 style={S.h1}>🛠 管理后台</h1>
           <p style={S.error}>当前账号没有管理员权限。</p>
-          <a href="/app" style={S.back}>← 返回工作台</a>
+          <Link href="/app" style={S.back}>← 返回工作台</Link>
         </div>
       </main>
     );
@@ -112,7 +114,7 @@ export default function AdminPage() {
           </tbody>
         </table>
 
-        <a href="/app" style={S.back}>← 返回工作台</a>
+        <Link href="/app" style={S.back}>← 返回工作台</Link>
       </div>
     </main>
   );
