@@ -26,6 +26,9 @@ import CommandBar from './CommandBar';
 import { useSessionStore } from '@/lib/session-store';
 import { rebuildChatMessages, rebuildTrace, rebuildHistory, extractReplayCommands, rebuildExecLines, type ApiMessage } from '@/lib/conversation';
 import SessionSidebar from './SessionSidebar';
+import OnboardingTour from './OnboardingTour';
+import { useOnboarding } from '@/hooks/useOnboarding';
+import { buildBasicSteps, buildAdvancedSteps, type TourCtx } from '@/lib/onboarding-steps';
 
 interface Msg {
   id: number;
@@ -69,6 +72,7 @@ export default function ChatApp() {
   const config = useConfigStore();
   const { sessions, currentSessionId, setSessions, setCurrent, upsert, patchCurrent } = useSessionStore();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const { active, setActive, autoStartIfDue, start, markSeen } = useOnboarding();
   const [sessionsLoading, setSessionsLoading] = useState(true);
 
   // ── 引擎实例(单例) ──
@@ -101,6 +105,8 @@ export default function ChatApp() {
   // ── UI 状态 ──
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState('');
+  const inputRef = useRef(input);
+  inputRef.current = input;
   const [sending, setSending] = useState(false);
   const [trace, setTrace] = useState<TraceItem[]>([]);
   const [execLines, setExecLines] = useState<ExecLine[]>([]);
@@ -116,6 +122,16 @@ export default function ChatApp() {
   const [exportOpen, setExportOpen] = useState(false);
   const [recording, setRecording] = useState(false);
   const exportMenuRef = useRef<HTMLDivElement>(null);
+
+  const [tutorialOpen, setTutorialOpen] = useState(false);
+  const tutorialMenuRef = useRef<HTMLDivElement>(null);
+
+  const tourCtx: TourCtx = {
+    setSidebarOpen,
+    setExportOpen,
+    setInput,
+    getInput: () => inputRef.current,
+  };
 
   const [history, setHistory] = useState<any[]>([]);     // Agent 上下文(截断 8 条)
   const trialTokenRef = useRef<string | null>(null);
@@ -149,6 +165,16 @@ export default function ChatApp() {
     document.addEventListener('mousedown', onDown);
     return () => document.removeEventListener('mousedown', onDown);
   }, [exportOpen]);
+
+  // ── 教程下拉:点外部关闭 ──
+  useEffect(() => {
+    if (!tutorialOpen) return;
+    const onDown = (e: MouseEvent) => {
+      if (tutorialMenuRef.current && !tutorialMenuRef.current.contains(e.target as Node)) setTutorialOpen(false);
+    };
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [tutorialOpen]);
 
   // ── 导出: 视频录制开始/停止(MP4 优先, WebM 兜底) ──
   const toggleRecord = useCallback(() => {
@@ -242,6 +268,7 @@ export default function ChatApp() {
   // 首次进入: 加载会话列表, 无则建空会话; 绑定 logger sessionId
   useEffect(() => {
     if (!ggbReady) return;
+    autoStartIfDue();   // 首次进入: 未看过基础教程则启动
     let cancelled = false;
     (async () => {
       try {
@@ -508,6 +535,21 @@ export default function ChatApp() {
             <span className="usage-badge" title="管理员不限次数" data-tour="usage-badge">管理员 ∞</span>
           )}
           {!adminLoading && isAdmin && <Link className="btn ghost" href="/admin">🛠 管理</Link>}
+          <div className="tutorial-wrap" ref={tutorialMenuRef}>
+            <button className="btn ghost" data-tour="tutorial" onClick={() => setTutorialOpen((v) => !v)}>
+              📖 教程
+            </button>
+            {tutorialOpen && (
+              <div className="tutorial-menu">
+                <button className="export-item" onClick={() => { start('basic'); setTutorialOpen(false); }}>
+                  <span className="export-text"><span className="export-title">📖 基础教程</span><span className="export-desc">画图、识别、导出</span></span>
+                </button>
+                <button className="export-item" onClick={() => { start('advanced'); setTutorialOpen(false); }}>
+                  <span className="export-text"><span className="export-title">🧱 进阶教程</span><span className="export-desc">历史、执行记录、重建脚本</span></span>
+                </button>
+              </div>
+            )}
+          </div>
           <Link className="btn ghost" href="/settings">⚙ 设置</Link>
           {recording ? (
             <button className="btn rec-stop" onClick={toggleRecord} title="停止录制并下载视频">
@@ -636,6 +678,22 @@ export default function ChatApp() {
           {!adminLoading && isAdmin && <TracePanel trace={trace} execLines={execLines} />}
         </section>
       </main>
+      {active && (
+        <OnboardingTour
+          key={active}
+          steps={active === 'basic' ? buildBasicSteps(tourCtx) : buildAdvancedSteps(tourCtx)}
+          onFinish={(completed) => {
+            markSeen(active);
+            setActive(null);
+            // completed 仅用于日志语义; 基础的"继续进阶"由 onContinueAdvanced 处理
+            void completed;
+          }}
+          onContinueAdvanced={() => {
+            markSeen('basic');
+            setActive('advanced');
+          }}
+        />
+      )}
     </div>
   );
 }

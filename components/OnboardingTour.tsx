@@ -73,7 +73,9 @@ export default function OnboardingTour({ steps, onFinish, onContinueAdvanced }: 
       el.scrollIntoView({ block: 'center', behavior: 'smooth' });
       await new Promise((r) => setTimeout(r, 220));          // 等滚动
       if (cancelled) return;
-      const r = (document.querySelector(anchor) as HTMLElement).getBoundingClientRect();
+      const el2 = document.querySelector(anchor);
+      if (!el2) { setRect(null); setReady(true); return; }
+      const r = (el2 as HTMLElement).getBoundingClientRect();
       setRect(r);
       setSide(step.side || 'bottom');
       setReady(true);
