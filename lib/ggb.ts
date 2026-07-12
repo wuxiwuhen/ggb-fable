@@ -365,6 +365,18 @@ export class GGB {
     try { return this.applet.getBase64?.() || null; } catch (e) { return null; }
   }
 
+  // 画布完整 XML 快照(与 get_canvas_context 解析的同源, 含手工绘制); 持久化用
+  getXML(): string {
+    if (!this.applet) return '';
+    try { return this.applet.getXML?.() || ''; } catch (e) { return ''; }
+  }
+
+  // 从 XML 快照无损还原画布(含手工绘制); restore 用
+  setXML(xml: string): void {
+    if (!this.applet || !xml) return;
+    try { this.applet.setXML?.(xml); } catch (e) { console.warn('setXML 失败:', e); }
+  }
+
   // 取 applet 渲染所用的 <canvas>(用于 MediaRecorder 录屏)。
   // GeoGebra HTML5 applet 把图形画在 ggb-container 内的 canvas 上;可能有多层(EV/GV),
   // 取面积最大的那张作为录制源(合成视图)。
