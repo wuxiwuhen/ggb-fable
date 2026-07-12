@@ -160,6 +160,55 @@ export default function ChatApp() {
   const trialTokenRef = useRef<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
+  // ── 画布 XML 快照持久化 ──
+  const restoringRef = useRef(false);                                   // restore 期间抑制捕获
+  const persistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const persistCanvasXml = useCallback(async () => {
+    const sid = useSessionStore.getState().currentSessionId;
+    if (!sid || !ggbRef.current) return;
+    const xml = ggbRef.current.getXML();
+    if (!xml) return;
+    try {
+      await fetch('/api/sessions', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'update', id: sid, canvas_xml: xml }),
+      });
+    } catch (e) { console.warn('画布快照持久化失败:', e); }
+  }, [ggbRef]);
+  const schedulePersist = useCallback(() => {
+    if (restoringRef.current) return;                                   // 恢复期间不捕获
+    if (persistTimerRef.current) clearTimeout(persistTimerRef.current);
+    persistTimerRef.current = setTimeout(() => { void persistCanvasXml(); }, 800);
+  }, [persistCanvasXml]);
+
+  // 手工绘制监听: onUpdate(add/remove/update) + onCommand(execCommand) → 防抖落 XML
+  // GGB 实例整会话稳定(reinit 不换实例), subscribedRef 保证只订阅一次
+  const subscribedRef = useRef(false);
+  useEffect(() => {
+    if (!ggbReady || !ggbRef.current || subscribedRef.current) return;
+    subscribedRef.current = true;
+    ggbRef.current.onUpdate(() => schedulePersist());
+    ggbRef.current.onCommand(() => schedulePersist());
+  }, [ggbReady, schedulePersist]);
+
+  // 离开页面兜底: sendBeacon 同步落当前画布 XML
+  useEffect(() => {
+    const onUnload = () => {
+      const sid = useSessionStore.getState().currentSessionId;
+      if (!sid || !ggbRef.current) return;
+      const xml = ggbRef.current.getXML();
+      if (!xml) return;
+      try {
+        navigator.sendBeacon('/api/sessions', new Blob(
+          [JSON.stringify({ action: 'update', id: sid, canvas_xml: xml })],
+          { type: 'application/json' },
+        ));
+      } catch (e) { /* 静默 */ }
+    };
+    window.addEventListener('beforeunload', onUnload);
+    return () => window.removeEventListener('beforeunload', onUnload);
+  }, [ggbRef]);
+
   // 流式 token 缓冲 + rAF 批量 flush(避免每个 token 一次 setState)
   const streamBuf = useRef<{ id: number; text: string } | null>(null);
   const rafRef = useRef<number | null>(null);
@@ -425,6 +474,7 @@ export default function ChatApp() {
           },
           onExec: (cmd, r) => {
             setExecLines((prev) => [...prev, { cmd, result: r }]);
+            schedulePersist();
           },
         },
       });
@@ -468,7 +518,7 @@ export default function ChatApp() {
       setSending(false);
       streamBuf.current = null;
     }
-  }, [input, sending, imgPreview, config, usage, history, buildBackend, scheduleFlush, flushStream, fetchUsage, ggbRef, trialCtx]);
+  }, [input, sending, imgPreview, config, usage, history, buildBackend, scheduleFlush, flushStream, fetchUsage, ggbRef, trialCtx, schedulePersist]);
 
   // 后台生成标题并更新会话(trial 走 /api/trial/title 不扣次数; byok 用用户 key)
   const generateTitle = useCallback(async (text: string, sessionId: string) => {
