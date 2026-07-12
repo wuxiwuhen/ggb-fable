@@ -1,8 +1,8 @@
 'use client';
 
-// 主应用编排组件(替代 app.js 的 send/agent loop/streaming/trace/recipe/session 全流程)
+// 主应用编排组件(替代 app.js 的 send/agent loop/streaming/trace/session 全流程)
 // 三大流程:
-//   1) 发送 → Agent 工具循环 → 流式渲染 → 画布更新 → 工具轨迹 → 会话持久化 → 重建脚本
+//   1) 发送 → Agent 工具循环 → 流式渲染 → 画布更新 → 工具轨迹 → 会话持久化
 //   2) 图片上传 → OCR → 回填输入框(两步解耦, 用户校对后再发)
 //   3) 模式切换(trial 后端代理+限额 / byok 前端直连)
 
@@ -17,7 +17,6 @@ import { makeTrialBackend, makeByokBackend } from '@/lib/agent-backend';
 import { makeTrialEmbed, makeByokEmbed } from '@/lib/embed';
 import { chatTrial, visionTrial, visionByok, type TrialContext } from '@/lib/llm';
 import { Vision } from '@/lib/vision';
-import { Condenser } from '@/lib/condenser';
 import { useGeogebra } from '@/hooks/useGeogebra';
 import { exportPng, startRecording, stopRecording, recordingFormat } from '@/lib/export-media';
 import MessageContent from './MessageContent';
@@ -128,9 +127,6 @@ export default function ChatApp() {
   const [sending, setSending] = useState(false);
   const [trace, setTrace] = useState<TraceItem[]>([]);
   const [execLines, setExecLines] = useState<ExecLine[]>([]);
-  const [commandLog, setCommandLog] = useState<Array<{ cmd: string; ok: boolean; labels: string; error: string; ephemeral?: boolean }>>([]);
-  const [recipe, setRecipe] = useState<string[] | null>(null);
-  const [recipeLoading, setRecipeLoading] = useState(false);
   const [usage, setUsage] = useState<{ used: number; limit: number; remaining: number } | null>(null);
   const [error, setError] = useState('');
   const [imgPreview, setImgPreview] = useState<string | null>(null);
@@ -238,7 +234,7 @@ export default function ChatApp() {
     });
     const data = await res.json();
     const id: string = data.id;
-    setMessages([]); setTrace([]); setExecLines([]); setCommandLog([]); setRecipe(null); setHistory([]);
+    setMessages([]); setTrace([]); setExecLines([]); setHistory([]);
     await ggbRef.current?.clearAll();
     const now = new Date().toISOString();
     upsert({ id, title: null, mode: config.mode, model: null, created_at: now, updated_at: now });
@@ -257,8 +253,6 @@ export default function ChatApp() {
     setMessages([]);
     setTrace([]);
     setExecLines([]);
-    setCommandLog([]);
-    setRecipe(null);
     setHistory([]);
     await ggbRef.current?.clearAll();
   }, [currentSessionId, messages]);
@@ -278,15 +272,12 @@ export default function ChatApp() {
       setTrace(rebuildTrace(messages).map((t) => ({ id: ++msgId, ...t })));
       setHistory(rebuildHistory(messages));
       setExecLines(rebuildExecLines(messages));
-      // 恢复画布: recipe 优先, 没有则回退重放 execute_command 命令
+      // 恢复画布: 暂用命令回放(XML 快照恢复见 Task 5); 执行历史显示已由 execLines 重建
       await ggbRef.current?.clearAll();
-      const recipe: string[] | null = session?.recipe ? (Array.isArray(session.recipe) ? session.recipe : null) : null;
-      const cmds = recipe && recipe.length ? recipe : extractReplayCommands(messages);
-      setRecipe(recipe && recipe.length ? recipe : null);
+      const cmds = extractReplayCommands(messages);
       if (cmds.length) {
         try { await ggbRef.current?.execBatch(cmds.join('\n')); } catch (e) { console.warn('画布重放失败:', e); }
       }
-      setCommandLog(ggbRef.current?.getCommandLog() || []);
       setCurrent(id);
       loggerRef.current.setSession(id);
     } catch (e) {
@@ -434,7 +425,6 @@ export default function ChatApp() {
           },
           onExec: (cmd, r) => {
             setExecLines((prev) => [...prev, { cmd, result: r }]);
-            setCommandLog(ggbRef.current?.getCommandLog() || []);
           },
         },
       });
@@ -450,9 +440,6 @@ export default function ChatApp() {
 
       // 刷新额度
       if (config.mode === 'trial') fetchUsage();
-
-      // 后台生成重建脚本
-      if (!result.stopped) generateRecipe(backend);
     } catch (e: any) {
       const msg = e?.message || String(e);
       // 用户主动停止(轮间抛"已中止" 或 流式被中断如 BodyStreamBuffer aborted): 正常行为, 不弹提示
@@ -482,41 +469,6 @@ export default function ChatApp() {
       streamBuf.current = null;
     }
   }, [input, sending, imgPreview, config, usage, history, buildBackend, scheduleFlush, flushStream, fetchUsage, ggbRef, trialCtx]);
-
-  // 重建脚本(后台, 复用 trial token 免重复扣)
-  const generateRecipe = useCallback(async (backend: AgentBackend) => {
-    const log = ggbRef.current?.getCommandLog() || [];
-    if (!log.length) return;
-    setRecipeLoading(true);
-    try {
-      const res = await Condenser.run(log, (p) => backend.chat(p));
-      const cmds = res.commands.length ? res.commands : null;
-      setRecipe(cmds);
-      // 持久化 recipe 到当前会话(供切换重放)
-      const sid = useSessionStore.getState().currentSessionId;
-      if (cmds && sid) {
-        fetch('/api/sessions', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'update', id: sid, recipe: cmds }),
-        }).catch(() => {});
-      }
-    } catch (e) { /* 静默 */ } finally { setRecipeLoading(false); }
-  }, [ggbRef]);
-
-  // 手动保存编辑后的重建脚本: 写 state + 持久化到当前会话(供切换/刷新重放)
-  const saveRecipe = useCallback(async (lines: string[]) => {
-    setRecipe(lines.length ? lines : null);
-    const sid = useSessionStore.getState().currentSessionId;
-    if (!sid) return;
-    try {
-      await fetch('/api/sessions', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'update', id: sid, recipe: lines }),
-      });
-    } catch (e) {
-      console.warn('保存重建脚本失败:', e);
-    }
-  }, []);
 
   // 后台生成标题并更新会话(trial 走 /api/trial/title 不扣次数; byok 用用户 key)
   const generateTitle = useCallback(async (text: string, sessionId: string) => {
@@ -558,13 +510,6 @@ export default function ChatApp() {
   const toggleOcr = useCallback((msgId: number) => {
     setMessages((prev) => prev.map((m) => (m.id === msgId && m.ocr ? { ...m, ocr: { ...m.ocr, expanded: !m.ocr.expanded } } : m)));
   }, []);
-
-  const replay = useCallback(async (lines: string[]) => {
-    if (!ggbRef.current) return;
-    await ggbRef.current.clearAll();
-    await ggbRef.current.execBatch(lines.join('\n'));
-    setCommandLog(ggbRef.current.getCommandLog());
-  }, [ggbRef]);
 
   // ── 附图(只压缩+预览, 不识别): OCR 推迟到 send 时再做, 用户可先补充提示词 ──
   const attachImage = useCallback(async (file: File) => {
@@ -675,14 +620,7 @@ export default function ChatApp() {
       <SessionSidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} onNew={clearWorkspace} onSwitch={switchSession} />
       <main className="layout">
         <section className="pane chat-pane">
-          <CommandBar
-            commandLog={commandLog}
-            recipe={recipe}
-            onGenerateRecipe={async () => { if (agentRef.current) generateRecipe(buildBackend()); }}
-            onReplay={replay}
-            onSaveRecipe={saveRecipe}
-            recipeLoading={recipeLoading}
-          />
+          <CommandBar execLines={execLines} />
 
           <div className="messages">
             {messages.length === 0 && (
