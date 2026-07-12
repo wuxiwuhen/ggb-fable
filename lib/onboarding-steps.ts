@@ -59,10 +59,6 @@ export function buildBasicSteps(ctx: TourCtx): TourStep[] {
       body: '描述你想画的图形，可连续追加指令（如「再画它的切线」）。Cmd/Ctrl+Enter 发送。',
       cta: '示例已填好——点发送，你会看到画布动起来（计 1 次试用）',
       preEnter: () => ctx.setInput(DEMO_EXAMPLE),
-      postExit: () => {
-        // 用户没发送(示例还在原样)则清空; 已发送(input 已空)或被编辑则保留
-        if (ctx.getInput() === DEMO_EXAMPLE) ctx.setInput('');
-      },
     },
     {
       // 3. 画布
@@ -118,6 +114,7 @@ export function buildAdvancedSteps(ctx: TourCtx): TourStep[] {
       body: '这里是你的对话列表，可新建、切换、回看历史。每个对话的画布和指令都独立保存。',
       preEnter: () => ctx.setSidebarOpen(true),
       waitFor: () => !!document.querySelector('[data-tour="session-list"]'),
+      postExit: () => ctx.setSidebarOpen(false),
     },
     {
       // 8. 执行历史(展开 CommandBar + history tab)

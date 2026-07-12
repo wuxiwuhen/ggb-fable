@@ -289,8 +289,8 @@ button { font-family: inherit; cursor: pointer; }
 .sidebar-time { font-size: 11px; color: #999; }
 
 /* ── 新手引导(遮罩 + 气泡) ── */
-.tour-root { position: fixed; inset: 0; z-index: 100; }
-.tour-mask { position: fixed; background: rgba(15, 23, 42, 0.55); }
+.tour-root { position: fixed; inset: 0; z-index: 100; pointer-events: none; }
+.tour-mask { position: fixed; background: rgba(15, 23, 42, 0.55); pointer-events: auto; }
 .tour-mask-full { inset: 0; width: 100%; height: 100%; }
 .tour-highlight {
   position: fixed; border-radius: 6px;
@@ -300,7 +300,7 @@ button { font-family: inherit; cursor: pointer; }
 .tour-bubble {
   background: #fff; border-radius: 12px; padding: 16px 18px 14px;
   box-shadow: 0 10px 32px rgba(0, 0, 0, 0.18); max-width: 360px;
-  animation: tour-pop 0.18s ease both;
+  animation: tour-pop 0.18s ease both; pointer-events: auto;
 }
 .tour-bubble.center {
   position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 380px; max-width: calc(100vw - 32px);

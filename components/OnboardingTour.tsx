@@ -2,7 +2,7 @@
 
 // 新手引导引擎: 遮罩挖空 + 气泡 + 步骤状态机。
 // 时序: 进入步骤 -> preEnter(操纵UI) -> waitFor(轮询DOM就绪) -> 定位高亮; 离开 -> postExit(还原)。
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useLayoutEffect, useRef } from 'react';
 import type { TourStep, TourSide } from '@/lib/onboarding-steps';
 
 interface Props {
@@ -44,6 +44,8 @@ export default function OnboardingTour({ steps, onFinish, onContinueAdvanced }: 
   const [rect, setRect] = useState<DOMRect | null>(null);   // null = 居中卡片(无锚点/找不到/降级)
   const [ready, setReady] = useState(false);
   const [side, setSide] = useState<TourSide>('bottom');
+  const bubbleRef = useRef<HTMLDivElement>(null);
+  const [bubbleSize, setBubbleSize] = useState({ w: 320, h: 150 });
 
   const step = steps[index];
   const isLast = index === steps.length - 1;
@@ -124,17 +126,26 @@ export default function OnboardingTour({ steps, onFinish, onContinueAdvanced }: 
     return () => window.removeEventListener('keydown', onKey);
   }, [index, isLast, onFinish]);
 
+  // 实测气泡尺寸(用于精确定位): useLayoutEffect 在 DOM 变更后、paint 前同步执行,
+  // 因此首次渲染(用 150 估算)与 setBubbleSize(真实 ~220)后的重渲染都在同一帧内完成, 用户只看到修正后的位置(无闪烁)。
+  useLayoutEffect(() => {
+    if (isCenter) return;
+    const el = bubbleRef.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    if (r.height > 0) setBubbleSize({ w: r.width || 320, h: r.height });
+  }, [index, isCenter, step.title, step.body, step.cta, ready]);
+
   const next = useCallback(() => {
     if (isLast) onFinish(true);
     else setIndex((i) => i + 1);
   }, [isLast, onFinish]);
   const prev = useCallback(() => setIndex((i) => Math.max(0, i - 1)), []);
 
-  // 气泡定位(锚点步骤时)
+  // 气泡定位(锚点步骤时): 用实测尺寸计算, 消除高度估算偏差导致的遮挡
   let bubbleStyle: React.CSSProperties | undefined;
   if (!isCenter && rect && ready) {
-    // 先用预估尺寸计算(气泡宽度固定 320, 高度按内容估; computePlacement 会贴边兜底)
-    const placement = computePlacement(rect, side, 320, 150);
+    const placement = computePlacement(rect, side, bubbleSize.w, bubbleSize.h);
     bubbleStyle = { position: 'fixed', top: placement.top, left: placement.left, width: 320 };
   }
 
@@ -156,8 +167,9 @@ export default function OnboardingTour({ steps, onFinish, onContinueAdvanced }: 
         <div className="tour-mask tour-mask-full" onClick={() => onFinish(false)} />
       )}
 
-      {/* 气泡 */}
-      <div className={`tour-bubble ${isCenter ? 'center' : ''}`} style={isCenter ? undefined : bubbleStyle}>
+      {/* 气泡(锚点步骤在定位就绪前不渲染, 避免左上角闪现; ref 供 useLayoutEffect 实测尺寸) */}
+      {(isCenter || ready) && (
+      <div ref={bubbleRef} className={`tour-bubble ${isCenter ? 'center' : ''}`} style={isCenter ? undefined : bubbleStyle}>
         <div className="tour-head">
           <span className="tour-counter">{index + 1}/{progress}</span>
           <button className="tour-close" aria-label="关闭引导" onClick={() => onFinish(false)}>✕</button>
@@ -197,6 +209,7 @@ export default function OnboardingTour({ steps, onFinish, onContinueAdvanced }: 
           </div>
         )}
       </div>
+      )}
     </div>
   );
 }
