@@ -72,8 +72,15 @@ export default function OnboardingTour({ steps, onFinish, onContinueAdvanced }: 
       const anchor = step.anchor;  // 捕获到局部 const(避免 await 后 TS 丢失窄化)
       const el = document.querySelector(anchor) as HTMLElement | null;
       if (!el) { setRect(null); setReady(true); return; }  // 找不到 -> 降级居中
-      el.scrollIntoView({ block: 'center', behavior: 'smooth' });
-      await new Promise((r) => setTimeout(r, 220));          // 等滚动
+      // 元素已在视口内则不滚动: scrollIntoView 对画布等大元素有副作用(平滑滚动期间测到中间态, 高亮框只框部分)
+      const r0 = el.getBoundingClientRect();
+      const inView =
+        r0.top >= 0 && r0.bottom <= window.innerHeight &&
+        r0.left >= 0 && r0.right <= window.innerWidth;
+      if (!inView) {
+        el.scrollIntoView({ block: 'center', behavior: 'auto' }); // instant: 同步完成, 不测中间态
+        await new Promise((r) => setTimeout(r, 60));               // 让布局稳定
+      }
       if (cancelled) return;
       const el2 = document.querySelector(anchor);
       if (!el2) { setRect(null); setReady(true); return; }
