@@ -22,7 +22,7 @@ import { exportPng, startRecording, stopRecording, recordingFormat } from '@/lib
 import MessageContent from './MessageContent';
 import TracePanel, { type TraceItem, type ExecLine } from './TracePanel';
 import CommandBar from './CommandBar';
-import { useSessionStore } from '@/lib/session-store';
+import { useSessionStore, getLastSessionId } from '@/lib/session-store';
 import { rebuildChatMessages, rebuildTrace, rebuildHistory, extractReplayCommands, rebuildExecLines, type ApiMessage } from '@/lib/conversation';
 import SessionSidebar from './SessionSidebar';
 import OnboardingTour from './OnboardingTour';
@@ -361,6 +361,10 @@ export default function ChatApp() {
         if (cancelled) { setSessionsLoading(false); return; }
         setSessions(list);
         setSessionsLoading(false);
+        // 刷新恢复: 优先"上次会话", 否则最近一条; currentSessionId 为 null → switchSession 不早退
+        const last = getLastSessionId();
+        const target = last && list.some((s) => s.id === last) ? last : (list[0]?.id ?? null);
+        if (target) await switchSession(target);
       } catch (e) {
         console.warn('加载会话失败:', e);
         setSessionsLoading(false);
