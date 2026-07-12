@@ -35,6 +35,8 @@ interface Msg {
   role: 'user' | 'assistant' | 'system';
   content: string;
   streaming?: boolean;
+  image?: string;   // user 附图(data URL), 仅当轮显示, 不持久化(重载后以识别文本回显)
+  ocr?: { state: 'loading' | 'done' | 'error'; text?: string; error?: string; expanded?: boolean };
 }
 
 const EXAMPLES = [
@@ -46,23 +48,38 @@ const EXAMPLES = [
 
 let msgId = 0;
 
-// 工具名 → 用户友好的进度文案(发送后到首条有效文本之间, 据当前正在执行的工具显示进度)
-const TOOL_STATUS: Record<string, string> = {
-  get_canvas_context: '正在读取画布',
-  search_command: '正在检索命令',
-  execute_command: '正在构造图形',
-  verify_geometry: '正在验证几何关系',
-  inspect_render: '正在检查渲染效果',
-  reset_canvas: '正在清空画布',
+// 工具名 → 阶段名词(输出气泡首字文本前, 把工具调用映射成可见的过程阶段)
+const PHASE_LABEL: Record<string, string> = {
+  get_canvas_context: '读取画布',
+  search_command: '检索命令',
+  execute_command: '构造图形',
+  verify_geometry: '几何验证',
+  inspect_render: '视觉核验',
+  reset_canvas: '清空画布',
 };
 
-function ThinkingIndicator({ trace }: { trace: TraceItem[] }) {
-  const last = trace[trace.length - 1];
-  const busy = !!(last && last.result == null && TOOL_STATUS[last.name]);
+// 输出气泡"首字文本前"的过程面板: 图片识别阶段 + 各工具阶段(✓完成 / ⟳进行中), 全空则"正在思考…"
+function AssistantProgress({ msg, trace }: { msg: Msg; trace: TraceItem[] }) {
+  const phases = trace.filter((t) => PHASE_LABEL[t.name]);
+  const ocrLoading = msg.ocr?.state === 'loading';
+  const showThinking = !ocrLoading && phases.length === 0;
   return (
-    <div className="thinking">
-      <span className="thinking-dots"><i /><i /><i /></span>
-      <span>{(busy && last && TOOL_STATUS[last.name]) || '正在思考'}…</span>
+    <div className="assistant-progress">
+      {ocrLoading && (
+        <div className="phase-item active"><span className="spinner" /><span>图片识别中…</span></div>
+      )}
+      {phases.map((t, i) => {
+        const active = t.result == null;
+        return (
+          <div key={i} className={`phase-item ${active ? 'active' : 'done'}`}>
+            {active ? <span className="spinner" /> : <span className="phase-check">✓</span>}
+            <span>{PHASE_LABEL[t.name]}{active ? '…' : ''}</span>
+          </div>
+        );
+      })}
+      {showThinking && (
+        <div className="phase-item active"><span className="spinner" /><span>正在思考…</span></div>
+      )}
     </div>
   );
 }
@@ -116,8 +133,8 @@ export default function ChatApp() {
   const [recipeLoading, setRecipeLoading] = useState(false);
   const [usage, setUsage] = useState<{ used: number; limit: number; remaining: number } | null>(null);
   const [error, setError] = useState('');
-  const [ocrLoading, setOcrLoading] = useState(false);
   const [imgPreview, setImgPreview] = useState<string | null>(null);
+  const [lightbox, setLightbox] = useState<string | null>(null);   // 点气泡图片放大查看(null=关闭)
 
   // ── 导出菜单状态 ──
   const [exportOpen, setExportOpen] = useState(false);
@@ -319,8 +336,9 @@ export default function ChatApp() {
 
   // ── 发送 ──
   const send = useCallback(async () => {
-    const text = input.trim();
-    if (!text || sending) return;
+    const typed = input.trim();
+    const hasImage = !!imgPreview;
+    if ((!typed && !hasImage) || sending) return;
     if (sessionsLoading) return;
     if (!useSessionStore.getState().currentSessionId) await newSession();  // 惰性创建
     if (!ggbRef.current || !agentRef.current) { setError('画布未就绪'); return; }
@@ -340,27 +358,66 @@ export default function ChatApp() {
     setExecLines([]);
     trialTokenRef.current = null;   // 新意图, 首次扣 1 次
 
-    // user 消息
-    const userMsg: Msg = { id: ++msgId, role: 'user', content: text };
-    const assistantMsg: Msg = { id: ++msgId, role: 'assistant', content: '', streaming: true };
-    setMessages((prev) => [...prev, userMsg, assistantMsg]);
-    setInput('');
-    setSending(true);
-    // 首条消息后, 后台生成会话标题(当前会话无标题时)
-    const sid = useSessionStore.getState().currentSessionId;
-    if (sid && !useSessionStore.getState().sessions.find((s) => s.id === sid)?.title) {
-      generateTitle(text, sid);
-    }
-    loggerRef.current.userTurn(text);
-
-    streamBuf.current = { id: assistantMsg.id, text: '' };
+    // 整个 send(含 OCR 阶段)共用一个 abort controller, 点"停止"可中断 OCR
     const controller = new AbortController();
     abortRef.current = controller;
+    setSending(true);
+
+    // 立刻把消息送进气泡: 图片与指令拆成两条 user 气泡(图在前, 指令在后), 再加 assistant 占位
+    // —— 识别进度统一由输出气泡承载
+    const imageMsg: Msg | null = hasImage ? { id: ++msgId, role: 'user', content: '', image: imgPreview! } : null;
+    const textMsg: Msg | null = typed ? { id: ++msgId, role: 'user', content: typed } : null;
+    const assistantMsg: Msg = {
+      id: ++msgId, role: 'assistant', content: '', streaming: true,
+      ocr: hasImage ? { state: 'loading' } : undefined,
+    };
+    const newUserMsgs = [imageMsg, textMsg].filter(Boolean) as Msg[];
+    setMessages((prev) => [...prev, ...newUserMsgs, assistantMsg]);
+    setInput('');
+    setImgPreview(null);
+    const sid = useSessionStore.getState().currentSessionId;
+
+    // 带图: 后台 OCR(只转录题目文字), 完成后回填 assistant 气泡的识别内容; 纯文字直接用 typed
+    let finalText = typed;
+    if (imageMsg) {
+      try {
+        const ocrText = await Vision.recognize({
+          image: imageMsg.image!,
+          signal: controller.signal,
+          visionFn: (img, prompt, sig) =>
+            config.mode === 'trial'
+              ? visionTrial({ image: img, prompt, trialCtx, signal: sig })
+              : visionByok(config.vision as any, { image: img, prompt, signal: sig }),
+        });
+        if (!ocrText.trim()) throw new Error('未识别出有效文字');
+        setMessages((prev) => prev.map((m) => (m.id === assistantMsg.id ? { ...m, ocr: { state: 'done', text: ocrText, expanded: false } } : m)));
+        // 后台发给 LLM 的最终输入: 标明是图片识别内容(用户可能说"画出图中的…") + 用户提示词
+        const ocrLabeled = `【以下为图片识别的题目内容】\n${ocrText}`;
+        finalText = typed ? `${ocrLabeled}\n\n${typed}` : ocrLabeled;
+      } catch (e: any) {
+        // 识别失败/中止: 撤回本批所有新消息, 恢复草稿(图+文字)让用户重试
+        const removeIds = new Set([...newUserMsgs.map((m) => m.id), assistantMsg.id]);
+        setMessages((prev) => prev.filter((m) => !removeIds.has(m.id)));
+        setImgPreview(imageMsg.image!);
+        setInput(typed);
+        setSending(false);
+        if (e?.name !== 'AbortError') setError('图片识别失败: ' + (e?.message || e));
+        return;
+      }
+    }
+
+    // 持久化(用最终文本, 含 OCR) + 后台标题
+    loggerRef.current.userTurn(finalText);
+    if (sid && !useSessionStore.getState().sessions.find((s) => s.id === sid)?.title) {
+      generateTitle(finalText, sid);
+    }
+
+    streamBuf.current = { id: assistantMsg.id, text: '' };
 
     try {
       const backend = buildBackend();
       const result = await agentRef.current.run({
-        userInput: text,
+        userInput: finalText,
         history,
         config: { max_tool_rounds: config.maxToolRounds },
         backend,
@@ -388,30 +445,43 @@ export default function ChatApp() {
       setMessages((prev) => prev.map((m) => (m.id === assistantMsg.id ? { ...m, content: result.finalText, streaming: false } : m)));
 
       // history 累积(截断 8 条, 只存文本)
-      const newHistory = [...history, { role: 'user', content: text }, { role: 'assistant', content: result.finalText }].slice(-8);
+      const newHistory = [...history, { role: 'user', content: finalText }, { role: 'assistant', content: result.finalText }].slice(-8);
       setHistory(newHistory);
 
       // 刷新额度
       if (config.mode === 'trial') fetchUsage();
-      loggerRef.current.flush();
 
       // 后台生成重建脚本
       if (!result.stopped) generateRecipe(backend);
     } catch (e: any) {
-      if (e.message === 'TRIAL_EXHAUSTED') {
+      const msg = e?.message || String(e);
+      // 用户主动停止(轮间抛"已中止" 或 流式被中断如 BodyStreamBuffer aborted): 正常行为, 不弹提示
+      const aborted = msg === '已中止' || e?.name === 'AbortError' || /abort/i.test(msg);
+      if (msg === 'TRIAL_EXHAUSTED') {
         setError('试用次数已用完, 可切换到"自带 Key"模式继续使用');
         fetchUsage();
-      } else if (e.message === '已中止') {
-        // 用户主动停止, 保留已生成内容
+      } else if (aborted) {
+        loggerRef.current.errorEvent('user_stop', e);
+        // 兜底标题: 中止时若标题还没生成, 用占位"新会话"让会话进列表可识别
+        const st = useSessionStore.getState();
+        const cur = st.sessions.find((s) => s.id === st.currentSessionId);
+        if (st.currentSessionId && cur && !cur.title) {
+          st.patchCurrent({ title: '新会话' });
+          fetch('/api/sessions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'update', id: st.currentSessionId, title: '新会话' }) }).catch(() => {});
+        }
       } else {
-        setError(e.message || String(e));
+        setError(msg);
       }
-      setMessages((prev) => prev.map((m) => (m.id === assistantMsg.id ? { ...m, streaming: false, content: m.content || '（出错）' } : m)));
+      setMessages((prev) => prev.map((m) => (m.id === assistantMsg.id
+        ? { ...m, streaming: false, content: aborted ? m.content : (m.content || '（出错）') }
+        : m)));
     } finally {
+      // 落库(成功/中止/出错都落): 主动停止的会话也要持久化, 才会出现在历史列表
+      loggerRef.current.flush();
       setSending(false);
       streamBuf.current = null;
     }
-  }, [input, sending, config, usage, history, buildBackend, scheduleFlush, flushStream, fetchUsage, ggbRef]);
+  }, [input, sending, imgPreview, config, usage, history, buildBackend, scheduleFlush, flushStream, fetchUsage, ggbRef, trialCtx]);
 
   // 重建脚本(后台, 复用 trial token 免重复扣)
   const generateRecipe = useCallback(async (backend: AgentBackend) => {
@@ -484,6 +554,11 @@ export default function ChatApp() {
 
   const stop = useCallback(() => { abortRef.current?.abort(); }, []);
 
+  // 展开/收起某条图片消息的 OCR 识别内容
+  const toggleOcr = useCallback((msgId: number) => {
+    setMessages((prev) => prev.map((m) => (m.id === msgId && m.ocr ? { ...m, ocr: { ...m.ocr, expanded: !m.ocr.expanded } } : m)));
+  }, []);
+
   const replay = useCallback(async (lines: string[]) => {
     if (!ggbRef.current) return;
     await ggbRef.current.clearAll();
@@ -491,33 +566,33 @@ export default function ChatApp() {
     setCommandLog(ggbRef.current.getCommandLog());
   }, [ggbRef]);
 
-  // ── 图片 OCR ──
-  const handleImage = useCallback(async (file: File) => {
-    if (config.mode === 'trial') {
-      // 直接走后端视觉代理
-    } else if (!config.isVisionValid()) {
+  // ── 附图(只压缩+预览, 不识别): OCR 推迟到 send 时再做, 用户可先补充提示词 ──
+  const attachImage = useCallback(async (file: File) => {
+    if (config.mode !== 'trial' && !config.isVisionValid()) {
       setError('BYOK 模式未配置视觉模型, 请到设置页填写');
       return;
     }
     setError('');
-    setOcrLoading(true);
     try {
       const dataUrl = await Vision.compress(file);
       setImgPreview(dataUrl);
-      const text = await Vision.recognize({
-        image: dataUrl,
-        visionFn: config.mode === 'trial'
-          ? (img, prompt, sig) => visionTrial({ image: img, prompt, trialCtx, signal: sig })
-          : (img, prompt, sig) => visionByok(config.vision as any, { image: img, prompt, signal: sig }),
-      });
-      setInput(text);
-      setImgPreview(null);
     } catch (e: any) {
-      setError('图片识别失败: ' + (e.message || e));
-    } finally {
-      setOcrLoading(false);
+      setError('图片处理失败: ' + (e.message || e));
     }
-  }, [config, trialCtx]);
+  }, [config]);
+
+  // 粘贴图片进输入框 → 同上传(只附图, 识别留到 send)
+  const onPasteImage = useCallback((e: React.ClipboardEvent) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (let i = 0; i < items.length; i++) {
+      const it = items[i];
+      if (it.type.startsWith('image/')) {
+        const file = it.getAsFile();
+        if (file) { e.preventDefault(); attachImage(file); return; }
+      }
+    }
+  }, [attachImage]);
 
   const remaining = config.mode === 'trial' ? (usage?.remaining ?? null) : null;
   const canSend = config.mode === 'trial' ? (isAdmin || remaining === null || remaining > 0) : config.isByokValid();
@@ -621,38 +696,62 @@ export default function ChatApp() {
                 </div>
               </div>
             )}
-            {messages.map((m) => (
-              <div key={m.id} className={`msg ${m.role}`}>
-                {m.role === 'system' ? (
-                  <div className="msg-content">{m.content}</div>
-                ) : m.role === 'assistant' && m.streaming && !m.content ? (
-                  <ThinkingIndicator trace={trace} />
-                ) : (
-                  <MessageContent content={m.content || ''} />
-                )}
-              </div>
-            ))}
+            {messages.map((m) => {
+              let body: React.ReactNode;
+              if (m.role === 'system') {
+                body = <div className="msg-content">{m.content}</div>;
+              } else if (m.role === 'user' && m.image) {
+                body = (
+                  <img src={m.image} className="msg-image" alt="题目图片（点击放大）" onClick={() => setLightbox(m.image!)} />
+                );
+              } else if (m.role === 'assistant') {
+                const preText = m.streaming && !m.content;
+                body = (
+                  <>
+                    {m.ocr?.state === 'done' && (
+                      <div className="ocr-block">
+                        <button type="button" className="ocr-toggle" onClick={() => toggleOcr(m.id)}>
+                          {m.ocr.expanded ? '收起识别内容 ▲' : '查看识别内容 ▾'}
+                        </button>
+                        {m.ocr.expanded && (
+                          <div className="ocr-text"><MessageContent content={m.ocr.text || ''} /></div>
+                        )}
+                      </div>
+                    )}
+                    {preText ? <AssistantProgress msg={m} trace={trace} /> : <MessageContent content={m.content || ''} />}
+                  </>
+                );
+              } else {
+                body = <MessageContent content={m.content || ''} />;
+              }
+              return <div key={m.id} className={`msg ${m.role}${m.role === 'user' && m.image ? ' msg-image-only' : ''}`}>{body}</div>;
+            })}
           </div>
 
           <div className="composer">
             {error && <div className="error-banner">{error}</div>}
             <div className="input-box" data-tour="composer">
-              {(imgPreview || ocrLoading) && (
+              {imgPreview && (
                 <div className="media-row">
-                  {imgPreview && <img src={imgPreview} className="img-preview" alt="预览" />}
-                  {ocrLoading && <span className="ocr-status"><span className="spinner" />识别图片中…</span>}
+                  <div className="img-preview-wrap">
+                    <img src={imgPreview} className="img-preview" alt="预览" />
+                    {!sending && (
+                      <button type="button" className="img-preview-remove" title="移除图片" aria-label="移除图片" onClick={() => setImgPreview(null)}>✕</button>
+                    )}
+                  </div>
                 </div>
               )}
               <textarea
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
+                onPaste={onPasteImage}
                 onKeyDown={(e) => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') send(); }}
-                placeholder="描述你想画的数学图形，例如：画一个圆心在原点、半径为 3 的圆…"
+                placeholder={imgPreview ? '可补充提示词（可选），点发送后先识别图片再画图…' : '描述你想画的数学图形，例如：画一个圆心在原点、半径为 3 的圆…'}
                 rows={3}
               />
               <div className="toolbar">
-                <button className="icon-btn" title="上传数学题图片（OCR 识别）" aria-label="上传图片"
-                  onClick={() => document.getElementById('image-file-input')?.click()} disabled={ocrLoading}>
+                <button className="icon-btn" title="上传数学题图片（发送时识别）" aria-label="上传图片"
+                  onClick={() => document.getElementById('image-file-input')?.click()} disabled={sending}>
                   <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
                     <rect x="3" y="3" width="18" height="18" rx="3" />
                     <circle cx="8.5" cy="8.5" r="1.6" />
@@ -661,7 +760,7 @@ export default function ChatApp() {
                 </button>
                 <div className="toolbar-spacer" />
                 {!sending ? (
-                  <button className="send-btn" onClick={send} disabled={!canSend || !input.trim()} title="发送" aria-label="发送">
+                  <button className="send-btn" onClick={send} disabled={!canSend || (!input.trim() && !imgPreview)} title="发送" aria-label="发送">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M12 19V6M6 12l6-6 6 6" />
                     </svg>
@@ -676,7 +775,7 @@ export default function ChatApp() {
               </div>
             </div>
             <input id="image-file-input" type="file" accept="image/*" hidden
-              onChange={(e) => { const f = e.target.files?.[0]; if (f) handleImage(f); e.target.value = ''; }} />
+              onChange={(e) => { const f = e.target.files?.[0]; if (f) attachImage(f); e.target.value = ''; }} />
             <div className="status">
               {config.mode === 'byok' && !config.isByokValid() ? '⚠ 未配置 BYOK 模型，请到设置页填写' : '就绪 · Cmd/Ctrl+Enter 发送'}
             </div>
@@ -706,6 +805,11 @@ export default function ChatApp() {
             setActive('advanced');
           }}
         />
+      )}
+      {lightbox && (
+        <div className="lightbox" role="dialog" aria-label="图片放大查看" onClick={() => setLightbox(null)}>
+          <img src={lightbox} alt="放大查看" />
+        </div>
       )}
     </div>
   );

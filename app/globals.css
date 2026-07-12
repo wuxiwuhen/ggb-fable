@@ -96,7 +96,7 @@ button { font-family: inherit; cursor: pointer; }
 }
 .chip:hover { border-color: #4f46e5; color: #4f46e5; }
 
-.msg { margin-bottom: 16px; padding: 12px 16px; border-radius: 12px; max-width: 92%; line-height: 1.7; }
+.msg { margin-bottom: 16px; padding: 12px 16px; border-radius: 12px; width: fit-content; max-width: 92%; line-height: 1.7; }
 .msg.user { background: #eef2ff; margin-left: auto; }
 .msg.assistant { background: #f7f8fa; }
 .msg.system { background: #fefce8; font-size: 12px; color: #888; }
@@ -105,6 +105,27 @@ button { font-family: inherit; cursor: pointer; }
 .msg-content ul, .msg-content ol { margin: 4px 0 8px; padding-left: 22px; }
 .msg-content strong { color: #111; }
 .msg-content code { background: #eee; padding: 1px 5px; border-radius: 4px; font-size: 0.9em; }
+
+/* 用户图片气泡(单独一条): 点击放大, 气泡收缩到图宽 */
+.msg-image { display: block; max-width: 240px; max-height: 240px; border-radius: 8px; border: 1px solid rgba(0, 0, 0, 0.08); object-fit: contain; cursor: zoom-in; }
+.msg.msg-image-only { width: fit-content; max-width: 92%; }
+
+/* 图片放大查看层: 点任意处关闭 */
+.lightbox { position: fixed; inset: 0; z-index: 9999; background: rgba(0, 0, 0, 0.88); display: flex; align-items: center; justify-content: center; cursor: zoom-out; }
+.lightbox img { max-width: 92vw; max-height: 92vh; object-fit: contain; border-radius: 6px; }
+
+/* 输出气泡里的 OCR 识别结果下拉(持久, 文本流出后仍可查看) */
+.ocr-block { margin-bottom: 6px; min-width: 0; max-width: 100%; }
+.ocr-toggle { background: none; border: none; padding: 2px 0; font-size: 12px; color: #4f46e5; cursor: pointer; }
+.ocr-toggle:hover { text-decoration: underline; }
+.ocr-text { margin-top: 6px; padding: 8px 10px; background: rgba(255, 255, 255, 0.7); border-radius: 8px; border: 1px solid rgba(0, 0, 0, 0.06); font-size: 13px; max-height: 320px; overflow-y: auto; }
+
+/* 输出气泡首字文本前的过程面板: 图片识别 + 各工具阶段 */
+.assistant-progress { display: flex; flex-direction: column; gap: 6px; }
+.assistant-progress .phase-item { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #9ca3af; }
+.assistant-progress .phase-item.active { color: #4f46e5; }
+.assistant-progress .phase-item.done { color: #6b7280; }
+.assistant-progress .phase-check { color: #10b981; font-weight: 600; }
 
 /* ── 思考中指示器(发送后到首条有效文本之间, 动画点 + 当前进度) ── */
 .thinking { display: flex; align-items: center; gap: 8px; color: #8a8f98; font-size: 14px; padding: 2px 2px; }
@@ -127,7 +148,10 @@ button { font-family: inherit; cursor: pointer; }
   box-shadow: 0 0 0 4px rgba(79, 70, 229, 0.10);
 }
 .media-row { display: flex; align-items: center; gap: 10px; padding: 10px 12px 0; }
+.media-row .img-preview-wrap { position: relative; display: inline-block; line-height: 0; }
 .media-row .img-preview { max-height: 56px; border-radius: 8px; border: 1px solid #eee; }
+.media-row .img-preview-remove { position: absolute; top: -6px; right: -6px; width: 18px; height: 18px; padding: 0; border: none; border-radius: 50%; background: rgba(15, 23, 42, 0.72); color: #fff; font-size: 11px; line-height: 18px; text-align: center; cursor: pointer; }
+.media-row .img-preview-remove:hover { background: rgba(15, 23, 42, 0.92); }
 .ocr-status { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; color: #8a8f98; }
 .spinner { width: 13px; height: 13px; border: 2px solid #e0e3e9; border-top-color: #4f46e5; border-radius: 50%; animation: composer-spin 0.7s linear infinite; }
 @keyframes composer-spin { to { transform: rotate(360deg); } }

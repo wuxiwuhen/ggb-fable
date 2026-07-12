@@ -36,19 +36,10 @@ function isMathLike(t: string): boolean {
   return false;
 }
 
-function trimSections(text: string): string {
+// 新 prompt 不再分块、不要标题行; 兜底去掉模型可能误加的 ===== 标题/分隔线, 只留转录正文
+function cleanOcrText(text: string): string {
   if (!text) return text;
-  let t = text;
-  t = t.replace(/=+\s*第一块[^\n]*\n?/g, '');
-  const m = t.match(/=+\s*第二块[^\n]*\n/);
-  if (m) {
-    const idx = m.index!;
-    const rest = t.slice(idx + m[0].length).trim();
-    if (!rest || /^(无图形|无图|无|（\s*无图形?\s*）|\(\s*无图形?\s*\))$/.test(rest)) {
-      t = t.slice(0, idx);
-    }
-  }
-  return t.replace(/[\s\n]+$/, '');
+  return text.replace(/^\s*=+[^\n]*\n/, '').trim();
 }
 
 export const Vision = {
@@ -89,7 +80,7 @@ export const Vision = {
     signal?: AbortSignal;
     visionFn: (image: string, prompt: string, signal?: AbortSignal) => Promise<string>;
   }): Promise<string> {
-    const prompt = `你是数学题 OCR 专家。看这张题目图片，输出一段文字，让别人仅凭这段文字能 100% 复刻原题（全部文字+全部图形）。
+    const prompt = `你是数学题 OCR 专家。看这张题目图片，只转录其中的文字（不要描述图形长什么样——图形转述常出错反而干扰，只管文字）。
 
 【最重要·数学必须可渲染】所有数学公式必须用 LaTeX，且只允许两种定界符：
 - 行内公式用 $...$，例如 $\\frac{1}{2}$、$x^2$、$\\angle A$、$\\pi r^2$
@@ -110,21 +101,17 @@ $...$ 只包裹数学表达式本身，绝不把汉字或标点包进去（错�
 - 多步对齐：$$\\begin{aligned} 2x+1 &= 5 \\\\ 2x &= 4 \\\\ x &= 2 \\end{aligned}$$
 - 矩阵：$$\\begin{pmatrix} 1 & 2 \\\\ 3 & 4 \\end{pmatrix}$$
 
-【输出结构】严格按以下两块输出，且只输出这两块：
+【输出结构】只输出一块——题目原文逐字转录：
 
-===== 第一块：题目原文逐字转录 =====
-按阅读顺序转录图片里的所有文字。文字保持原文措辞，禁止改写/概括/翻译/润色；其中的数学符号必须按上面要求转成可渲染 LaTeX。遮挡或模糊处用〚不清〛标注，不要猜。
-
-===== 第二块：图形/图片详细描述 =====
-若题目含任何图，对每一个图独立详尽描述，详细到别人能照着精确重画。若完全没有图形，本块写"无图形"。
+按阅读顺序转录图片里的所有文字。文字保持原文措辞，禁止改写/概括/翻译/润色；其中的数学符号必须按上面要求转成可渲染 LaTeX。遮挡或模糊处用〚不清〛标注，不要猜。不要输出任何标题行、分隔线(如 =====)、说明性文字或前后缀，第一个字符就是题目的第一个字。
 
 【可用 LaTeX 命令】\\frac \\dfrac \\sqrt \\sqrt[n]{} _{} ^{} \\angle \\triangle \\cdot \\times \\div \\pm \\geq \\leq \\neq \\approx \\infty \\pi \\sum \\lim \\sin \\cos \\tan \\log \\ln \\vec{} \\overline{} \\circ \\quad
 
-【输出纪律】不要解题，不要生成代码或 JSON。上面所有【】里的要求与示例本身绝不能出现在你的输出里。完整性优先，宁冗勿漏。
+【输出纪律】不要解题，不要生成代码或 JSON，不要描述图形。上面所有【】里的要求与示例本身绝不能出现在你的输出里。完整性优先，宁冗勿漏。
 
-现在开始：你输出的第一个字符必须是 =（即第一块的标题行）。`;
+现在开始：直接输出题目转录文本。`;
 
     const raw = await visionFn(image, prompt, signal);
-    return trimSections(normalizeMathDelimiters(raw));
+    return cleanOcrText(normalizeMathDelimiters(raw));
   },
 };
