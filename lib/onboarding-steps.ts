@@ -8,6 +8,7 @@ export interface TourCtx {
   setExportOpen: (v: boolean) => void;
   setInput: (v: string) => void;
   getInput: () => string;
+  prefillDemo: (text: string) => void;   // 仅首次调用生效(用于第2步预填示例, 不重填)
 }
 
 export interface TourStep {
@@ -58,7 +59,7 @@ export function buildBasicSteps(ctx: TourCtx): TourStep[] {
       title: '在这里用自然语言画图',
       body: '描述你想画的图形，可连续追加指令（如「再画它的切线」）。Cmd/Ctrl+Enter 发送。',
       cta: '示例已填好——点发送，你会看到画布动起来（计 1 次试用）',
-      preEnter: () => ctx.setInput(DEMO_EXAMPLE),
+      preEnter: () => ctx.prefillDemo(DEMO_EXAMPLE),
     },
     {
       // 3. 画布

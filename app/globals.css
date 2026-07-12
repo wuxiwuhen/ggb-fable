@@ -295,7 +295,7 @@ button { font-family: inherit; cursor: pointer; }
 .tour-highlight {
   position: fixed; border-radius: 6px;
   box-shadow: 0 0 0 2px #4f46e5, 0 0 0 6px rgba(79, 70, 229, 0.18);
-  pointer-events: none; transition: all 0.18s ease;
+  pointer-events: none;
 }
 .tour-bubble {
   background: #fff; border-radius: 12px; padding: 16px 18px 14px;

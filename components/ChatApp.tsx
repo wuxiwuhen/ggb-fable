@@ -107,6 +107,7 @@ export default function ChatApp() {
   const [input, setInput] = useState('');
   const inputRef = useRef(input);
   inputRef.current = input;
+  const tourPrefilledRef = useRef(false);
   const [sending, setSending] = useState(false);
   const [trace, setTrace] = useState<TraceItem[]>([]);
   const [execLines, setExecLines] = useState<ExecLine[]>([]);
@@ -126,11 +127,20 @@ export default function ChatApp() {
   const [tutorialOpen, setTutorialOpen] = useState(false);
   const tutorialMenuRef = useRef<HTMLDivElement>(null);
 
+  // 仅首次调用生效(用于新手引导第2步预填示例, 上一步返回时不重填)
+  const prefillDemo = useCallback((text: string) => {
+    if (!tourPrefilledRef.current) {
+      setInput(text);
+      tourPrefilledRef.current = true;
+    }
+  }, []);
+
   const tourCtx: TourCtx = {
     setSidebarOpen,
     setExportOpen,
     setInput,
     getInput: () => inputRef.current,
+    prefillDemo,
   };
 
   const [history, setHistory] = useState<any[]>([]);     // Agent 上下文(截断 8 条)
@@ -175,6 +185,9 @@ export default function ChatApp() {
     document.addEventListener('mousedown', onDown);
     return () => document.removeEventListener('mousedown', onDown);
   }, [tutorialOpen]);
+
+  // ── 新手引导: 每次 tour 启动/重启时重置预填标记, 让第2步能再次预填 ──
+  useEffect(() => { tourPrefilledRef.current = false; }, [active]);
 
   // ── 导出: 视频录制开始/停止(MP4 优先, WebM 兜底) ──
   const toggleRecord = useCallback(() => {
