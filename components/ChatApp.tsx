@@ -163,6 +163,8 @@ export default function ChatApp() {
   // ── 画布 XML 快照持久化 ──
   const restoringRef = useRef(false);                                   // restore 期间抑制捕获
   const persistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // NOTE: 不在此处检查 restoringRef —— switchSession 的老会话自愈路径故意在 restoringRef=true 时调用本函数;
+  // 防止过渡期误写的正确做法是 cancelPersist()(在 clearAll 前清掉待触发的防抖定时器), 而非在此 guard。
   const persistCanvasXml = useCallback(async () => {
     const sid = useSessionStore.getState().currentSessionId;
     if (!sid || !ggbRef.current) return;
@@ -180,6 +182,10 @@ export default function ChatApp() {
     if (persistTimerRef.current) clearTimeout(persistTimerRef.current);
     persistTimerRef.current = setTimeout(() => { void persistCanvasXml(); }, 800);
   }, [persistCanvasXml]);
+  // 清掉待触发的防抖定时器: 切会话/新建/清空/卸载前调用, 防止过渡期误写脏 XML
+  const cancelPersist = useCallback(() => {
+    if (persistTimerRef.current) { clearTimeout(persistTimerRef.current); persistTimerRef.current = null; }
+  }, []);
 
   // 手工绘制监听: onUpdate(add/remove/update) + onCommand(execCommand) → 防抖落 XML
   // GGB 实例整会话稳定(reinit 不换实例), subscribedRef 保证只订阅一次
@@ -189,7 +195,8 @@ export default function ChatApp() {
     subscribedRef.current = true;
     ggbRef.current.onUpdate(() => schedulePersist());
     ggbRef.current.onCommand(() => schedulePersist());
-  }, [ggbReady, schedulePersist]);
+    return () => { cancelPersist(); };
+  }, [ggbReady, schedulePersist, cancelPersist]);
 
   // 离开页面兜底: sendBeacon 同步落当前画布 XML
   useEffect(() => {
@@ -204,10 +211,11 @@ export default function ChatApp() {
           { type: 'application/json' },
         ));
       } catch (e) { /* 静默 */ }
+      cancelPersist();
     };
     window.addEventListener('beforeunload', onUnload);
     return () => window.removeEventListener('beforeunload', onUnload);
-  }, [ggbRef]);
+  }, [ggbRef, cancelPersist]);
 
   // 流式 token 缓冲 + rAF 批量 flush(避免每个 token 一次 setState)
   const streamBuf = useRef<{ id: number; text: string } | null>(null);
@@ -275,6 +283,7 @@ export default function ChatApp() {
   const newSession = useCallback(async () => {
     // 已有会话且当前是空画布+无消息 → 无需重复新建
     if (currentSessionId && messages.length === 0 && !(ggbRef.current?.getCommandLog() || []).length) return;
+    cancelPersist();
     abortRef.current?.abort();
     setError('');
     const res = await fetch('/api/sessions', {
@@ -291,12 +300,13 @@ export default function ChatApp() {
     loggerRef.current.setSession(id);          // 修复: logger 绑定 sessionId
     setSidebarOpen(false);
     return id;
-  }, [config, setSessions, setCurrent, upsert]);
+  }, [config, setSessions, setCurrent, upsert, cancelPersist]);
 
   // 清空工作区(不建新会话): 保留当前 sessionId, 只清画布+聊天, 侧边栏不变
   const clearWorkspace = useCallback(async () => {
     if (!currentSessionId) return;
     if (messages.length === 0 && !(ggbRef.current?.getCommandLog() || []).length) return;
+    cancelPersist();
     abortRef.current?.abort();
     setError('');
     setMessages([]);
@@ -304,11 +314,12 @@ export default function ChatApp() {
     setExecLines([]);
     setHistory([]);
     await ggbRef.current?.clearAll();
-  }, [currentSessionId, messages]);
+  }, [currentSessionId, messages, cancelPersist]);
 
   // 切换会话: 先持久化离开的会话 → 加载 → 重建 chat/trace/history → setXML 还原画布 → 设为当前
   const switchSession = useCallback(async (id: string) => {
     if (id === currentSessionId) return;
+    cancelPersist();
     abortRef.current?.abort();
     setError('');
     try {
@@ -346,7 +357,7 @@ export default function ChatApp() {
       setError('切换会话失败: ' + (e as any).message);
     }
     setSidebarOpen(false);
-  }, [currentSessionId, setCurrent, persistCanvasXml]);
+  }, [currentSessionId, setCurrent, persistCanvasXml, cancelPersist]);
 
   // 首次进入: 加载会话列表, 无则建空会话; 绑定 logger sessionId
   useEffect(() => {
