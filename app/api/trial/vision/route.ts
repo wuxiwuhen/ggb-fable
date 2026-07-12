@@ -9,7 +9,12 @@
 import { getUserFromCookie } from '@/lib/supabase';
 import { signToken, verifyToken } from '@/lib/trial-token';
 
-export const runtime = 'edge';
+// ⚠️ 用 nodejs runtime 而非 edge —— 区别于 /api/trial/llm(它走流式, Edge 无硬时长上限)。
+// 视觉调用是【非流式】(stream:false, 整段等 GLM-4.6v 生成完毕): 大图 + inspect_render 长 prompt
+// 单次常 20–40s, 超出 Edge ~25–30s 硬上限会被 Vercel 杀掉 → 504 FUNCTION_INVOCATION_TIMEOUT。
+// Node.js serverless 配 maxDuration 才有足够余量。Edge 对非流式零收益, 别改回去。
+export const runtime = 'nodejs';
+export const maxDuration = 60;   // Hobby/Pro 均支持; Pro 可按需提到 120/300
 
 const TOKEN_TTL = Number(process.env.TRIAL_TOKEN_TTL || 900) * 1000;
 
