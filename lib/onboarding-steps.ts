@@ -31,17 +31,10 @@ export const DEMO_EXAMPLE =
 
 // ── DOM 操纵 helper(操控 CommandBar 内部 state, 因其 details/tab 不受外部 props 控制) ──
 
-// 展开"执行历史/重建脚本"折叠面板(<details> 非受控, 直接设 open 安全)
+// 展开"执行历史"折叠面板(<details> 非受控, 直接设 open 安全)
 export function openCmdBar(): void {
   const details = document.querySelector('details.cmd-bar') as HTMLDetailsElement | null;
   if (details) details.open = true;
-}
-
-// 切换 CommandBar 的 tab: 派发对应 .cmd-tab 的 click 触发其 React onClick -> setMode
-export function switchCmdTab(tab: 'history' | 'recipe'): void {
-  const tabs = document.querySelectorAll<HTMLButtonElement>('.cmd-toggle .cmd-tab');
-  const target = tab === 'history' ? tabs[0] : tabs[1];
-  target?.click();
 }
 
 // ── 基础教程: 6 步核心闭环 ──
@@ -95,7 +88,7 @@ export function buildBasicSteps(ctx: TourCtx): TourStep[] {
     {
       // 结束卡(无锚点 = 居中) + choices
       title: '基础就这些 ✨',
-      body: '你已能画图并导出。还想看看进阶功能（历史对话、执行历史、重建脚本）吗？',
+      body: '你已能画图并导出。还想看看进阶功能（历史对话、执行历史）吗？',
       choices: [
         { label: '继续看进阶', action: 'advanced' },
         { label: '不了，开始用', action: 'finish' },
@@ -104,7 +97,7 @@ export function buildBasicSteps(ctx: TourCtx): TourStep[] {
   ];
 }
 
-// ── 进阶教程: 3 步 ──
+// ── 进阶教程: 2 步 ──
 export function buildAdvancedSteps(ctx: TourCtx): TourStep[] {
   return [
     {
@@ -118,25 +111,13 @@ export function buildAdvancedSteps(ctx: TourCtx): TourStep[] {
       postExit: () => ctx.setSidebarOpen(false),
     },
     {
-      // 8. 执行历史(展开 CommandBar + history tab)
+      // 8. 执行历史(展开 CommandBar)
       anchor: '[data-tour="command-history"]',
       side: 'bottom',
       title: '执行历史',
       body: '每次画图实际执行的 GeoGebra 命令都在这，✓/✗ 标明成功与否，方便排查为什么没画出来。',
-      preEnter: () => { openCmdBar(); switchCmdTab('history'); },
+      preEnter: () => { openCmdBar(); },
       waitFor: () => !!(document.querySelector('details.cmd-bar') as HTMLDetailsElement | null)?.open,
-    },
-    {
-      // 9. 重建脚本(切到 recipe tab)
-      anchor: '[data-tour="recipe-tab"]',
-      side: 'bottom',
-      title: '重建脚本',
-      body: '可把命令脚本精简、编辑（比如改个参数），再 ▶ 重放重新画——改图重画不用从头对话。',
-      preEnter: () => { openCmdBar(); switchCmdTab('recipe'); },
-      waitFor: () => {
-        const recipe = document.querySelectorAll<HTMLButtonElement>('.cmd-toggle .cmd-tab')[1];
-        return !!recipe && recipe.classList.contains('active');
-      },
     },
   ];
 }

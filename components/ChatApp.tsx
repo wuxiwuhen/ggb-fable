@@ -645,7 +645,7 @@ export default function ChatApp() {
                   <span className="export-text"><span className="export-title">📖 基础教程</span><span className="export-desc">画图、识别、导出</span></span>
                 </button>
                 <button className="export-item" onClick={() => { start('advanced'); setTutorialOpen(false); }}>
-                  <span className="export-text"><span className="export-title">🧱 进阶教程</span><span className="export-desc">历史、执行记录、重建脚本</span></span>
+                  <span className="export-text"><span className="export-title">🧱 进阶教程</span><span className="export-desc">历史、执行记录</span></span>
                 </button>
               </div>
             )}
