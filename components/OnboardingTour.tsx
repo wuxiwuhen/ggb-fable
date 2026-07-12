@@ -160,18 +160,19 @@ export default function OnboardingTour({ steps, onFinish, onContinueAdvanced }: 
 
   return (
     <div className="tour-root" role="dialog" aria-label="新手引导">
-      {/* 遮罩: 有 rect 时用 4 块挖洞, 否则整屏 */}
+      {/* 遮罩: 有 rect 时用 4 块挖洞, 否则整屏。
+          遮罩 pointer-events:auto 捕获点击但不响应——点阴影不退出, 只能走完步骤或用 ✕/跳过/ESC 主动退出 */}
       {rect && ready ? (
         <>
-          <div className="tour-mask" style={{ left: 0, top: 0, width: '100%', height: rect.top }} onClick={() => onFinish(false)} />
-          <div className="tour-mask" style={{ left: 0, top: rect.bottom, width: '100%', height: `calc(100vh - ${rect.bottom}px)` }} onClick={() => onFinish(false)} />
-          <div className="tour-mask" style={{ left: 0, top: rect.top, width: rect.left, height: rect.height }} onClick={() => onFinish(false)} />
-          <div className="tour-mask" style={{ left: rect.right, top: rect.top, width: `calc(100vw - ${rect.right}px)`, height: rect.height }} onClick={() => onFinish(false)} />
+          <div className="tour-mask" style={{ left: 0, top: 0, width: '100%', height: rect.top }} />
+          <div className="tour-mask" style={{ left: 0, top: rect.bottom, width: '100%', height: `calc(100vh - ${rect.bottom}px)` }} />
+          <div className="tour-mask" style={{ left: 0, top: rect.top, width: rect.left, height: rect.height }} />
+          <div className="tour-mask" style={{ left: rect.right, top: rect.top, width: `calc(100vw - ${rect.right}px)`, height: rect.height }} />
           {/* 高亮描边框 */}
           <div className="tour-highlight" style={{ left: rect.left, top: rect.top, width: rect.width, height: rect.height }} />
         </>
       ) : (
-        <div className="tour-mask tour-mask-full" onClick={() => onFinish(false)} />
+        <div className="tour-mask tour-mask-full" />
       )}
 
       {/* 气泡(锚点步骤在定位就绪前不渲染, 避免左上角闪现; ref 供 useLayoutEffect 实测尺寸) */}
