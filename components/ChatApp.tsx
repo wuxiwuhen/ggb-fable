@@ -306,12 +306,13 @@ export default function ChatApp() {
     await ggbRef.current?.clearAll();
   }, [currentSessionId, messages]);
 
-  // 切换会话: 加载 → 重建 chat/trace/history → 重放画布 → 设为当前
+  // 切换会话: 先持久化离开的会话 → 加载 → 重建 chat/trace/history → setXML 还原画布 → 设为当前
   const switchSession = useCallback(async (id: string) => {
     if (id === currentSessionId) return;
     abortRef.current?.abort();
     setError('');
     try {
+      await persistCanvasXml();           // 离开前持久化"当前"会话画布(用旧 currentSessionId)
       const res = await fetch(`/api/sessions?id=${id}`, { cache: 'no-store' });
       if (!res.ok) return;
       const { session, messages }: { session: any; messages: ApiMessage[] } = await res.json();
@@ -321,19 +322,31 @@ export default function ChatApp() {
       setTrace(rebuildTrace(messages).map((t) => ({ id: ++msgId, ...t })));
       setHistory(rebuildHistory(messages));
       setExecLines(rebuildExecLines(messages));
-      // 恢复画布: 暂用命令回放(XML 快照恢复见 Task 5); 执行历史显示已由 execLines 重建
-      await ggbRef.current?.clearAll();
-      const cmds = extractReplayCommands(messages);
-      if (cmds.length) {
-        try { await ggbRef.current?.execBatch(cmds.join('\n')); } catch (e) { console.warn('画布重放失败:', e); }
-      }
-      setCurrent(id);
+      setCurrent(id);                      // 切到新会话(后续自愈 persistCanvasXml 用新 id)
       loggerRef.current.setSession(id);
+      restoringRef.current = true;         // 抑制 setXML 触发的监听事件回写
+      try {
+        await ggbRef.current?.clearAll();
+        if (session?.canvas_xml) {
+          try { ggbRef.current?.setXML(session.canvas_xml); }
+          catch (e) { console.warn('画布 setXML 恢复失败:', e); }
+        } else {
+          // 老会话回退: recipe 或原始命令重放, 成功后自愈落 XML, 下次直接 setXML
+          const cmds: string[] = Array.isArray(session?.recipe) && session.recipe.length
+            ? session.recipe : extractReplayCommands(messages);
+          if (cmds.length) {
+            try { await ggbRef.current?.execBatch(cmds.join('\n')); } catch (e) { console.warn('画布重放失败:', e); }
+          }
+          void persistCanvasXml();         // 自愈(currentSessionId 已是 id)
+        }
+      } finally {
+        restoringRef.current = false;
+      }
     } catch (e) {
       setError('切换会话失败: ' + (e as any).message);
     }
     setSidebarOpen(false);
-  }, [currentSessionId, setCurrent]);
+  }, [currentSessionId, setCurrent, persistCanvasXml]);
 
   // 首次进入: 加载会话列表, 无则建空会话; 绑定 logger sessionId
   useEffect(() => {
