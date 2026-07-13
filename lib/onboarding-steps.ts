@@ -52,14 +52,21 @@ export function buildTourSteps(ctx: TourCtx): TourStep[] {
       preEnter: () => ctx.prefillDemo(DEMO_EXAMPLE),
     },
     {
-      // 3. 画布
+      // 3. 图片识别 OCR
+      anchor: '[aria-label="上传图片"]',
+      side: 'top',
+      title: '图片识别',
+      body: '拍一道题或截个图，OCR 自动识别成数学表达式再画出来——不占试用次数。',
+    },
+    {
+      // 4. 画布
       anchor: '#ggb-container',
       side: 'left',
       title: '画布',
       body: 'AI 会读你的话、调用 GeoGebra 命令把图形画在这里，图形可拖动、缩放、探究。',
     },
     {
-      // 4. 执行历史(展开 CommandBar)
+      // 5. 执行历史(展开 CommandBar)
       anchor: '[data-tour="command-history"]',
       side: 'bottom',
       title: '执行历史',
@@ -68,21 +75,7 @@ export function buildTourSteps(ctx: TourCtx): TourStep[] {
       waitFor: () => !!(document.querySelector('details.cmd-bar') as HTMLDetailsElement | null)?.open,
     },
     {
-      // 5. 图片识别 OCR
-      anchor: '[aria-label="上传图片"]',
-      side: 'top',
-      title: '图片识别',
-      body: '拍一道题或截个图，OCR 自动识别成数学表达式再画出来——不占试用次数。',
-    },
-    {
-      // 6. 额度与模式
-      anchor: '[data-tour="mode-switch"]',
-      side: 'bottom',
-      title: '额度与模式',
-      body: '点这里在「免费试用」和「自带 Key」之间切换。免费试用送 5 次额度（旁边徽章显示剩余），用完切到「自带 Key」并在设置页填自己的 API Key 即可无限使用。',
-    },
-    {
-      // 7. 导出(展开下拉)
+      // 6. 导出(展开下拉)
       anchor: '[data-tour="export"]',
       side: 'bottom',
       title: '导出',
@@ -92,7 +85,7 @@ export function buildTourSteps(ctx: TourCtx): TourStep[] {
       postExit: () => ctx.setExportOpen(false),
     },
     {
-      // 8. 对话与历史(打开侧边栏)
+      // 7. 对话与历史(打开侧边栏)
       anchor: '[data-tour="session-list"]',
       side: 'right',
       title: '对话与历史',
@@ -100,6 +93,13 @@ export function buildTourSteps(ctx: TourCtx): TourStep[] {
       preEnter: () => ctx.setSidebarOpen(true),
       waitFor: () => !!document.querySelector('[data-tour="session-list"]'),
       postExit: () => ctx.setSidebarOpen(false),
+    },
+    {
+      // 8. 额度与模式
+      anchor: '[data-tour="mode-switch"]',
+      side: 'bottom',
+      title: '额度与模式',
+      body: '点这里在「免费试用」和「自带 Key」之间切换。免费试用送 5 次额度（旁边徽章显示剩余），用完切到「自带 Key」并在设置页填自己的 API Key 即可无限使用。',
     },
     {
       // 9. 结束卡
