@@ -4,7 +4,8 @@
 // POST 多用途(body.action):
 //   create  { action, mode, model?, title? }              → 新建会话, 返回 { id }
 //   append  { action, sessionId, events: [...] }          → 追加事件为 messages 行(会话不存在自动建)
-//   update  { action, id, title? }                        → 改标题
+//   update  { action, id, title?, pinned? }                → 改标题/置顶
+//   delete  { action, id }                                 → 删除会话(联级删 messages)
 // GET:
 //   (无参)            → 当前用户会话列表(倒序)
 //   ?id=UUID          → 单会话全部 messages(按 id 升序)
@@ -36,7 +37,7 @@ export async function GET(req: Request) {
 
   const { data } = await admin
     .from('sessions')
-    .select('id, title, mode, model, created_at, updated_at')
+    .select('id, title, mode, model, pinned, created_at, updated_at')
     .eq('user_id', user.id)
     .order('updated_at', { ascending: false });
   return json(200, { sessions: data || [] });
@@ -62,9 +63,18 @@ export async function POST(req: Request) {
     if (body.title != null) patch.title = body.title;
     if (body.recipe !== undefined) patch.recipe = body.recipe;       // [已退役, 仅老会话回放读]
     if (body.canvas_xml !== undefined) patch.canvas_xml = body.canvas_xml;   // 画布 XML 快照持久化
+    if (body.pinned !== undefined) patch.pinned = body.pinned;              // 置顶切换
     const { data: rows } = await admin.from('sessions')
       .update(patch).eq('id', body.id).eq('user_id', user.id).select('id');
     return json(200, { ok: true, affected: rows?.length ?? 0 });
+  }
+
+  if (body.action === 'delete') {
+    // 鉴权归属后删; messages 有 ON DELETE CASCADE, 自动联级删
+    const { data: existing } = await admin.from('sessions').select('id, user_id').eq('id', body.id).maybeSingle();
+    if (!existing || existing.user_id !== user.id) return json(404, { error: '会话不存在' });
+    await admin.from('sessions').delete().eq('id', body.id);
+    return json(200, { ok: true });
   }
 
   if (body.action === 'append') {

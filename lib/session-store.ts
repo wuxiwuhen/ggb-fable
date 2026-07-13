@@ -15,6 +15,7 @@ export interface SessionMeta {
   title: string | null;
   mode: string;
   model: string | null;
+  pinned: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -26,6 +27,9 @@ interface SessionState {
   setCurrent: (id: string | null) => void;
   upsert: (s: SessionMeta) => void;                          // 新建或更新一条元数据
   patchCurrent: (patch: Partial<SessionMeta>) => void;       // 改当前会话元数据(如 title)
+  renameSession: (id: string, title: string) => void;
+  togglePin: (id: string) => void;
+  removeSession: (id: string) => void;
 }
 
 export const useSessionStore = create<SessionState>()((set) => ({
@@ -45,5 +49,19 @@ export const useSessionStore = create<SessionState>()((set) => ({
   }),
   patchCurrent: (patch) => set((st) => ({
     sessions: st.sessions.map((x) => (x.id === st.currentSessionId ? { ...x, ...patch } : x)),
+  })),
+  renameSession: (id, title) => set((st) => ({
+    sessions: st.sessions.map((x) => (x.id === id ? { ...x, title } : x)),
+  })),
+  togglePin: (id) => set((st) => {
+    const target = st.sessions.find((x) => x.id === id);
+    if (!target) return st;
+    return {
+      sessions: st.sessions.map((x) => (x.id === id ? { ...x, pinned: !x.pinned, updated_at: new Date().toISOString() } : x)),
+    };
+  }),
+  removeSession: (id) => set((st) => ({
+    sessions: st.sessions.filter((x) => x.id !== id),
+    currentSessionId: st.currentSessionId === id ? null : st.currentSessionId,
   })),
 }));

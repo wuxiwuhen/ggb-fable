@@ -29,6 +29,7 @@ create table if not exists public.sessions (
   model text,                            -- 用了哪个模型(trial) 或 BYOK 的 model_name
   recipe jsonb,                          -- [已退役, 仅老会话回退重放读] 该会话精简重建脚本命令数组
   canvas_xml text,                       -- 该会话画布完整 GeoGebra XML 快照(刷新/切换 setXML 无损还原, 含手工绘制)
+  pinned boolean default false,          -- 置顶标记(true 的会话排在列表最前)
   created_at timestamptz default now(),
   updated_at timestamptz default now()
 );
@@ -172,3 +173,4 @@ alter table public.sessions add column if not exists recipe jsonb;
 
 -- ── 画布 XML 持久化: 兼容已建库补 canvas_xml 列 ──
 alter table public.sessions add column if not exists canvas_xml text;
+alter table public.sessions add column if not exists pinned boolean default false;

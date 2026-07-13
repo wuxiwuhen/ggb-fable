@@ -297,7 +297,7 @@ export default function ChatApp() {
     setMessages([]); setTrace([]); setExecLines([]); setHistory([]);
     await ggbRef.current?.clearAll();
     const now = new Date().toISOString();
-    upsert({ id, title: null, mode: config.mode, model: null, created_at: now, updated_at: now });
+    upsert({ id, title: null, mode: config.mode, model: null, pinned: false, created_at: now, updated_at: now });
     setCurrent(id);
     loggerRef.current.setSession(id);          // 修复: logger 绑定 sessionId
     setSidebarOpen(false);
