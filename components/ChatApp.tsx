@@ -27,7 +27,7 @@ import { rebuildChatMessages, rebuildTrace, rebuildHistory, extractReplayCommand
 import SessionSidebar from './SessionSidebar';
 import OnboardingTour from './OnboardingTour';
 import { useOnboarding } from '@/hooks/useOnboarding';
-import { buildBasicSteps, buildAdvancedSteps, type TourCtx } from '@/lib/onboarding-steps';
+import { buildTourSteps, type TourCtx } from '@/lib/onboarding-steps';
 
 interface Msg {
   id: number;
@@ -137,8 +137,6 @@ export default function ChatApp() {
   const [recording, setRecording] = useState(false);
   const exportMenuRef = useRef<HTMLDivElement>(null);
 
-  const [tutorialOpen, setTutorialOpen] = useState(false);
-  const tutorialMenuRef = useRef<HTMLDivElement>(null);
 
   // 仅首次调用生效(用于新手引导第2步预填示例, 上一步返回时不重填)
   const prefillDemo = useCallback((text: string) => {
@@ -246,15 +244,6 @@ export default function ChatApp() {
     return () => document.removeEventListener('mousedown', onDown);
   }, [exportOpen]);
 
-  // ── 教程下拉:点外部关闭 ──
-  useEffect(() => {
-    if (!tutorialOpen) return;
-    const onDown = (e: MouseEvent) => {
-      if (tutorialMenuRef.current && !tutorialMenuRef.current.contains(e.target as Node)) setTutorialOpen(false);
-    };
-    document.addEventListener('mousedown', onDown);
-    return () => document.removeEventListener('mousedown', onDown);
-  }, [tutorialOpen]);
 
   // ── 新手引导: 每次 tour 启动/重启时重置预填标记, 让第2步能再次预填 ──
   useEffect(() => { tourPrefilledRef.current = false; }, [active]);
@@ -650,21 +639,7 @@ export default function ChatApp() {
             <span className="usage-badge" title="管理员不限次数" data-tour="usage-badge">管理员 ∞</span>
           )}
           {!adminLoading && isAdmin && <Link className="btn ghost" href="/admin">🛠 管理</Link>}
-          <div className="tutorial-wrap" ref={tutorialMenuRef}>
-            <button className="btn ghost" data-tour="tutorial" onClick={() => setTutorialOpen((v) => !v)}>
-              📖 教程
-            </button>
-            {tutorialOpen && (
-              <div className="tutorial-menu">
-                <button className="export-item" onClick={() => { start('basic'); setTutorialOpen(false); }}>
-                  <span className="export-text"><span className="export-title">📖 基础教程</span><span className="export-desc">画图、识别、导出</span></span>
-                </button>
-                <button className="export-item" onClick={() => { start('advanced'); setTutorialOpen(false); }}>
-                  <span className="export-text"><span className="export-title">🧱 进阶教程</span><span className="export-desc">历史、执行记录</span></span>
-                </button>
-              </div>
-            )}
-          </div>
+          <button className="btn ghost" data-tour="tutorial" onClick={() => start()}>📖 教程</button>
           <Link className="btn ghost" href="/settings">⚙ 设置</Link>
           {recording ? (
             <button className="btn rec-stop" onClick={toggleRecord} title="停止录制并下载视频">
@@ -812,18 +787,8 @@ export default function ChatApp() {
       </main>
       {active && (
         <OnboardingTour
-          key={active}
-          steps={active === 'basic' ? buildBasicSteps(tourCtx) : buildAdvancedSteps(tourCtx)}
-          onFinish={(completed) => {
-            markSeen(active);
-            setActive(null);
-            // completed 仅用于日志语义; 基础的"继续进阶"由 onContinueAdvanced 处理
-            void completed;
-          }}
-          onContinueAdvanced={() => {
-            markSeen('basic');
-            setActive('advanced');
-          }}
+          steps={buildTourSteps(tourCtx)}
+          onFinish={() => { markSeen(); setActive(false); }}
         />
       )}
       {lightbox && (

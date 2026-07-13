@@ -8,7 +8,6 @@ import type { TourStep, TourSide } from '@/lib/onboarding-steps';
 interface Props {
   steps: TourStep[];
   onFinish: (completed: boolean) => void;
-  onContinueAdvanced?: () => void;
 }
 
 const SIDE_GAP = 12;     // 气泡与锚点的间距
@@ -39,7 +38,7 @@ function computePlacement(rect: DOMRect, side: TourSide, bubbleW: number, bubble
   return { top: VIEWPORT_GAP, left: VIEWPORT_GAP, side };
 }
 
-export default function OnboardingTour({ steps, onFinish, onContinueAdvanced }: Props) {
+export default function OnboardingTour({ steps, onFinish }: Props) {
   const [index, setIndex] = useState(0);
   const [rect, setRect] = useState<DOMRect | null>(null);   // null = 居中卡片(无锚点/找不到/降级)
   const [ready, setReady] = useState(false);
@@ -192,8 +191,8 @@ export default function OnboardingTour({ steps, onFinish, onContinueAdvanced }: 
             step.choices.map((c) => (
               <button
                 key={c.action}
-                className={`btn ${c.action === 'advanced' ? 'primary' : 'ghost'}`}
-                onClick={() => (c.action === 'advanced' ? onContinueAdvanced?.() : onFinish(true))}
+                className={`btn ${c.action === 'finish' ? 'primary' : 'ghost'}`}
+                onClick={() => onFinish(true)}
               >
                 {c.label}
               </button>

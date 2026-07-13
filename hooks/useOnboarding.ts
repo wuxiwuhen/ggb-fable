@@ -1,30 +1,32 @@
 'use client';
 
-// 新手引导触发与持久化: localStorage 记忆是否看过; 提供 active 状态与启动/标记接口。
+// 新手引导触发与持久化: localStorage 记忆是否看过; 提供 active 布尔状态与启动/标记接口。
 import { useCallback, useState } from 'react';
 
-export type TourKind = 'basic' | 'advanced';
-
-const STORAGE_KEY = 'ggb-fable-onboarding';
+const STORAGE_KEY = 'ggb-fable-onboarding-v2';
 
 interface OnboardingState {
   v: number;
-  basicSeen: boolean;
-  advancedSeen: boolean;
+  seen: boolean;
 }
 
 function readState(): OnboardingState {
-  if (typeof window === 'undefined') return { v: 1, basicSeen: false, advancedSeen: false };
+  if (typeof window === 'undefined') return { v: 2, seen: false };
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    const parsed = raw ? JSON.parse(raw) : {};
-    return {
-      v: 1,
-      basicSeen: !!parsed.basicSeen,
-      advancedSeen: !!parsed.advancedSeen,
-    };
+    // 向后兼容旧 key(ggb-fable-onboarding, v=1): basicSeen=true → seen=true
+    if (!raw) {
+      const oldRaw = localStorage.getItem('ggb-fable-onboarding');
+      if (oldRaw) {
+        const old = JSON.parse(oldRaw);
+        if (old?.basicSeen === true) return { v: 2, seen: true };
+      }
+      return { v: 2, seen: false };
+    }
+    const parsed = JSON.parse(raw);
+    return { v: 2, seen: !!parsed.seen };
   } catch {
-    return { v: 1, basicSeen: false, advancedSeen: false };
+    return { v: 2, seen: false };
   }
 }
 
@@ -33,20 +35,18 @@ function writeState(s: OnboardingState): void {
 }
 
 export function useOnboarding() {
-  const [active, setActive] = useState<TourKind | null>(null);
+  const [active, setActive] = useState(false);
 
-  // 首次自动: 未看过基础教程 -> 启动基础。由 ChatApp 在 ggbReady 后调用。
+  // 首次自动: 未看过教程则启动。由 ChatApp 在 ggbReady 后调用。
   const autoStartIfDue = useCallback(() => {
-    if (!readState().basicSeen) setActive('basic');
+    if (!readState().seen) setActive(true);
   }, []);
 
-  const start = useCallback((kind: TourKind) => setActive(kind), []);
+  const start = useCallback(() => setActive(true), []);
 
-  // 标记某段已看过(完成或中途退出都标记, 尊重用户不再自动弹)
-  const markSeen = useCallback((kind: TourKind) => {
-    const s = readState();
-    if (kind === 'basic') writeState({ ...s, basicSeen: true });
-    else writeState({ ...s, advancedSeen: true });
+  // 标记已看过(完成或中途退出都标记, 尊重用户不再自动弹)
+  const markSeen = useCallback(() => {
+    writeState({ v: readState().v, seen: true });
   }, []);
 
   return { active, setActive, autoStartIfDue, start, markSeen };

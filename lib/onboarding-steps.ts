@@ -1,4 +1,4 @@
-// 新手引导步骤数据: 类型 + 预填示例 + DOM 操纵 helper + 基础/进阶步骤工厂
+// 新手引导步骤数据: 类型 + 预填示例 + DOM 操纵 helper + 统一教程工厂
 // 引擎组件 OnboardingTour 消费 TourStep[]; 工厂闭包引用 ChatApp 的 setter (TourCtx)。
 
 export type TourSide = 'top' | 'bottom' | 'left' | 'right';
@@ -23,27 +23,24 @@ export interface TourStep {
   choices?: { label: string; action: 'finish' | 'advanced' }[]; // 仅结束卡用
 }
 
-// 预填示例: Task 1 实测选优确认。默认主选(单位圆正弦曲线动画); 若 Task 1 判定不稳则替换为备选。
+// 预填示例
 export const DEMO_EXAMPLE =
   '画一个单位圆，圆上动点 P 随角度 t 旋转（t 做成动画滑块），在右侧坐标系画出点 (t, sin t) 的轨迹，动态展示正弦曲线如何随 P 的转动被一步步"画"出来';
-// 备选(仅当主选不稳时替换上方常量):
-//   '用动画滑块 a 控制抛物线 y = a*(x-1)^2 - 4 的开口大小，展示 a 从负到正变化时抛物线如何翻转与缩放'
 
-// ── DOM 操纵 helper(操控 CommandBar 内部 state, 因其 details/tab 不受外部 props 控制) ──
+// ── DOM 操纵 helper ──
 
-// 展开"执行历史"折叠面板(<details> 非受控, 直接设 open 安全)
 export function openCmdBar(): void {
   const details = document.querySelector('details.cmd-bar') as HTMLDetailsElement | null;
   if (details) details.open = true;
 }
 
-// ── 基础教程: 6 步核心闭环 ──
-export function buildBasicSteps(ctx: TourCtx): TourStep[] {
+// ── 统一教程(基础+进阶合并, 单次走完) ──
+export function buildTourSteps(ctx: TourCtx): TourStep[] {
   return [
     {
-      // 1. 欢迎卡(无锚点 = 居中)
+      // 1. 欢迎卡
       title: '欢迎使用 GGB Fable',
-      body: '用一句话画出可探究的数学图形。30 秒带你上手核心玩法——画图、识别、导出。',
+      body: '用一句话画出可探究的数学图形。30 秒带你上手核心玩法。',
     },
     {
       // 2. 对话框(预填示例)
@@ -62,21 +59,30 @@ export function buildBasicSteps(ctx: TourCtx): TourStep[] {
       body: 'AI 会读你的话、调用 GeoGebra 命令把图形画在这里，图形可拖动、缩放、探究。',
     },
     {
-      // 4. 图片识别 OCR
+      // 4. 执行历史(展开 CommandBar)
+      anchor: '[data-tour="command-history"]',
+      side: 'bottom',
+      title: '执行历史',
+      body: '每次画图实际执行的 GeoGebra 命令都在这，✓/✗ 标明成功与否，方便排查为什么没画出来。',
+      preEnter: () => { openCmdBar(); },
+      waitFor: () => !!(document.querySelector('details.cmd-bar') as HTMLDetailsElement | null)?.open,
+    },
+    {
+      // 5. 图片识别 OCR
       anchor: '[aria-label="上传图片"]',
       side: 'top',
       title: '图片识别',
       body: '拍一道题或截个图，OCR 自动识别成数学表达式再画出来——不占试用次数。',
     },
     {
-      // 5. 额度与模式
+      // 6. 额度与模式
       anchor: '[data-tour="mode-switch"]',
       side: 'bottom',
       title: '额度与模式',
       body: '点这里在「免费试用」和「自带 Key」之间切换。免费试用送 5 次额度（旁边徽章显示剩余），用完切到「自带 Key」并在设置页填自己的 API Key 即可无限使用。',
     },
     {
-      // 6. 导出(展开下拉)
+      // 7. 导出(展开下拉)
       anchor: '[data-tour="export"]',
       side: 'bottom',
       title: '导出',
@@ -86,22 +92,7 @@ export function buildBasicSteps(ctx: TourCtx): TourStep[] {
       postExit: () => ctx.setExportOpen(false),
     },
     {
-      // 结束卡(无锚点 = 居中) + choices
-      title: '基础就这些 ✨',
-      body: '你已能画图并导出。还想看看进阶功能（历史对话、执行历史）吗？',
-      choices: [
-        { label: '继续看进阶', action: 'advanced' },
-        { label: '不了，开始用', action: 'finish' },
-      ],
-    },
-  ];
-}
-
-// ── 进阶教程: 2 步 ──
-export function buildAdvancedSteps(ctx: TourCtx): TourStep[] {
-  return [
-    {
-      // 7. 对话与历史(打开侧边栏)
+      // 8. 对话与历史(打开侧边栏)
       anchor: '[data-tour="session-list"]',
       side: 'right',
       title: '对话与历史',
@@ -111,13 +102,9 @@ export function buildAdvancedSteps(ctx: TourCtx): TourStep[] {
       postExit: () => ctx.setSidebarOpen(false),
     },
     {
-      // 8. 执行历史(展开 CommandBar)
-      anchor: '[data-tour="command-history"]',
-      side: 'bottom',
-      title: '执行历史',
-      body: '每次画图实际执行的 GeoGebra 命令都在这，✓/✗ 标明成功与否，方便排查为什么没画出来。',
-      preEnter: () => { openCmdBar(); },
-      waitFor: () => !!(document.querySelector('details.cmd-bar') as HTMLDetailsElement | null)?.open,
+      // 9. 结束卡
+      title: '开始创作吧 ✨',
+      body: '你已掌握全部功能。用自然语言描述图形，AI 会在画布上画出来。',
     },
   ];
 }
