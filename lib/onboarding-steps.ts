@@ -56,7 +56,7 @@ export function buildTourSteps(ctx: TourCtx): TourStep[] {
       anchor: '[aria-label="上传图片"]',
       side: 'top',
       title: '图片识别',
-      body: '拍一道题或截个图，OCR 自动识别成数学表达式再画出来——不占试用次数。',
+      body: '拍一道题或截个图，OCR 自动识别成数学表达式再画出来。',
     },
     {
       // 4. 画布
