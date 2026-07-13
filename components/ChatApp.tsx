@@ -11,7 +11,7 @@ import Link from 'next/link';
 import { useAuth } from '@/lib/auth';
 import { useConfigStore } from '@/lib/config-store';
 import { Logger } from '@/lib/logger';
-import { CommandSearch, type EmbedFunction } from '@/lib/command-search';
+import { CommandSearch, type EmbedFunction, makeEmbeddingModelKey, TRIAL_MODEL_KEY } from '@/lib/command-search';
 import { AgentEngine, type AgentBackend } from '@/lib/agent';
 import { makeTrialBackend, makeByokBackend } from '@/lib/agent-backend';
 import { makeTrialEmbed, makeByokEmbed } from '@/lib/embed';
@@ -102,15 +102,26 @@ export default function ChatApp() {
   const embedFn = useMemo<EmbedFunction>(() => async (texts) => {
     const st = useConfigStore.getState();
     if (st.mode === 'trial') return makeTrialEmbed()(texts);
-    return (makeByokEmbed(st.getActiveByok()) || (async () => null))(texts);
+    const embCfg = st.getEmbeddingConfig();
+    if (embCfg) return makeByokEmbed(embCfg)(texts);
+    return null;  // keyword-only
   }, []);
 
   // 初始化 command search + agent(ggb 就绪后)
   useEffect(() => {
     if (!ggbReady || !ggbRef.current) return;
     if (!csRef.current) {
+      const st = useConfigStore.getState();
+      const modelKey = st.mode === 'trial'
+        ? TRIAL_MODEL_KEY
+        : st.getEmbeddingConfig()
+          ? makeEmbeddingModelKey(
+              st.getEmbeddingConfig()!.base_url,
+              st.getEmbeddingConfig()!.model_name,
+              st.getEmbeddingConfig()!.dimensions || 1024)
+          : '';
       const cs = new CommandSearch(embedFn);
-      cs.init();
+      cs.init(modelKey);
       csRef.current = cs;
     }
     if (!agentRef.current) {

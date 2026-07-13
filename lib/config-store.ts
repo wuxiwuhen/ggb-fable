@@ -20,6 +20,7 @@ interface ConfigState {
   byokProfiles: ByokProfile[];
   activeProfileName: string;
   vision: Partial<LLMConfig>;          // BYOK 视觉模型(可选)
+  embedding: Partial<LLMConfig>;       // BYOK 嵌入模型(可选)
   maxToolRounds: number;
 
   setMode: (m: AppMode) => void;
@@ -27,12 +28,17 @@ interface ConfigState {
   removeProfile: (name: string) => void;
   setActiveProfileName: (name: string) => void;
   setVision: (v: Partial<LLMConfig>) => void;
+  setEmbedding: (v: Partial<LLMConfig>) => void;
   setMaxToolRounds: (n: number) => void;
 
   // 当前激活的 BYOK 配置
   getActiveByok: () => ByokProfile | null;
   isByokValid: () => boolean;
   isVisionValid: () => boolean;
+  isEmbeddingValid: () => boolean;
+
+  // 获取当前嵌入模型配置: 优先 embedding 字段, 否则 LLM 是 GLM 时降级复用; 否则 null
+  getEmbeddingConfig: () => LLMConfig | null;
 }
 
 // 常用接口预设(只填 base_url + model_name, key 用户自填)
@@ -50,6 +56,7 @@ export const useConfigStore = create<ConfigState>()(
       byokProfiles: [],
       activeProfileName: '',
       vision: {},
+      embedding: {},
       maxToolRounds: 50,
 
       setMode: (m) => set({ mode: m }),
@@ -66,6 +73,7 @@ export const useConfigStore = create<ConfigState>()(
       }),
       setActiveProfileName: (name) => set({ activeProfileName: name }),
       setVision: (v) => set((s) => ({ vision: { ...s.vision, ...v } })),
+      setEmbedding: (v) => set((s) => ({ embedding: { ...s.embedding, ...v } })),
       setMaxToolRounds: (n) => set({ maxToolRounds: n }),
 
       getActiveByok: () => {
@@ -79,6 +87,20 @@ export const useConfigStore = create<ConfigState>()(
       isVisionValid: () => {
         const v = get().vision;
         return !!(v.api_key && v.base_url && v.model_name);
+      },
+      isEmbeddingValid: () => {
+        const e = get().embedding;
+        return !!(e.api_key && e.base_url && e.model_name);
+      },
+      getEmbeddingConfig: () => {
+        const { embedding } = get();
+        if (embedding.api_key && embedding.base_url && embedding.model_name) return embedding as LLMConfig;
+        // 未填独立 embedding 配置: GLM LLM profile 向后兼容复用
+        const p = get().getActiveByok();
+        if (p && p.base_url.includes('bigmodel.cn')) {
+          return { api_key: p.api_key, base_url: p.base_url, model_name: 'embedding-3' };
+        }
+        return null;
       },
     }),
     { name: 'ggb-fable-config' },

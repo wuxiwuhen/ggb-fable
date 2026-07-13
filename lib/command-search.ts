@@ -3,11 +3,31 @@
 // 数据源: public/knowledge/commandSignatures.json (509条官方命令) + 手工中文别名/陷阱
 //
 // 向量 embedding 调用可注入: trial 模式走 /api/trial/embeddings(用我的 key),
-// byok 模式前端直连用户的 GLM 端点。CommandSearch 本身与模式无关。
+// byok 模式前端直连用户的 embedding 端点。CommandSearch 本身与模式无关。
+//
+// 向量缓存: 预计算的 commandEmbeddings.json(提交在 repo 里, GLM embedding-3/1024维)
+// 若当前模型匹配 → 直接加载(零 API)。不匹配 → IndexedDB 持久化, 每配置只算一次。
+
+import { loadEmbeddingsFromIDB, saveEmbeddingsToIDB } from './embedding-cache';
 
 const DIM = 1024;
 
 export type EmbedFunction = (texts: string[]) => Promise<number[][] | null>;
+
+// 生成 embedding 模型标识 key(用于匹配预计算文件/IndexedDB)。
+// GLM 统一缩略为 "glm::" 前缀, 以便和 public/knowledge/commandEmbeddings.json 里的 model 字段对齐。
+export function makeEmbeddingModelKey(base_url: string, model_name: string, dimensions = 1024): string {
+  const provider = base_url.includes('bigmodel.cn') ? 'glm' : base_url;
+  return `${provider}::${model_name}::${dimensions}`;
+}
+
+// trial 模式使用的预计算 model key(与 commandEmbeddings.json 一致)
+export const TRIAL_MODEL_KEY = makeEmbeddingModelKey('https://open.bigmodel.cn/api/paas/v4', 'embedding-3', 1024);
+
+export interface CommandEmbeddings {
+  model: string;    // "provider::model::dim", 匹配当前配置
+  vectors: Record<string, number[]>;  // commandBase → embedding
+}
 
 interface SignatureEntry {
   commandBase: string;
@@ -107,6 +127,7 @@ export class CommandSearch {
   private ready = false;
   private readyResolvers: (() => void)[] = [];
   private preWarmDone = false;
+  private currentModelKey = '';
 
   constructor(embed: EmbedFunction | null = null) {
     this.embed = embed;
@@ -119,7 +140,7 @@ export class CommandSearch {
     });
   }
 
-  async init() {
+  async init(modelKey?: string) {
     try {
       if (this.embed) {
         console.log('[CommandSearch] embedding 已注入');
@@ -128,6 +149,42 @@ export class CommandSearch {
       }
       this.fullDB = await this.loadCommandDB();
       this.buildIndex();
+      this.currentModelKey = modelKey || '';
+
+      // 1) 尝试加载预计算向量(静态文件)
+      let loaded = false;
+      if (this.embed && this.currentModelKey) {
+        try {
+          const resp = await fetch('/knowledge/commandEmbeddings.json');
+          if (resp.ok) {
+            const data: CommandEmbeddings = await resp.json();
+            if (data.model === this.currentModelKey) {
+              this.embeddingCache = data.vectors;
+              console.log(`[CommandSearch] 预计算向量命中(${data.model}), ${Object.keys(data.vectors).length} 条`);
+              loaded = true;
+            } else {
+              console.log(`[CommandSearch] 静态文件 model=${data.model} ≠ 当前 ${this.currentModelKey}, 尝试 IndexedDB`);
+            }
+          }
+        } catch { /* 文件 404 → IndexedDB */ }
+      }
+
+      // 2) 尝试 IndexedDB(模型不匹配时)
+      if (!loaded && this.embed && this.currentModelKey) {
+        try {
+          const fromIDB = await loadEmbeddingsFromIDB(this.currentModelKey);
+          if (fromIDB && Object.keys(fromIDB).length > 0) {
+            this.embeddingCache = fromIDB;
+            console.log(`[CommandSearch] IndexedDB 命中(${this.currentModelKey}), ${Object.keys(fromIDB).length} 条`);
+            loaded = true;
+          }
+        } catch { /* IDB 不可用 → 每次 API 调用 */ }
+      }
+
+      // 3) 未缓存 → 预热(只对 cache 里没有的命令调 API)
+      if (!loaded) {
+        console.log('[CommandSearch] 模型未缓存, 启动向量预热');
+      }
       this.preWarmEmbeddings(FREQUENT_COMMANDS);
       this.ready = true;
       while (this.readyResolvers.length) this.readyResolvers.shift()!();
@@ -196,15 +253,27 @@ export class CommandSearch {
     this.preWarmDone = true;
     (async () => {
       const toWarm = cmds.filter((n) => !this.embeddingCache[n] && this.indexedDB[n]);
-      if (!toWarm.length) return;
+      if (!toWarm.length) {
+        console.log('[CommandSearch] 向量全部缓存, 跳过预热');
+        return;
+      }
       try {
         const vecs = await this.glmEmbedding(toWarm);
         if (vecs) {
           toWarm.forEach((n, i) => { this.embeddingCache[n] = this.normalize(vecs[i]); });
-          console.log(`[CommandSearch] 预热 ${toWarm.length} 个高频向量`);
+          console.log(`[CommandSearch] 预热 ${toWarm.length} 个新向量`);
+          void this.saveCurrentCache();
         }
       } catch (e) { /* 静默 */ }
     })();
+  }
+
+  // 将当前 embeddingCache 完整持久化到 IndexedDB(累积式, 不丢已缓存数据)
+  private async saveCurrentCache() {
+    if (!this.currentModelKey || !Object.keys(this.embeddingCache).length) return;
+    try {
+      await saveEmbeddingsToIDB(this.currentModelKey, this.embeddingCache);
+    } catch { /* 静默 */ }
   }
 
   // 四层搜索: 别名 → 精确 → 关键词 → 向量重排
@@ -289,6 +358,7 @@ export class CommandSearch {
       const newVecs = await this.glmEmbedding(needed);
       if (newVecs) {
         needed.forEach((b, i) => { this.embeddingCache[b] = this.normalize(newVecs[i]); });
+        void this.saveCurrentCache();
       }
     }
 

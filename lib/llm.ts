@@ -15,6 +15,7 @@ export interface LLMConfig {
   model_name: string;
   temperature?: number;
   max_tool_rounds?: number;
+  dimensions?: number;          // embedding 向量维度(默认 1024)
 }
 
 export interface ToolDef {

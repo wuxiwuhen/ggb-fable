@@ -9,7 +9,7 @@ import { useConfigStore, PRESETS } from '@/lib/config-store';
 import { useAuth } from '@/lib/auth';
 import { getSupabaseBrowser } from '@/lib/supabase';
 
-const TABS = ['模型配置', '视觉模型', '修改密码', '高级'] as const;
+const TABS = ['模型配置', '视觉模型', '嵌入模型', '修改密码', '高级'] as const;
 type Tab = (typeof TABS)[number];
 
 export default function SettingsPage() {
@@ -133,6 +133,26 @@ export default function SettingsPage() {
                   <input style={S.input} value={config.vision.model_name || ''} onChange={(e) => config.setVision({ model_name: e.target.value })} placeholder="glm-4.6v" />
                 </label>
                 <p style={S.note}>视觉模型配置实时生效(无需保存按钮)</p>
+              </>
+            )}
+
+            {tab === '嵌入模型' && (
+              <>
+                <h2 style={S.h2}>嵌入模型(命令检索) <span style={S.badge}>可选</span></h2>
+                <p style={S.note}>BYOK 模式下命令知识库向量检索用。留空则复用 LLM 配置（仅 GLM 端点向后兼容），不存在兼容端点则降级为纯关键词匹配（仍然可用，只是语义排序不如向量检索精确）。</p>
+                <label style={S.label}>API Key
+                  <input style={S.input} type="password" value={config.embedding.api_key || ''} onChange={(e) => config.setEmbedding({ api_key: e.target.value })} />
+                </label>
+                <label style={S.label}>Base URL
+                  <input style={S.input} value={config.embedding.base_url || ''} onChange={(e) => config.setEmbedding({ base_url: e.target.value })} placeholder="https://api.openai.com/v1" />
+                </label>
+                <label style={S.label}>Model Name
+                  <input style={S.input} value={config.embedding.model_name || ''} onChange={(e) => config.setEmbedding({ model_name: e.target.value })} placeholder="text-embedding-3-small" />
+                </label>
+                <label style={S.label}>Dimensions(维度)
+                  <input style={S.input} type="number" min={64} max={4096} value={config.embedding.dimensions || 1024} onChange={(e) => config.setEmbedding({ dimensions: +e.target.value || 1024 })} placeholder="1024" />
+                </label>
+                <p style={S.note}>嵌入模型配置实时生效。首次使用新模型时会调用一次 API 批量计算向量并 IndexedDB 缓存，后续会话直接复用（零调用）。</p>
               </>
             )}
 
