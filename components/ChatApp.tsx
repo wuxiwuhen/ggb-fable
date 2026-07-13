@@ -317,7 +317,8 @@ export default function ChatApp() {
     setExecLines([]);
     setHistory([]);
     await ggbRef.current?.clearAll();
-  }, [currentSessionId, messages, cancelPersist, persistCanvasXml]);
+    setCurrent(null);   // 解除侧边栏选中(旧会话已清空, 不算当前)
+  }, [currentSessionId, messages, cancelPersist, persistCanvasXml, setCurrent]);
 
   // 切换会话: 先持久化离开的会话 → 加载 → 重建 chat/trace/history → setXML 还原画布 → 设为当前
   const switchSession = useCallback(async (id: string) => {
@@ -632,7 +633,7 @@ export default function ChatApp() {
             <span className="title">GGB Fable</span>
           </Link>
           <button className="btn ghost" title="对话列表" data-tour="sessions-toggle" onClick={() => setSidebarOpen(true)}>☰</button>
-          <button className="btn ghost" title="新建会话" onClick={newSession}>+</button>
+          <button className="btn ghost" title="清空工作区" onClick={clearWorkspace}>+</button>
         </div>
         <div className="top-actions">
           {/* 模式切换 */}
@@ -698,7 +699,7 @@ export default function ChatApp() {
         </div>
       </header>
 
-      <SessionSidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} onNew={newSession} onSwitch={switchSession} />
+      <SessionSidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} onNew={clearWorkspace} onSwitch={switchSession} />
       <main className="layout">
         <section className="pane chat-pane">
           <CommandBar execLines={execLines} />
