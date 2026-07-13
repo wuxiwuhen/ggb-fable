@@ -283,6 +283,8 @@ export default function ChatApp() {
   const newSession = useCallback(async () => {
     // 已有会话且当前是空画布+无消息 → 无需重复新建
     if (currentSessionId && messages.length === 0 && !(ggbRef.current?.getCommandLog() || []).length) return;
+    // 离开前持久化当前会话画布(防手工内容丢失)
+    if (currentSessionId) await persistCanvasXml();
     cancelPersist();
     abortRef.current?.abort();
     setError('');
@@ -300,12 +302,13 @@ export default function ChatApp() {
     loggerRef.current.setSession(id);          // 修复: logger 绑定 sessionId
     setSidebarOpen(false);
     return id;
-  }, [config, setSessions, setCurrent, upsert, cancelPersist]);
+  }, [config, setSessions, setCurrent, upsert, cancelPersist, persistCanvasXml]);
 
-  // 清空工作区(不建新会话): 保留当前 sessionId, 只清画布+聊天, 侧边栏不变
   const clearWorkspace = useCallback(async () => {
     if (!currentSessionId) return;
     if (messages.length === 0 && !(ggbRef.current?.getCommandLog() || []).length) return;
+    // 清空前持久化当前画布(防手工内容丢失)
+    await persistCanvasXml();
     cancelPersist();
     abortRef.current?.abort();
     setError('');
@@ -314,7 +317,7 @@ export default function ChatApp() {
     setExecLines([]);
     setHistory([]);
     await ggbRef.current?.clearAll();
-  }, [currentSessionId, messages, cancelPersist]);
+  }, [currentSessionId, messages, cancelPersist, persistCanvasXml]);
 
   // 切换会话: 先持久化离开的会话 → 加载 → 重建 chat/trace/history → setXML 还原画布 → 设为当前
   const switchSession = useCallback(async (id: string) => {
@@ -629,7 +632,7 @@ export default function ChatApp() {
             <span className="title">GGB Fable</span>
           </Link>
           <button className="btn ghost" title="对话列表" data-tour="sessions-toggle" onClick={() => setSidebarOpen(true)}>☰</button>
-          <button className="btn ghost" title="清空工作区" onClick={clearWorkspace}>+</button>
+          <button className="btn ghost" title="新建会话" onClick={newSession}>+</button>
         </div>
         <div className="top-actions">
           {/* 模式切换 */}
@@ -695,7 +698,7 @@ export default function ChatApp() {
         </div>
       </header>
 
-      <SessionSidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} onNew={clearWorkspace} onSwitch={switchSession} />
+      <SessionSidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} onNew={newSession} onSwitch={switchSession} />
       <main className="layout">
         <section className="pane chat-pane">
           <CommandBar execLines={execLines} />
