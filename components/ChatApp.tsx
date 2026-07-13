@@ -23,7 +23,7 @@ import MessageContent from './MessageContent';
 import TracePanel, { type TraceItem, type ExecLine } from './TracePanel';
 import CommandBar from './CommandBar';
 import { useSessionStore, getLastSessionId } from '@/lib/session-store';
-import { rebuildChatMessages, rebuildTrace, rebuildHistory, extractReplayCommands, rebuildExecLines, type ApiMessage } from '@/lib/conversation';
+import { rebuildChatMessages, rebuildTrace, rebuildHistory, rebuildExecLines, type ApiMessage } from '@/lib/conversation';
 import SessionSidebar from './SessionSidebar';
 import OnboardingTour from './OnboardingTour';
 import { useOnboarding } from '@/hooks/useOnboarding';
@@ -345,15 +345,8 @@ export default function ChatApp() {
         if (session?.canvas_xml) {
           try { ggbRef.current?.setXML(session.canvas_xml); }
           catch (e) { console.warn('画布 setXML 恢复失败:', e); }
-        } else {
-          // 老会话回退: recipe 或原始命令重放, 成功后自愈落 XML, 下次直接 setXML
-          const cmds: string[] = Array.isArray(session?.recipe) && session.recipe.length
-            ? session.recipe : extractReplayCommands(messages);
-          if (cmds.length) {
-            try { await ggbRef.current?.execBatch(cmds.join('\n')); } catch (e) { console.warn('画布重放失败:', e); }
-          }
-          void persistCanvasXml();         // 自愈(currentSessionId 已是 id)
         }
+        // 空会话(新建无内容)无 XML→不用恢复, clearAll 足够
       } finally {
         restoringRef.current = false;
       }

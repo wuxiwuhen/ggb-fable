@@ -32,17 +32,6 @@ export function rebuildTrace(apiMsgs: ApiMessage[]): TraceEntry[] {
     .map((m) => ({ name: m.tool_name as string, args: m.tool_args, result: m.tool_result }));
 }
 
-// recipe 未就绪时的回退: 从 execute_command 的 tool 消息提取所有命令文本
-export function extractReplayCommands(apiMsgs: ApiMessage[]): string[] {
-  const cmds: string[] = [];
-  for (const m of apiMsgs) {
-    if (m.role === 'tool' && m.tool_name === 'execute_command' && m.tool_args && m.tool_args.command) {
-      cmds.push(m.tool_args.command);
-    }
-  }
-  return cmds;
-}
-
 // 重建执行历史: 从 role='system' + tool_name='ggb_exec' 的消息提取命令+状态
 import type { ExecLine } from '@/components/TracePanel';
 export function rebuildExecLines(apiMsgs: ApiMessage[]): ExecLine[] {

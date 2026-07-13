@@ -61,7 +61,6 @@ export async function POST(req: Request) {
   if (body.action === 'update') {
     const patch: any = { updated_at: new Date().toISOString() };
     if (body.title != null) patch.title = body.title;
-    if (body.recipe !== undefined) patch.recipe = body.recipe;       // [已退役, 仅老会话回放读]
     if (body.canvas_xml !== undefined) patch.canvas_xml = body.canvas_xml;   // 画布 XML 快照持久化
     if (body.pinned !== undefined) patch.pinned = body.pinned;              // 置顶切换
     const { data: rows } = await admin.from('sessions')
