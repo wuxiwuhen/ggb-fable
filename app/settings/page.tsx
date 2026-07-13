@@ -9,13 +9,13 @@ import { useConfigStore, PRESETS } from '@/lib/config-store';
 import { useAuth } from '@/lib/auth';
 import { getSupabaseBrowser } from '@/lib/supabase';
 
-const TABS = ['模型配置', '视觉模型', '嵌入模型', '修改密码', '高级'] as const;
+const TABS = ['基础模型', '视觉模型', '嵌入模型', '修改密码', '高级'] as const;
 type Tab = (typeof TABS)[number];
 
 export default function SettingsPage() {
   const { user } = useAuth();
   const config = useConfigStore();
-  const [tab, setTab] = useState<Tab>('模型配置');
+  const [tab, setTab] = useState<Tab>('基础模型');
 
   // ── 模型配置表单 ──
   const [name, setName] = useState(config.getActiveByok()?.name || '');
@@ -76,7 +76,7 @@ export default function SettingsPage() {
 
           {/* 右侧内容 */}
           <div style={{ flex: 1, minWidth: 0 }}>
-            {tab === '模型配置' && (
+            {tab === '基础模型' && (
               <>
                 <h2 style={S.h2}>BYOK 模型配置 <span style={S.badge}>{config.mode === 'byok' ? '生效中' : '备用'}</span></h2>
 
