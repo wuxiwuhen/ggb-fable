@@ -64,6 +64,10 @@ export function buildTourSteps(ctx: TourCtx): TourStep[] {
       side: 'left',
       title: '画布',
       body: 'AI 会读你的话、调用 GeoGebra 命令把图形画在这里，图形可拖动、缩放、探究。',
+      waitFor: () => {
+        const el = document.querySelector('#ggb-container') as HTMLElement | null;
+        return !!(el && el.getBoundingClientRect().height > 100);
+      },
     },
     {
       // 5. 执行历史(展开 CommandBar)
@@ -75,14 +79,11 @@ export function buildTourSteps(ctx: TourCtx): TourStep[] {
       waitFor: () => !!(document.querySelector('details.cmd-bar') as HTMLDetailsElement | null)?.open,
     },
     {
-      // 6. 导出(展开下拉)
+      // 6. 导出
       anchor: '[data-tour="export"]',
       side: 'bottom',
       title: '导出',
       body: '画布上的动画可录制成 🎬 MP4/WebM 视频；也可导出 🖼️ PNG 静态图。',
-      preEnter: () => ctx.setExportOpen(true),
-      waitFor: () => !!document.querySelector('.export-menu'),
-      postExit: () => ctx.setExportOpen(false),
     },
     {
       // 7. 对话与历史(打开侧边栏)
