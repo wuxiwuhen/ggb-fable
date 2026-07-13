@@ -28,6 +28,9 @@ export default function SessionSidebar({ open, onClose, onNew, onSwitch }: Props
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const editRef = useRef<HTMLInputElement>(null);
 
+  // 侧边栏关闭时清理所有浮层
+  useEffect(() => { if (!open) { setMenuId(null); setEditingId(null); setDeleteConfirm(null); } }, [open]);
+
   // 双击标题进入编辑
   function startEdit(s: SessionMeta) {
     setEditingId(s.id);
