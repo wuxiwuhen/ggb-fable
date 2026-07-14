@@ -223,10 +223,13 @@ export class GGB {
     const t0 = Date.now();
     let labels = '';
     try {
-      if (typeof a.asyncEvalCommandGetLabels === 'function') {
-        labels = await a.asyncEvalCommandGetLabels(cmd);
-      } else if (typeof a.evalCommandGetLabels === 'function') {
+      // 优先同步版本: 保证每条命令立即写入构造协议(成为独立撤销步骤);
+      // asyncEvalCommandGetLabels 在快速连续调用时可能在 GGB 内部被合并为一个 undo 步骤,
+      // 导致用户手工绘制后点"撤销"时整批 AI 内容被一并清空。
+      if (typeof a.evalCommandGetLabels === 'function') {
         labels = a.evalCommandGetLabels(cmd);
+      } else if (typeof a.asyncEvalCommandGetLabels === 'function') {
+        labels = await a.asyncEvalCommandGetLabels(cmd);
       } else {
         const ok = a.evalCommand?.(cmd) ?? false;
         if (!ok) this.lastError = this.lastError || 'evalCommand 返回 false (命令可能语法错误)';
@@ -258,17 +261,23 @@ export class GGB {
     return result;
   }
 
-  // 批量执行(多条用 \n 分隔), setRepaintingActive 包裹避免 O(n) 重绘
+  // 批量执行(多条用 \n 分隔), 逐条执行保持独立可撤销
+  // GGB HTML5 版: evalCommandGetLabels 不会自动创建构造步骤(只有工具栏/鼠标操作才会),
+  // storeUndoInfo 也不可靠。唯一可靠的方式是 setXML(getXML()) — 将当前状态作为新步骤
+  // 写入构造协议, 画布视觉不变但 undo 栈会正确记录。
   async execBatch(cmdText: string): Promise<GgbExecResult[]> {
-    const a = await this.ensureReady();
+    await this.ensureReady();
     const lines = cmdText.split('\n').map((s) => s.trim()).filter(Boolean);
     const results: GgbExecResult[] = [];
-    try { a.setRepaintingActive?.(false); } catch (e) {}
     for (const line of lines) {
       const r = await this.execCommand(line);
       results.push({ ...r, cmd: line });
     }
-    try { a.setRepaintingActive?.(true); } catch (e) {}
+    // setXML(getXML()) 强制建构造步骤, 保证本批 AI 指令纳入 undo 栈
+    try {
+      const xml = this.applet?.getXML?.();
+      if (xml) this.applet?.setXML?.(xml);
+    } catch {}
     return results;
   }
 
@@ -369,6 +378,18 @@ export class GGB {
   getXML(): string {
     if (!this.applet) return '';
     try { return this.applet.getXML?.() || ''; } catch (e) { return ''; }
+  }
+
+  // 显示代数区(收起对话框时进入原生 GGB 绘制态)
+  showAlgebraView(): void {
+    if (!this.applet) return;
+    try { this.applet.setPerspective?.('AG'); } catch (e) { console.warn('showAlgebraView fail:', e); }
+  }
+
+  // 隐藏代数区(显示对话框时回到 AI 辅助绘制态)
+  hideAlgebraView(): void {
+    if (!this.applet) return;
+    try { this.applet.setPerspective?.('G'); } catch (e) { console.warn('hideAlgebraView fail:', e); }
   }
 
   // 从 XML 快照无损还原画布(含手工绘制); restore 用

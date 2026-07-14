@@ -169,3 +169,18 @@ $$;
 
 alter table public.sessions add column if not exists canvas_xml text;
 alter table public.sessions add column if not exists pinned boolean default false;
+
+-- ── 5. feedback: 用户反馈收集(仅登录用户) ──
+create table if not exists public.feedback (
+  id bigint primary key generated always as identity,
+  user_id uuid references auth.users(id) on delete cascade,
+  content text not null,                     -- 反馈内容(最多 2000 字)
+  email text,                                -- 冗余: 用户邮箱(便于回访)
+  created_at timestamptz default now()
+);
+
+alter table public.feedback enable row level security;
+-- service_role 写入(API 用 admin client, 绕过 RLS); 用户只读自己的
+drop policy if exists "feedback_owner_select" on public.feedback;
+create policy "feedback_owner_select" on public.feedback
+  for select using (auth.uid() = user_id);

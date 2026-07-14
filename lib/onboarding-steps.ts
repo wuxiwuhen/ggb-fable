@@ -27,20 +27,13 @@ export interface TourStep {
 export const DEMO_EXAMPLE =
   '画一个单位圆，圆上动点 P 随角度 t 旋转（t 做成动画滑块），在右侧坐标系画出点 (t, sin t) 的轨迹，动态展示正弦曲线如何随 P 的转动被一步步"画"出来';
 
-// ── DOM 操纵 helper ──
-
-export function openCmdBar(): void {
-  const details = document.querySelector('details.cmd-bar') as HTMLDetailsElement | null;
-  if (details) details.open = true;
-}
-
 // ── 统一教程(基础+进阶合并, 单次走完) ──
 export function buildTourSteps(ctx: TourCtx): TourStep[] {
   return [
     {
       // 1. 欢迎卡
       title: '欢迎使用 GGB Fable',
-      body: '用一句话画出可探究的数学图形。30 秒带你上手核心玩法。',
+      body: '用一句话画出可探究的数学图形。40 秒带你上手核心玩法。',
     },
     {
       // 2. 对话框(预填示例)
@@ -70,20 +63,18 @@ export function buildTourSteps(ctx: TourCtx): TourStep[] {
       },
     },
     {
-      // 5. 执行历史(展开 CommandBar)
-      anchor: '[data-tour="command-history"]',
-      side: 'bottom',
-      title: '执行历史',
-      body: '每次画图实际执行的 GeoGebra 命令都在这，✓/✗ 标明成功与否，方便排查为什么没画出来。',
-      preEnter: () => { openCmdBar(); },
-      waitFor: () => !!(document.querySelector('details.cmd-bar') as HTMLDetailsElement | null)?.open,
-    },
-    {
-      // 6. 导出
+      // 5. 导出
       anchor: '[data-tour="export"]',
       side: 'bottom',
       title: '导出',
       body: '画布上的动画可录制成 🎬 MP4/WebM 视频；也可导出 🖼️ PNG 静态图。',
+    },
+    {
+      // 6. 全屏画布模式
+      anchor: '[data-tour="collapse-chat"]',
+      side: 'bottom',
+      title: '全屏画布模式',
+      body: '点这里收起对话框，画布占满全屏并自动打开代数区。可用原生 GGB 工具栏（点、线、圆…）手动编辑图形。再点一次回到 AI 对话模式。',
     },
     {
       // 7. 对话与历史(打开侧边栏)
@@ -103,7 +94,14 @@ export function buildTourSteps(ctx: TourCtx): TourStep[] {
       body: '点这里在「免费试用」和「自带 Key」之间切换。免费试用送 5 次额度（旁边徽章显示剩余），用完切到「自带 Key」并在设置页填自己的 API Key 即可无限使用。',
     },
     {
-      // 9. 结束卡
+      // 9. 反馈建议
+      anchor: '[data-tour="feedback-btn"]',
+      side: 'bottom',
+      title: '反馈建议',
+      body: '使用过程中有任何想法、建议或遇到问题？点这里提交反馈，帮助我们改进产品。',
+    },
+    {
+      // 10. 结束卡
       title: '开始创作吧 ✨',
       body: '你已掌握全部功能。用自然语言描述图形，AI 会在画布上画出来。',
     },

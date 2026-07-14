@@ -21,7 +21,7 @@ import { useGeogebra } from '@/hooks/useGeogebra';
 import { exportPng, startRecording, stopRecording, recordingFormat } from '@/lib/export-media';
 import MessageContent from './MessageContent';
 import TracePanel, { type TraceItem, type ExecLine } from './TracePanel';
-import CommandBar from './CommandBar';
+
 import { useSessionStore, getLastSessionId } from '@/lib/session-store';
 import { rebuildChatMessages, rebuildTrace, rebuildHistory, rebuildExecLines, type ApiMessage } from '@/lib/conversation';
 import SessionSidebar from './SessionSidebar';
@@ -88,6 +88,11 @@ export default function ChatApp() {
   const config = useConfigStore();
   const { sessions, currentSessionId, setSessions, setCurrent, upsert, patchCurrent } = useSessionStore();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [chatCollapsed, setChatCollapsed] = useState(false);
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
+  const [feedbackText, setFeedbackText] = useState('');
+  const [feedbackSending, setFeedbackSending] = useState(false);
+  const [feedbackSent, setFeedbackSent] = useState(false);
   const { active, setActive, autoStartIfDue, start, markSeen } = useOnboarding();
   const [sessionsLoading, setSessionsLoading] = useState(true);
 
@@ -345,6 +350,12 @@ export default function ChatApp() {
         if (session?.canvas_xml) {
           try { ggbRef.current?.setXML(session.canvas_xml); }
           catch (e) { console.warn('画布 setXML 恢复失败:', e); }
+          // GGB HTML5 版 setXML() 不自动建构造步骤, 需要用 setXML(getXML())
+          // 强制将恢复后的画布状态写入 undo 栈, 否则撤销时会越过 setXML 直接回到空白态
+          try {
+            const xml = ggbRef.current?.getXML();
+            if (xml) ggbRef.current?.setXML(xml);
+          } catch {}
         }
         // 空会话(新建无内容)无 XML→不用恢复, clearAll 足够
       } finally {
@@ -381,6 +392,20 @@ export default function ChatApp() {
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ggbReady]);
+
+  // 当前会话被删除(如在侧边栏删除) → 清空画布与消息, 恢复到初始空白态
+  // sessionsLoading 守卫: 避免初始加载期(currentSessionId 尚未赋值)误清空
+  useEffect(() => {
+    if (currentSessionId === null && ggbReady && !sessionsLoading) {
+      cancelPersist();
+      abortRef.current?.abort();
+      setMessages([]);
+      setTrace([]);
+      setExecLines([]);
+      setHistory([]);
+      ggbRef.current?.clearAll();
+    }
+  }, [currentSessionId, ggbReady, sessionsLoading]);
 
   // ── 额度(仅 trial 模式) ──
   const fetchUsage = useCallback(async () => {
@@ -581,6 +606,42 @@ export default function ChatApp() {
 
   const stop = useCallback(() => { abortRef.current?.abort(); }, []);
 
+  // 收起/展开对话框: 切换画布全屏 + 代数区显隐
+  const toggleChatCollapse = useCallback(() => {
+    setChatCollapsed((prev) => {
+      const next = !prev;
+      if (next) {
+        ggbRef.current?.showAlgebraView();
+      } else {
+        ggbRef.current?.hideAlgebraView();
+      }
+      // 延迟 setSize 让 CSS 过渡生效后再调整 applet 尺寸
+      setTimeout(() => {
+        const api = ggbRef.current?.getAPI() as any;
+        const el = document.querySelector('.canvas-wrap');
+        if (api?.setSize && el) {
+          try { api.setSize(el.clientWidth, el.clientHeight); } catch {}
+        }
+      }, 350);
+      return next;
+    });
+  }, []);
+
+  // 提交用户反馈
+  const submitFeedback = useCallback(async () => {
+    if (!feedbackText.trim() || feedbackSending) return;
+    setFeedbackSending(true);
+    try {
+      await fetch('/api/feedback', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: feedbackText.trim() }),
+      });
+      setFeedbackSent(true);
+      setFeedbackText('');
+    } catch (e) { /* 静默 */ }
+    setFeedbackSending(false);
+  }, [feedbackText, feedbackSending, user]);
+
   // 展开/收起某条图片消息的 OCR 识别内容
   const toggleOcr = useCallback((msgId: number) => {
     setMessages((prev) => prev.map((m) => (m.id === msgId && m.ocr ? { ...m, ocr: { ...m.ocr, expanded: !m.ocr.expanded } } : m)));
@@ -627,6 +688,9 @@ export default function ChatApp() {
           </Link>
           <button className="btn ghost" title="对话列表" data-tour="sessions-toggle" onClick={() => setSidebarOpen(true)}>☰</button>
           <button className="btn ghost" title="清空工作区" onClick={clearWorkspace}>+</button>
+          <button className="btn ghost" title={chatCollapsed ? '展开对话框' : '收起对话框（全屏画布）'} data-tour="collapse-chat" onClick={toggleChatCollapse}>
+            {chatCollapsed ? '◨' : '◧'}
+          </button>
         </div>
         <div className="top-actions">
           {/* 模式切换 */}
@@ -643,6 +707,7 @@ export default function ChatApp() {
             <span className="usage-badge" title="管理员不限次数" data-tour="usage-badge">管理员 ∞</span>
           )}
           {!adminLoading && isAdmin && <Link className="btn ghost" href="/admin">🛠 管理</Link>}
+          <button className="btn ghost" title="反馈建议" data-tour="feedback-btn" onClick={() => { setFeedbackOpen(true); setFeedbackSent(false); setFeedbackText(''); }}>💬 反馈</button>
           <button className="btn ghost" data-tour="tutorial" onClick={() => start()}>📖 教程</button>
           <Link className="btn ghost" href="/settings">⚙ 设置</Link>
           {recording ? (
@@ -680,8 +745,8 @@ export default function ChatApp() {
 
       <SessionSidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} onNew={clearWorkspace} onSwitch={switchSession} />
       <main className="layout">
+        {!chatCollapsed && (
         <section className="pane chat-pane">
-          <CommandBar execLines={execLines} />
 
           <div className="messages">
             {messages.length === 0 && (
@@ -780,8 +845,9 @@ export default function ChatApp() {
             </div>
           </div>
         </section>
+        )}
 
-        <section className="pane canvas-pane">
+        <section className={`pane canvas-pane${chatCollapsed ? ' canvas-full' : ''}`}>
           <div className="canvas-wrap" ref={containerRef as any}>
             <div id="ggb-container" />
             {!ggbReady && <div className="canvas-loading">{ggbError || '正在加载 GeoGebra 画布…'}</div>}
@@ -799,6 +865,41 @@ export default function ChatApp() {
         <div className="lightbox" role="dialog" aria-label="图片放大查看" onClick={() => setLightbox(null)}>
           <img src={lightbox} alt="放大查看" />
         </div>
+      )}
+
+      {/* 用户反馈弹窗 */}
+      {feedbackOpen && (
+        <>
+          <div className="sidebar-overlay" onClick={() => setFeedbackOpen(false)} />
+          <div className="modal-confirm feedback-modal" style={{ maxWidth: 420 }} onClick={(e) => e.stopPropagation()}>
+            <h3 style={{ margin: '0 0 4px', fontSize: 17 }}>💬 反馈建议</h3>
+            <p style={{ margin: '0 0 14px', fontSize: 13, color: '#888' }}>
+              欢迎提出功能建议、使用体验或报告问题。你的反馈将帮助我们改进产品。
+            </p>
+            {feedbackSent ? (
+              <div style={{ textAlign: 'center', padding: '20px 0', color: '#10b981', fontSize: 15 }}>
+                ✅ 感谢你的反馈！
+              </div>
+            ) : (
+              <>
+                <textarea
+                  className="feedback-textarea"
+                  value={feedbackText}
+                  onChange={(e) => setFeedbackText(e.target.value)}
+                  placeholder="请输入你的建议或反馈…"
+                  rows={5}
+                  maxLength={2000}
+                />
+                <div className="modal-actions" style={{ marginTop: 14 }}>
+                  <button className="btn ghost" onClick={() => setFeedbackOpen(false)}>取消</button>
+                  <button className="btn primary" onClick={submitFeedback} disabled={!feedbackText.trim() || feedbackSending}>
+                    {feedbackSending ? '提交中…' : '提交反馈'}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </>
       )}
     </div>
   );
