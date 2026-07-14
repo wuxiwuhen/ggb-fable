@@ -284,29 +284,38 @@ export default function ChatApp() {
 
   // ── 会话管理(云端) ──
 
+  const creatingSessionRef = useRef(false);
+
   // 新建空会话: create → 清空 state + 画布 → 设为当前
   const newSession = useCallback(async () => {
+    // 重入保护: 防止并发调用 newSession() 创建多条空会话
+    if (creatingSessionRef.current) return;
     // 已有会话且当前是空画布+无消息 → 无需重复新建
     if (currentSessionId && messages.length === 0 && !(ggbRef.current?.getCommandLog() || []).length) return;
+    creatingSessionRef.current = true;
     // 离开前持久化当前会话画布(防手工内容丢失)
     if (currentSessionId) await persistCanvasXml();
     cancelPersist();
     abortRef.current?.abort();
     setError('');
-    const res = await fetch('/api/sessions', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'create', mode: config.mode, model: config.mode === 'trial' ? 'deepseek' : config.getActiveByok()?.model_name }),
-    });
-    const data = await res.json();
-    const id: string = data.id;
-    setMessages([]); setTrace([]); setExecLines([]); setHistory([]);
-    await ggbRef.current?.clearAll();
-    const now = new Date().toISOString();
-    upsert({ id, title: null, mode: config.mode, model: null, pinned: false, created_at: now, updated_at: now });
-    setCurrent(id);
-    loggerRef.current.setSession(id);          // 修复: logger 绑定 sessionId
-    setSidebarOpen(false);
-    return id;
+    try {
+      const res = await fetch('/api/sessions', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'create', mode: config.mode, model: config.mode === 'trial' ? 'deepseek' : config.getActiveByok()?.model_name }),
+      });
+      const data = await res.json();
+      const id: string = data.id;
+      setMessages([]); setTrace([]); setExecLines([]); setHistory([]);
+      await ggbRef.current?.clearAll();
+      const now = new Date().toISOString();
+      upsert({ id, title: null, mode: config.mode, model: null, pinned: false, created_at: now, updated_at: now });
+      setCurrent(id);
+      loggerRef.current.setSession(id);          // 修复: logger 绑定 sessionId
+      setSidebarOpen(false);
+      return id;
+    } finally {
+      creatingSessionRef.current = false;
+    }
   }, [config, setSessions, setCurrent, upsert, cancelPersist, persistCanvasXml]);
 
   const clearWorkspace = useCallback(async () => {
@@ -430,7 +439,11 @@ export default function ChatApp() {
     const hasImage = !!imgPreview;
     if ((!typed && !hasImage) || sending) return;
     if (sessionsLoading) return;
-    if (!useSessionStore.getState().currentSessionId) await newSession();  // 惰性创建
+    if (!useSessionStore.getState().currentSessionId) {
+      await newSession();  // 惰性创建
+      // 重入保护: newSession 可能因并发调用而提前返回; 再次确认是否已有会话
+      if (!useSessionStore.getState().currentSessionId) return;
+    }
     if (!ggbRef.current || !agentRef.current) { setError('画布未就绪'); return; }
 
     // 校验

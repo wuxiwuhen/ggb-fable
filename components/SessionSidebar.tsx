@@ -31,6 +31,19 @@ export default function SessionSidebar({ open, onClose, onNew, onSwitch }: Props
   // 侧边栏关闭时清理所有浮层
   useEffect(() => { if (!open) { setMenuId(null); setEditingId(null); setDeleteConfirm(null); } }, [open]);
 
+  // 点击弹窗外部关闭(重命名/删除/菜单)
+  useEffect(() => {
+    if (!menuId) return;
+    const onDown = (e: MouseEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (target && !target.closest('.sidebar-dropdown') && !target.closest('.sidebar-menu-btn')) {
+        setMenuId(null);
+      }
+    };
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [menuId]);
+
   // 双击标题进入编辑
   function startEdit(s: SessionMeta) {
     setEditingId(s.id);
