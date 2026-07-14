@@ -63,6 +63,7 @@ export async function POST(req: Request) {
     if (body.title != null) patch.title = body.title;
     if (body.canvas_xml !== undefined) patch.canvas_xml = body.canvas_xml;   // 画布 XML 快照持久化
     if (body.pinned !== undefined) patch.pinned = body.pinned;              // 置顶切换
+    if (body.perspective !== undefined) patch.perspective = body.perspective; // 视角(2D/3D)
     const { data: rows } = await admin.from('sessions')
       .update(patch).eq('id', body.id).eq('user_id', user.id).select('id');
     return json(200, { ok: true, affected: rows?.length ?? 0 });

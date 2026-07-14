@@ -108,6 +108,10 @@ inspect_render 截图交视觉模型按清单查标签遮挡/贴边/比例/线�
 
 4. **坐标系不动**：默认视图由系统维护，**禁止**使用 ZoomIn / SetCoordSystem / Pan / Center 等命令改坐标系或视图范围，除非用户要求"放大小数部分"/"调整视野"/"看特定区域"等明确指示。擅自缩放会导致横纵轴比例失调，反而看不全图形。
 
+5. **3D 几何题（立体几何）专用纪律**：
+   - 构造任何 3D 对象前，**必须**先调 set_perspective(view="T") 切换到纯 3D 绘图区。默认画布是 2D 的。
+   - 收尾执行 SetViewDirection((1, 1, 1)) 给 3D 一个合理的观察角度。
+
 ---
 
 # 输出规范（视觉与交互）
@@ -140,7 +144,7 @@ inspect_render 截图交视觉模型按清单查标签遮挡/贴边/比例/线�
   - ✅ 分数动态值：Text("\\text{面积} = \\frac{" + a + "}{" + b + "}", (2,3), false, true)
   - ❌ 错误（当前翻车点）：Text("1/|OA|² + 1/|OB|² = " + FractionText(val), (0.3,1.3))  // 两参数=纯文本，¹²和分数线是裸字符，难看
   - 反斜杠只写一层（\\frac 非 \\\\frac）；纯文字部分用 \\text{ } 包裹；位置避让几何图形。FractionText/FormulaText 返回的是 LaTeX 文本对象，拼进字符串会退化，优先直接写 LaTeX 命令 + 数值拼接。
-- **3D 视角**：立体几何场景主动执行 SetViewDirection((1,1,1)) 并提示用户切换视角。
+- **3D 视角**：立体几何务必先调 set_perspective(view="T") 开 3D 绘图区，收尾 SetViewDirection((1,1,1))。
 - **诚实原则**：遇到超出 GeoGebra 能力的需求（如符号计算、不定积分推导）直接说明，不掩饰。
 
 ---
@@ -196,6 +200,11 @@ const TOOLS: ToolDef[] = [
     parameters: { type: 'object', properties: { focus: { type: 'string', description: '对账依据: 直接取构造规划里的"视觉重点+不变关系"字段(如"OA⊥OB 直角标记""动点P轨迹""1/|OA|²+1/|OB|²定值文本"), 视觉模型会确认它在图上是否清晰可见。不要随手编, 必须与动手前声明的规划一致。' } }, required: [] },
   },
   {
+    name: 'set_perspective',
+    description: '切换 GeoGebra 视图布局。3D 几何题必须先调此工具打开 3D 绘图区(view="T")，否则 3D 对象落入 2D 视图变成奇怪投影。全屏模式下代数区自动打开。可用视图: G=2D绘图, A=代数, T=3D绘图。组合: AG=代数+2D, AT=代数+3D。',
+    parameters: { type: 'object', properties: { view: { type: 'string', description: '视图布局字符串, 如 AG / AT / G / T' } }, required: ['view'] },
+  },
+  {
     name: 'reset_canvas',
     description: '清空画布。仅在用户明确要求重置时调用。',
     parameters: { type: 'object', properties: {}, required: [] },
@@ -208,7 +217,7 @@ const GGB_RESERVED = new Set([
   'Angle', 'Distance', 'Length', 'Area', 'Slope', 'Rotate', 'Translate', 'Reflect', 'Dilate',
   'Locus', 'Sequence', 'If', 'Curve', 'Polyline', 'Text', 'ShowLabel', 'SetColor', 'SetLineStyle',
   'SetLineThickness', 'SetPointSize', 'SetPointStyle', 'SetFilling', 'SetVisible', 'SetFixed',
-  'SetConditionToShowObject', 'SetCoordSystem', 'ZoomIn', 'ZoomOut', 'ShowAxes', 'ShowGrid',
+  'SetConditionToShowObject', 'SetCoordSystem', 'SetPerspective', 'SetActiveView', 'ZoomIn', 'ZoomOut', 'ShowAxes', 'ShowGrid',
   'Delete', 'Rename', 'SetValue', 'SetCaption', 'SetShowLabel', 'SetVisibleInView', 'SetFillColor',
   'RightAngle', 'FractionText', 'FormulaText', 'StartAnimation', 'ArePerpendicular', 'AreParallel',
   'x', 'y', 'sqrt', 'sin', 'cos', 'tan', 'abs', 'true', 'false',
@@ -404,6 +413,12 @@ ${focusStep}
               ? '验收通过: 视觉未发现问题。【立即输出最终回复, 禁止再调 execute_command】。'
               : '视觉指出上述问题(仅供参考, 可能误判)。只针对被点名的项做**最小微调**(如移开遮挡的文本、补一个缺失的标签), **严禁改变画法或重构**(如把已有的直角小方块改成向量夹角、把正确的对象重画)。改前先 get_canvas_context 复核, 本题最多因视觉反馈调整 1 轮, 调完即输出最终回复。',
           };
+          break;
+        }
+        case 'set_perspective': {
+          const view = String(args.view || 'AG');
+          try { this.deps.ggb.getAPI()?.setPerspective?.(view); } catch {}
+          result = { ok: true, view };
           break;
         }
         case 'reset_canvas':

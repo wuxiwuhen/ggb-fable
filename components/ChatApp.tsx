@@ -89,6 +89,7 @@ export default function ChatApp() {
   const { sessions, currentSessionId, setSessions, setCurrent, upsert, patchCurrent } = useSessionStore();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [chatCollapsed, setChatCollapsed] = useState(false);
+  const [canvasPerspective, setCanvasPerspective] = useState<string | null>(null); // 当前画布视角(null=2D)
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [feedbackText, setFeedbackText] = useState('');
   const [feedbackSending, setFeedbackSending] = useState(false);
@@ -209,6 +210,15 @@ export default function ChatApp() {
     subscribedRef.current = true;
     ggbRef.current.onUpdate(() => schedulePersist());
     ggbRef.current.onCommand(() => schedulePersist());
+    // 撤销保护: 若撤销到空白步(来自 reset)，自动 redo 弹回
+    try {
+      (ggbRef.current?.getAPI() as any)?.registerStoreUndoListener?.(() => {
+        const xml = ggbRef.current?.getXML?.() || '';
+        if (!/<element\b/.test(xml)) {
+          try { (ggbRef.current?.getAPI() as any)?.redo?.(); } catch {}
+        }
+      });
+    } catch {}
     return () => { cancelPersist(); };
   }, [ggbReady, schedulePersist, cancelPersist]);
 
@@ -311,6 +321,7 @@ export default function ChatApp() {
       upsert({ id, title: null, mode: config.mode, model: null, pinned: false, created_at: now, updated_at: now });
       setCurrent(id);
       loggerRef.current.setSession(id);          // 修复: logger 绑定 sessionId
+      setCanvasPerspective(null);
       setSidebarOpen(false);
       return id;
     } finally {
@@ -332,7 +343,8 @@ export default function ChatApp() {
     setHistory([]);
     await ggbRef.current?.clearAll();
     setCurrent(null);   // 解除侧边栏选中(旧会话已清空, 不算当前)
-  }, [currentSessionId, messages, cancelPersist, persistCanvasXml, setCurrent]);
+    setCanvasPerspective(null);
+  }, [currentSessionId, messages, cancelPersist, persistCanvasXml, setCurrent, ggbRef]);
 
   // 切换会话: 先持久化离开的会话 → 加载 → 重建 chat/trace/history → setXML 还原画布 → 设为当前
   const switchSession = useCallback(async (id: string) => {
@@ -341,7 +353,7 @@ export default function ChatApp() {
     abortRef.current?.abort();
     setError('');
     try {
-      await persistCanvasXml();           // 离开前持久化"当前"会话画布(用旧 currentSessionId)
+      await persistCanvasXml();
       const res = await fetch(`/api/sessions?id=${id}`, { cache: 'no-store' });
       if (!res.ok) return;
       const { session, messages }: { session: any; messages: ApiMessage[] } = await res.json();
@@ -353,28 +365,29 @@ export default function ChatApp() {
       setExecLines(rebuildExecLines(messages));
       setCurrent(id);                      // 切到新会话(后续自愈 persistCanvasXml 用新 id)
       loggerRef.current.setSession(id);
-      restoringRef.current = true;         // 抑制 setXML 触发的监听事件回写
+      restoringRef.current = true;
       try {
-        await ggbRef.current?.clearAll();
+        // 回退到线上已验证的恢复逻辑: reset + setXML (线上 clearAll 无 setPerspective)
+        await ggbRef.current?.clearAll({ keepPerspective: true });
         if (session?.canvas_xml) {
           try { ggbRef.current?.setXML(session.canvas_xml); }
           catch (e) { console.warn('画布 setXML 恢复失败:', e); }
-          // GGB HTML5 版 setXML() 不自动建构造步骤, 需要用 setXML(getXML())
-          // 强制将恢复后的画布状态写入 undo 栈, 否则撤销时会越过 setXML 直接回到空白态
-          try {
-            const xml = ggbRef.current?.getXML();
-            if (xml) ggbRef.current?.setXML(xml);
-          } catch {}
+          // setUndoPoint 建 undo 步骤(替代原来的 setXML(getXML)，省一次 GGB 全量渲染)
+          try { (ggbRef.current?.getAPI() as any)?.setUndoPoint?.(); } catch {}
         }
-        // 空会话(新建无内容)无 XML→不用恢复, clearAll 足够
       } finally {
         restoringRef.current = false;
       }
+      // 恢复视角; 全屏模式下补开代数区
+      const base = session?.perspective || 'G';
+      const p = chatCollapsed ? (base === 'T' ? 'AT' : 'AG') : base;
+      try { ggbRef.current?.getAPI()?.setPerspective?.(p); } catch {}
+      setCanvasPerspective(base);
     } catch (e) {
       setError('切换会话失败: ' + (e as any).message);
     }
     setSidebarOpen(false);
-  }, [currentSessionId, setCurrent, persistCanvasXml, cancelPersist]);
+  }, [currentSessionId, setCurrent, persistCanvasXml, cancelPersist, chatCollapsed]);
 
   // 首次进入: 加载会话列表, 无则建空会话; 绑定 logger sessionId
   useEffect(() => {
@@ -393,9 +406,11 @@ export default function ChatApp() {
         const last = getLastSessionId();
         const target = last && list.some((s) => s.id === last) ? last : (list[0]?.id ?? null);
         if (target) await switchSession(target);
+        initialLoadDoneRef.current = true;  // 必须在 switchSession 之后——否则 Bug 1 fix 先于 restore 触发 clearAll
       } catch (e) {
         console.warn('加载会话失败:', e);
         setSessionsLoading(false);
+        initialLoadDoneRef.current = true;
       }
     })();
     return () => { cancelled = true; };
@@ -404,7 +419,11 @@ export default function ChatApp() {
 
   // 当前会话被删除(如在侧边栏删除) → 清空画布与消息, 恢复到初始空白态
   // sessionsLoading 守卫: 避免初始加载期(currentSessionId 尚未赋值)误清空
+  const initialLoadDoneRef = useRef(false);
+  // 当前会话被删除(如在侧边栏删除) → 清空画布与消息, 恢复到初始空白态
+  // sessionsLoading + initialLoadDoneRef 双重守卫: 避免初始加载期误清空
   useEffect(() => {
+    if (!initialLoadDoneRef.current) return;
     if (currentSessionId === null && ggbReady && !sessionsLoading) {
       cancelPersist();
       abortRef.current?.abort();
@@ -534,6 +553,17 @@ export default function ChatApp() {
           },
           onToolEnd: (name, args, res) => {
             setTrace((prev) => prev.map((t, i) => (i === prev.length - 1 ? { ...t, result: res } : t)));
+            // set_perspective 工具调用后持久化视角到 DB + 更新 React 状态
+            if (name === 'set_perspective' && res?.ok) {
+              setCanvasPerspective(args.view);
+              const sid = useSessionStore.getState().currentSessionId;
+              if (sid) {
+                fetch('/api/sessions', {
+                  method: 'POST', headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ action: 'update', id: sid, perspective: args.view }),
+                }).catch(() => {});
+              }
+            }
           },
           onExec: (cmd, r) => {
             setExecLines((prev) => [...prev, { cmd, result: r }]);
@@ -550,6 +580,9 @@ export default function ChatApp() {
       // history 累积(截断 8 条, 只存文本)
       const newHistory = [...history, { role: 'user', content: finalText }, { role: 'assistant', content: result.finalText }].slice(-8);
       setHistory(newHistory);
+
+      // AI 全部完成后立即持久化画布
+      await persistCanvasXml();
 
       // 刷新额度
       if (config.mode === 'trial') fetchUsage();
@@ -623,22 +656,19 @@ export default function ChatApp() {
   const toggleChatCollapse = useCallback(() => {
     setChatCollapsed((prev) => {
       const next = !prev;
-      if (next) {
-        ggbRef.current?.showAlgebraView();
-      } else {
-        ggbRef.current?.hideAlgebraView();
-      }
-      // 延迟 setSize 让 CSS 过渡生效后再调整 applet 尺寸
+      const is3D = canvasPerspective === 'T';
+      const targetP = next ? (is3D ? 'AT' : 'AG') : (is3D ? 'T' : 'G');
+      ggbRef.current?.getAPI()?.setPerspective?.(targetP);
       setTimeout(() => {
         const api = ggbRef.current?.getAPI() as any;
         const el = document.querySelector('.canvas-wrap');
         if (api?.setSize && el) {
           try { api.setSize(el.clientWidth, el.clientHeight); } catch {}
         }
-      }, 350);
+      }, 300);
       return next;
     });
-  }, []);
+  }, [canvasPerspective]);
 
   // 提交用户反馈
   const submitFeedback = useCallback(async () => {

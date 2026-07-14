@@ -169,6 +169,7 @@ $$;
 
 alter table public.sessions add column if not exists canvas_xml text;
 alter table public.sessions add column if not exists pinned boolean default false;
+alter table public.sessions add column if not exists perspective text;
 
 -- ── 5. feedback: 用户反馈收集(仅登录用户) ──
 create table if not exists public.feedback (

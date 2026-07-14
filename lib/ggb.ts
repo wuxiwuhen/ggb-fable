@@ -57,7 +57,7 @@ interface GgbApi {
   setGridVisible?: (v: boolean) => void;
   setAxisLabels?: (n: number, x: string, y: string) => void;
   setRepaintingActive?: (v: boolean) => void;
-  getXML?: (label?: string) => string;
+  getXML?: (label?: string | boolean) => string;
   getDefinitionString?: (label: string) => string;
   getObjectType?: (label: string) => string;
   exists?: (label: string) => boolean;
@@ -273,11 +273,6 @@ export class GGB {
       const r = await this.execCommand(line);
       results.push({ ...r, cmd: line });
     }
-    // setXML(getXML()) 强制建构造步骤, 保证本批 AI 指令纳入 undo 栈
-    try {
-      const xml = this.applet?.getXML?.();
-      if (xml) this.applet?.setXML?.(xml);
-    } catch {}
     return results;
   }
 
@@ -339,22 +334,12 @@ export class GGB {
     return { ok: true, value: val, numeric: num };
   }
 
-  async clearAll() {
+  async clearAll(opts?: { keepPerspective?: boolean }) {
     if (!this.applet) return;
+    if (!opts?.keepPerspective) {
+      try { this.applet.setPerspective?.('G'); } catch {}
+    }
     try { this.applet.reset?.(); } catch (e) {}
-    try {
-      if (!this.applet.reset) {
-        const xml = this.applet.getXML?.() || '';
-        if (xml && typeof DOMParser !== 'undefined') {
-          const doc = new DOMParser().parseFromString(xml, 'text/xml');
-          const labels = [...doc.querySelectorAll('construction element')]
-            .map((el) => el.getAttribute('label')).filter(Boolean) as string[];
-          for (const lb of labels) {
-            try { this.applet.evalCommand?.('Delete(' + lb + ')'); } catch (e) {}
-          }
-        }
-      }
-    } catch (e) {}
     this.commandLog = [];
     this.fireCommand(null);
   }
@@ -378,18 +363,6 @@ export class GGB {
   getXML(): string {
     if (!this.applet) return '';
     try { return this.applet.getXML?.() || ''; } catch (e) { return ''; }
-  }
-
-  // 显示代数区(收起对话框时进入原生 GGB 绘制态)
-  showAlgebraView(): void {
-    if (!this.applet) return;
-    try { this.applet.setPerspective?.('AG'); } catch (e) { console.warn('showAlgebraView fail:', e); }
-  }
-
-  // 隐藏代数区(显示对话框时回到 AI 辅助绘制态)
-  hideAlgebraView(): void {
-    if (!this.applet) return;
-    try { this.applet.setPerspective?.('G'); } catch (e) { console.warn('hideAlgebraView fail:', e); }
   }
 
   // 从 XML 快照无损还原画布(含手工绘制); restore 用
