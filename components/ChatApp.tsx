@@ -296,33 +296,31 @@ export default function ChatApp() {
 
   const creatingSessionRef = useRef(false);
 
-  // 新建空会话: create → 清空 state + 画布 → 设为当前
+  // 新建空会话: 客户端预生成 UUID → 清空 state + 画布 → 乐观设为当前 → 异步落库。
+  // 不等待服务端 create 响应——消除 send 时的网络卡顿。
   const newSession = useCallback(async () => {
-    // 重入保护: 防止并发调用 newSession() 创建多条空会话
     if (creatingSessionRef.current) return;
-    // 已有会话且当前是空画布+无消息 → 无需重复新建
     if (currentSessionId && messages.length === 0 && !(ggbRef.current?.getCommandLog() || []).length) return;
     creatingSessionRef.current = true;
-    // 离开前持久化当前会话画布(防手工内容丢失)
     if (currentSessionId) await persistCanvasXml();
     cancelPersist();
     abortRef.current?.abort();
     setError('');
     try {
-      const res = await fetch('/api/sessions', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'create', mode: config.mode, model: config.mode === 'trial' ? 'deepseek' : config.getActiveByok()?.model_name }),
-      });
-      const data = await res.json();
-      const id: string = data.id;
+      const id = crypto.randomUUID();
       setMessages([]); setTrace([]); setExecLines([]); setHistory([]);
       await ggbRef.current?.clearAll();
       const now = new Date().toISOString();
       upsert({ id, title: null, mode: config.mode, model: null, pinned: false, created_at: now, updated_at: now });
       setCurrent(id);
-      loggerRef.current.setSession(id);          // 修复: logger 绑定 sessionId
+      loggerRef.current.setSession(id);
       setCanvasPerspective(null);
       setSidebarOpen(false);
+      // 异步注册到服务端(不阻塞 UI); flush() 的 append 动作也会自动建会话——双保险
+      fetch('/api/sessions', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'create', id, mode: config.mode, model: config.mode === 'trial' ? 'deepseek' : config.getActiveByok()?.model_name }),
+      }).catch(() => {});
       return id;
     } finally {
       creatingSessionRef.current = false;
@@ -368,7 +366,8 @@ export default function ChatApp() {
       restoringRef.current = true;
       try {
         // 回退到线上已验证的恢复逻辑: reset + setXML (线上 clearAll 无 setPerspective)
-        await ggbRef.current?.clearAll({ keepPerspective: true });
+        // skipSetXml: 紧随的 setXML(saved) 会替换全量构造并触发重渲染, 无需中间空白帧
+        await ggbRef.current?.clearAll({ keepPerspective: true, skipSetXml: true });
         if (session?.canvas_xml) {
           try { ggbRef.current?.setXML(session.canvas_xml); }
           catch (e) { console.warn('画布 setXML 恢复失败:', e); }
@@ -389,10 +388,10 @@ export default function ChatApp() {
     setSidebarOpen(false);
   }, [currentSessionId, setCurrent, persistCanvasXml, cancelPersist, chatCollapsed]);
 
-  // 首次进入: 加载会话列表, 无则建空会话; 绑定 logger sessionId
+  // 首次进入: 加载会话列表供侧边栏展示, 不自动恢复会话(刷新后直接空白画布)
   useEffect(() => {
     if (!ggbReady) return;
-    autoStartIfDue();   // 首次进入: 未看过基础教程则启动
+    autoStartIfDue();
     let cancelled = false;
     (async () => {
       try {
@@ -402,15 +401,13 @@ export default function ChatApp() {
         if (cancelled) { setSessionsLoading(false); return; }
         setSessions(list);
         setSessionsLoading(false);
-        // 刷新恢复: 优先"上次会话", 否则最近一条; currentSessionId 为 null → switchSession 不早退
-        const last = getLastSessionId();
-        const target = last && list.some((s) => s.id === last) ? last : (list[0]?.id ?? null);
-        if (target) await switchSession(target);
-        initialLoadDoneRef.current = true;  // 必须在 switchSession 之后——否则 Bug 1 fix 先于 restore 触发 clearAll
       } catch (e) {
         console.warn('加载会话失败:', e);
-        setSessionsLoading(false);
-        initialLoadDoneRef.current = true;
+      } finally {
+        if (!cancelled) {
+          setSessionsLoading(false);
+          initialLoadDoneRef.current = true;
+        }
       }
     })();
     return () => { cancelled = true; };
@@ -422,9 +419,12 @@ export default function ChatApp() {
   const initialLoadDoneRef = useRef(false);
   // 当前会话被删除(如在侧边栏删除) → 清空画布与消息, 恢复到初始空白态
   // sessionsLoading + initialLoadDoneRef 双重守卫: 避免初始加载期误清空
+  // 外加内容检查: 初始空白态(无消息无命令)无需清空, 避免无意义的 clearAll 闪烁
   useEffect(() => {
     if (!initialLoadDoneRef.current) return;
     if (currentSessionId === null && ggbReady && !sessionsLoading) {
+      const cmdLen = (ggbRef.current?.getCommandLog() || []).length;
+      if (cmdLen === 0 && messages.length === 0) return; // 初始空白态, 无需清空
       cancelPersist();
       abortRef.current?.abort();
       setMessages([]);

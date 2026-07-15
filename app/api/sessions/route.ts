@@ -52,9 +52,11 @@ export async function POST(req: Request) {
   const admin = getSupabaseAdmin();
 
   if (body.action === 'create') {
-    const { data } = await admin.from('sessions').insert({
+    const insertData: any = {
       user_id: user.id, mode: body.mode || 'trial', model: body.model || null, title: body.title || null,
-    }).select('id').single();
+    };
+    if (body.id) insertData.id = body.id;  // 客户端乐观创建: 预生成 UUID, 不等待服务端返回
+    const { data } = await admin.from('sessions').insert(insertData).select('id').single();
     return json(200, { id: data?.id });
   }
 

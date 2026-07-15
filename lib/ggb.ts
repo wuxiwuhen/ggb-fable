@@ -334,12 +334,18 @@ export class GGB {
     return { ok: true, value: val, numeric: num };
   }
 
-  async clearAll(opts?: { keepPerspective?: boolean }) {
+  // 清空画布。不切换视角——保持当前视图激活, 3D 渲染器才能响应后续 setXML。
+  // reset() 清构造协议, setXML 触发全视图(含 3D)场景图重建、清空 WebGL 帧缓存。
+  // skipSetXml: 调用方随即会 setXML 恢复内容时跳过, 避免中间空白渲染。
+  async clearAll(opts?: { keepPerspective?: boolean; skipSetXml?: boolean }) {
     if (!this.applet) return;
-    if (!opts?.keepPerspective) {
-      try { this.applet.setPerspective?.('G'); } catch {}
-    }
     try { this.applet.reset?.(); } catch (e) {}
+    if (!opts?.skipSetXml) {
+      try {
+        const xml = this.applet.getXML?.();
+        if (xml) this.applet.setXML?.(xml);
+      } catch {}
+    }
     this.commandLog = [];
     this.fireCommand(null);
   }
