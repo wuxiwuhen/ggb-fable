@@ -1,6 +1,7 @@
 // 产品落地页(公开): 介绍 GGB Fable + 引导登录/进入工作台
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth';
 
@@ -15,12 +16,11 @@ const FEATURES = [
 
 export default function LandingPage() {
   const { user, isAdmin, loading, adminLoading } = useAuth();
-  // loading/adminLoading 期间不按 user/isAdmin 切换文案, 用占位按钮避免闪现"未登录/非管理员"态
   const authReady = !loading;
   const adminReady = !loading && !adminLoading;
-  // 已登录进工作台, 未登录去登录页(注册即享 5 次试用)
   const ctaHref = user ? '/app' : '/login';
   const ctaLabel = user ? '进入工作台' : '立即体验';
+  const [xhsOpen, setXhsOpen] = useState(false);
 
   return (
     <div className="landing">
@@ -29,7 +29,7 @@ export default function LandingPage() {
       <div className="blob" style={{ width: 520, height: 520, background: '#fed7aa', bottom: -160, right: -120 }} />
       <div className="blob" style={{ width: 360, height: 360, background: '#f5d0fe', top: '38%', left: '52%' }} />
 
-      {/* 浮动几何装饰(呼应 GeoGebra 几何主题) */}
+      {/* 浮动几何装饰 */}
       <div className="shape" style={{ top: '16%', left: '7%', animation: 'float 7s ease-in-out infinite' }}>
         <div style={{ width: 0, height: 0, borderLeft: '26px solid transparent', borderRight: '26px solid transparent', borderBottom: '44px solid rgba(79,70,229,0.25)' }} />
       </div>
@@ -50,6 +50,7 @@ export default function LandingPage() {
           <span className="title" style={{ fontSize: 22 }}>GGB Fable</span>
         </div>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+          <button className="btn xhs-btn" onClick={() => setXhsOpen(true)}>🎁 获取额度</button>
           {adminReady && isAdmin && <Link className="btn ghost" href="/admin" style={{ fontSize: 15, padding: '8px 16px' }}>管理后台</Link>}
           {authReady ? (
             <Link className={user ? 'btn ghost' : 'btn primary'} href={ctaHref} style={{ fontSize: 15, padding: '8px 18px' }}>{user ? '工作台' : '登录'}</Link>
@@ -92,6 +93,29 @@ export default function LandingPage() {
       <footer className="landing-footer">
         © GGB Fable · 让每个孩子都能玩转数学图形
       </footer>
+
+      {/* 获取额度弹窗 */}
+      {xhsOpen && (
+        <div className="modal-mask" onClick={() => setXhsOpen(false)}>
+          <div className="xhs-modal" onClick={(e) => e.stopPropagation()}>
+            <button className="xhs-modal-close" onClick={() => setXhsOpen(false)}>✕</button>
+            <div className="xhs-modal-icon">📕</div>
+            <h2 className="xhs-modal-title">关注小红书 · 领额外 10 次额度</h2>
+            <p className="xhs-modal-desc">打开小红书，搜索下方账号或小红书号，关注后私信发送 <strong>"GGB"</strong> 即可领取。人工回复，稍等片刻 ✨</p>
+            <div className="xhs-modal-account">
+              <div className="xhs-modal-field">
+                <span className="xhs-modal-label">账号</span>
+                <span className="xhs-modal-value">@DolaEmw</span>
+              </div>
+              <div className="xhs-modal-field">
+                <span className="xhs-modal-label">小红书号</span>
+                <span className="xhs-modal-value mono">2327679345</span>
+              </div>
+            </div>
+            <button className="btn primary xhs-modal-btn" onClick={() => setXhsOpen(false)}>知道了</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

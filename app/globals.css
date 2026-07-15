@@ -259,6 +259,55 @@ button { font-family: inherit; cursor: pointer; }
 
 .landing-footer { position: relative; z-index: 2; text-align: center; color: #999; font-size: 13px; padding: 24px; }
 
+/* 获取额度按钮 */
+.xhs-btn {
+  background: linear-gradient(135deg, #fe2c55, #ff6b81) !important;
+  color: #fff !important;
+  font-weight: 700 !important;
+  font-size: 14px !important;
+  padding: 8px 18px !important;
+  border-radius: 10px !important;
+  box-shadow: 0 4px 14px rgba(254,44,85,0.35);
+  transition: transform 0.15s, box-shadow 0.15s;
+  animation: xhsPulse 2.4s ease-in-out infinite;
+}
+.xhs-btn:hover { transform: translateY(-2px) scale(1.03); box-shadow: 0 6px 20px rgba(254,44,85,0.45); }
+@keyframes xhsPulse {
+  0%, 100% { box-shadow: 0 4px 14px rgba(254,44,85,0.35); }
+  50% { box-shadow: 0 4px 22px rgba(254,44,85,0.55); }
+}
+
+/* 获取额度弹窗 */
+.modal-mask {
+  position: fixed; inset: 0; z-index: 100;
+  background: rgba(0,0,0,0.4); backdrop-filter: blur(4px);
+  display: flex; align-items: center; justify-content: center;
+}
+.xhs-modal {
+  position: relative; max-width: 420px; width: 90%;
+  background: #fff; border-radius: 20px; padding: 36px 30px 28px;
+  text-align: center; box-shadow: 0 20px 60px rgba(0,0,0,0.18);
+  animation: fadeInUp 0.35s ease both;
+}
+.xhs-modal-close {
+  position: absolute; top: 14px; right: 16px;
+  background: none; border: none; font-size: 20px; color: #bbb; cursor: pointer; padding: 4px;
+}
+.xhs-modal-close:hover { color: #666; }
+.xhs-modal-icon { font-size: 48px; margin-bottom: 14px; }
+.xhs-modal-title { font-size: 19px; font-weight: 800; color: #222; margin: 0 0 12px; }
+.xhs-modal-desc { font-size: 14px; color: #666; line-height: 1.7; margin: 0 0 22px; }
+.xhs-modal-desc strong { color: #fe2c55; }
+.xhs-modal-account {
+  display: flex; flex-direction: column; gap: 10px;
+  background: #fafafa; border-radius: 14px; padding: 18px 20px; margin-bottom: 22px;
+}
+.xhs-modal-field { display: flex; align-items: center; justify-content: space-between; }
+.xhs-modal-label { font-size: 13px; color: #999; }
+.xhs-modal-value { font-size: 16px; font-weight: 700; color: #fe2c55; }
+.xhs-modal-value.mono { font-family: 'SF Mono', 'Fira Code', monospace; letter-spacing: 0.5px; }
+.xhs-modal-btn { padding: 10px 48px !important; font-size: 15px !important; border-radius: 10px !important; }
+
 .fade-up { animation: fadeInUp 0.7s ease both; }
 .fade-up.d1 { animation-delay: 0.1s; }
 .fade-up.d2 { animation-delay: 0.2s; }
