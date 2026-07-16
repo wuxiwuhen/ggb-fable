@@ -22,19 +22,28 @@ export async function GET(req: Request) {
   const adminUser = await requireAdmin(req);
   if (!adminUser) return json(403, { error: '需要管理员权限' });
 
+  const url = new URL(req.url);
+  const searchEmail = url.searchParams.get('email')?.trim().toLowerCase();
+  const limit = Math.min(Number(url.searchParams.get('limit')) || 10, 200);
+
   const admin = getSupabaseAdmin();
-  // 联表: usage + profiles(取 email)
-  const { data: usage } = await admin.from('usage').select('user_id, used, trial_limit');
+  const { data: usage } = await admin.from('usage').select('user_id, used, trial_limit').limit(limit);
   const { data: profiles } = await admin.from('profiles').select('user_id, email');
   const emailMap = new Map((profiles || []).map((p: any) => [p.user_id, p.email]));
 
-  const rows = (usage || []).map((u: any) => ({
+  let rows = (usage || []).map((u: any) => ({
     user_id: u.user_id,
     email: emailMap.get(u.user_id) || '',
     used: u.used,
     limit: u.trial_limit,
     remaining: Math.max(0, u.trial_limit - u.used),
   }));
+
+  // 邮箱搜索
+  if (searchEmail) {
+    rows = rows.filter((r) => r.email.toLowerCase().includes(searchEmail));
+  }
+
   return json(200, { rows });
 }
 

@@ -1,7 +1,7 @@
 'use client';
 
-// 管理员页: 查看所有用户试用额度, 刷新某用户额度(used=0)或设置额度
-// 仅 is_admin=true 可访问(后端 /api/admin/usage 二次鉴权)
+// 管理员页: 试用额度管理 + 用户反馈 + 用户指令
+// 仅 is_admin=true 可访问(后端二次鉴权)
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
@@ -15,22 +15,89 @@ interface UsageRow {
   remaining: number;
 }
 
+interface FeedbackRow {
+  id: number;
+  email: string;
+  content: string;
+  created_at: string;
+}
+
+interface MessageRow {
+  id: number;
+  email: string;
+  content: string;
+  session_title: string;
+  created_at: string;
+}
+
+const TABS = ['额度管理', '用户反馈', '用户指令'] as const;
+type Tab = (typeof TABS)[number];
+
 export default function AdminPage() {
   const { user, loading, isAdmin, adminLoading } = useAuth();
-  const [rows, setRows] = useState<UsageRow[]>([]);
+  const [tab, setTab] = useState<Tab>('额度管理');
+  const [search, setSearch] = useState('');
+  const [usageRows, setUsageRows] = useState<UsageRow[]>([]);
+  const [feedbackRows, setFeedbackRows] = useState<FeedbackRow[]>([]);
+  const [messageRows, setMessageRows] = useState<MessageRow[]>([]);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
+  const [loadingTab, setLoadingTab] = useState(false);
 
-  async function load() {
-    setError('');
-    const resp = await fetch('/api/admin/usage');
+  function buildParams(extra: Record<string, string> = {}): string {
+    const p = new URLSearchParams(extra);
+    if (search.trim()) p.set('email', search.trim());
+    return p.toString();
+  }
+
+  async function loadUsage() {
+    setError(''); setLoadingTab(true);
+    const resp = await fetch(`/api/admin/usage?${buildParams({ limit: '10' })}`);
+    setLoadingTab(false);
     if (resp.status === 403) { setError('需要管理员权限'); return; }
     if (!resp.ok) { setError('加载失败'); return; }
     const data = await resp.json();
-    setRows(data.rows || []);
+    setUsageRows(data.rows || []);
   }
 
-  useEffect(() => { if (user) load(); /* eslint-disable-next-line */ }, [user]);
+  async function loadFeedback() {
+    setError(''); setLoadingTab(true);
+    const resp = await fetch(`/api/admin/insights?${buildParams({ type: 'feedback', limit: '50' })}`);
+    setLoadingTab(false);
+    if (resp.status === 403) { setError('需要管理员权限'); return; }
+    if (!resp.ok) { setError('加载失败'); return; }
+    const data = await resp.json();
+    setFeedbackRows(data.rows || []);
+  }
+
+  async function loadMessages() {
+    setError(''); setLoadingTab(true);
+    const resp = await fetch(`/api/admin/insights?${buildParams({ type: 'messages', limit: '50' })}`);
+    setLoadingTab(false);
+    if (resp.status === 403) { setError('需要管理员权限'); return; }
+    if (!resp.ok) { setError('加载失败'); return; }
+    const data = await resp.json();
+    setMessageRows(data.rows || []);
+  }
+
+  useEffect(() => { if (user) loadUsage(); /* eslint-disable-next-line */ }, [user]);
+  // 搜索触发所有 tab 重新加载
+  useEffect(() => {
+    if (!user) return;
+    if (tab === '额度管理') loadUsage();
+    else if (tab === '用户反馈') loadFeedback();
+    else loadMessages();
+    /* eslint-disable-next-line */
+  }, [search]);
+
+  // tab 切换时按需加载
+  useEffect(() => {
+    if (!user) return;
+    if (tab === '额度管理' && usageRows.length === 0) loadUsage();
+    else if (tab === '用户反馈' && feedbackRows.length === 0) loadFeedback();
+    else if (tab === '用户指令' && messageRows.length === 0) loadMessages();
+    /* eslint-disable-next-line */
+  }, [tab]);
 
   async function refresh(userId: string) {
     setBusy(userId);
@@ -40,7 +107,7 @@ export default function AdminPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ user_id: userId, action: 'refresh' }),
       });
-      await load();
+      await loadUsage();
     } finally { setBusy(null); }
   }
 
@@ -56,20 +123,19 @@ export default function AdminPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ user_id: userId, action: 'set_limit', limit: n }),
       });
-      await load();
+      await loadUsage();
     } finally { setBusy(null); }
   }
 
-  // 等 session + is_admin 都查清再决定: 未查清前一直显示"加载中", 避免先闪"不是管理员"再纠正
+  // 等 session + is_admin 都查清再决定
   if (loading || adminLoading) return <main style={S.wrap}><p>加载中…</p></main>;
   if (!user) { if (typeof window !== 'undefined') window.location.href = '/login'; return null; }
-  // 前端提前拦截非管理员(后端 requireAdmin 仍是真鉴权, 这里只优化体验, 避免闪表头)
   if (!isAdmin) {
     return (
       <main style={S.wrap}>
         <div style={S.card}>
           <h1 style={S.h1}>🛠 管理后台</h1>
-          <p style={S.error}>当前账号没有管理员权限。</p>
+          <p style={{ color: '#dc2626', fontSize: 14 }}>当前账号没有管理员权限。</p>
           <Link href="/app" style={S.back}>← 返回工作台</Link>
         </div>
       </main>
@@ -80,39 +146,153 @@ export default function AdminPage() {
     <main style={S.wrap}>
       <div style={S.card}>
         <h1 style={S.h1}>🛠 管理后台</h1>
-        <p style={S.sub}>用户试用额度管理</p>
 
-        {error && <div style={S.error}>{error}</div>}
-
-        <table style={S.table}>
-          <thead>
-            <tr>
-              <th style={S.th}>用户</th>
-              <th style={S.th}>已用</th>
-              <th style={S.th}>额度</th>
-              <th style={S.th}>剩余</th>
-              <th style={S.th}>操作</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r) => (
-              <tr key={r.user_id}>
-                <td style={S.td}>{r.email || r.user_id.slice(0, 8)}</td>
-                <td style={S.td}>{r.used}</td>
-                <td style={S.td}>{r.limit}</td>
-                <td style={S.td}>{r.remaining}</td>
-                <td style={S.td}>
-                  <button style={S.btn} disabled={busy === r.user_id} onClick={() => refresh(r.user_id)}>刷新</button>
-                  {' '}
-                  <button style={S.btn} disabled={busy === r.user_id} onClick={() => setLimit(r.user_id)}>设额度</button>
-                </td>
-              </tr>
+        {/* Tab 导航 + 搜索 */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '16px 0', flexWrap: 'wrap' }}>
+          <div style={S.tabs}>
+            {TABS.map((t) => (
+              <button
+                key={t}
+                style={{ ...S.tabBtn, ...(tab === t ? S.tabBtnActive : {}) }}
+                onClick={() => setTab(t)}
+              >
+                {t}
+              </button>
             ))}
-            {rows.length === 0 && (
-              <tr><td colSpan={5} style={{ ...S.td, textAlign: 'center', color: '#999' }}>暂无数据</td></tr>
-            )}
-          </tbody>
-        </table>
+          </div>
+          <div style={{ flex: 1, minWidth: 200 }}>
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="搜索邮箱（留空则显示全部）…"
+              style={{
+                width: '100%', padding: '7px 12px', border: '1px solid #e5e7eb',
+                borderRadius: 8, fontSize: 13, outline: 'none',
+              }}
+            />
+          </div>
+        </div>
+
+        {error && <div style={{ background: '#fef2f2', color: '#dc2626', padding: '10px 14px', borderRadius: 6, marginBottom: 16, fontSize: 14 }}>{error}</div>}
+        {loadingTab && <div style={{ textAlign: 'center', color: '#888', padding: '20px 0', fontSize: 14 }}>加载中…</div>}
+
+        {/* Tab: 额度管理 */}
+        {tab === '额度管理' && (
+          <>
+            <p style={S.sub}>
+              {search ? `搜索 "${search}" · ` : ''}显示前 {usageRows.length} 条
+              <button style={{ ...S.btn, marginLeft: 12 }} onClick={loadUsage} disabled={loadingTab}>刷新</button>
+            </p>
+            <table style={S.table}>
+              <thead>
+                <tr>
+                  <th style={S.th}>用户</th>
+                  <th style={S.th}>已用</th>
+                  <th style={S.th}>额度</th>
+                  <th style={S.th}>剩余</th>
+                  <th style={S.th}>操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                {usageRows.map((r) => (
+                  <tr key={r.user_id}>
+                    <td style={S.td}>{r.email || r.user_id.slice(0, 8)}</td>
+                    <td style={S.td}>{r.used}</td>
+                    <td style={S.td}>{r.limit}</td>
+                    <td style={S.td}>{r.remaining}</td>
+                    <td style={S.td}>
+                      <button style={S.btn} disabled={busy === r.user_id} onClick={() => refresh(r.user_id)}>刷新</button>
+                      {' '}
+                      <button style={S.btn} disabled={busy === r.user_id} onClick={() => setLimit(r.user_id)}>设额度</button>
+                    </td>
+                  </tr>
+                ))}
+                {usageRows.length === 0 && !loadingTab && (
+                  <tr><td colSpan={5} style={{ ...S.td, textAlign: 'center', color: '#999' }}>
+                    {search ? '未找到匹配用户' : '暂无数据'}
+                  </td></tr>
+                )}
+              </tbody>
+            </table>
+          </>
+        )}
+
+        {/* Tab: 用户反馈 */}
+        {tab === '用户反馈' && (
+          <>
+            <p style={S.sub}>
+              {search ? `搜索 "${search}" · ` : ''}最近 {feedbackRows.length} 条反馈
+              <button style={{ ...S.btn, marginLeft: 12 }} onClick={loadFeedback} disabled={loadingTab}>刷新</button>
+            </p>
+            <div style={{ maxHeight: 520, overflowY: 'auto' }}>
+              <table style={S.table}>
+                <thead>
+                  <tr>
+                    <th style={{ ...S.th, width: 140 }}>用户</th>
+                    <th style={S.th}>反馈内容</th>
+                    <th style={{ ...S.th, width: 150 }}>时间</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {feedbackRows.map((r) => (
+                    <tr key={r.id}>
+                      <td style={{ ...S.td, fontSize: 12 }}>{r.email || '-'}</td>
+                      <td style={{ ...S.td, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{r.content}</td>
+                      <td style={{ ...S.td, fontSize: 12, color: '#888' }}>{fmtTime(r.created_at)}</td>
+                    </tr>
+                  ))}
+                  {feedbackRows.length === 0 && !loadingTab && (
+                    <tr><td colSpan={3} style={{ ...S.td, textAlign: 'center', color: '#999' }}>
+                      {search ? '未找到匹配的反馈' : '暂无反馈'}
+                    </td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
+
+        {/* Tab: 用户指令 */}
+        {tab === '用户指令' && (
+          <>
+            <p style={S.sub}>
+              {search ? `搜索 "${search}" · ` : ''}最近 {messageRows.length} 条用户输入
+              <button style={{ ...S.btn, marginLeft: 12 }} onClick={loadMessages} disabled={loadingTab}>刷新</button>
+            </p>
+            <div style={{ maxHeight: 520, overflowY: 'auto' }}>
+              <table style={S.table}>
+                <thead>
+                  <tr>
+                    <th style={{ ...S.th, width: 140 }}>用户</th>
+                    <th style={S.th}>输入内容</th>
+                    <th style={{ ...S.th, width: 120 }}>会话</th>
+                    <th style={{ ...S.th, width: 130 }}>时间</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {messageRows.map((r) => (
+                    <tr key={r.id}>
+                      <td style={{ ...S.td, fontSize: 12 }}>{r.email}</td>
+                      <td style={{ ...S.td, whiteSpace: 'pre-wrap', wordBreak: 'break-word', maxWidth: 360 }}>
+                        {r.content.length > 200 ? r.content.slice(0, 200) + '…' : r.content}
+                      </td>
+                      <td style={{ ...S.td, fontSize: 12, color: '#666', maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {r.session_title || '-'}
+                      </td>
+                      <td style={{ ...S.td, fontSize: 12, color: '#888' }}>{fmtTime(r.created_at)}</td>
+                    </tr>
+                  ))}
+                  {messageRows.length === 0 && !loadingTab && (
+                    <tr><td colSpan={4} style={{ ...S.td, textAlign: 'center', color: '#999' }}>
+                      {search ? '未找到匹配的指令' : '暂无数据'}
+                    </td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
 
         <Link href="/app" style={S.back}>← 返回工作台</Link>
       </div>
@@ -120,12 +300,25 @@ export default function AdminPage() {
   );
 }
 
+function fmtTime(iso: string): string {
+  if (!iso) return '-';
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 const S: Record<string, React.CSSProperties> = {
   wrap: { minHeight: '100vh', background: '#f7f8fa', padding: '40px 20px' },
-  card: { maxWidth: 800, margin: '0 auto', background: '#fff', borderRadius: 12, padding: 28, boxShadow: '0 2px 12px rgba(0,0,0,0.06)' },
+  card: { maxWidth: 900, margin: '0 auto', background: '#fff', borderRadius: 12, padding: 28, boxShadow: '0 2px 12px rgba(0,0,0,0.06)' },
   h1: { margin: '0 0 4px', fontSize: 22 },
-  sub: { margin: '0 0 20px', color: '#888', fontSize: 13 },
-  error: { background: '#fef2f2', color: '#dc2626', padding: '10px 14px', borderRadius: 6, marginBottom: 16, fontSize: 14 },
+  sub: { margin: '0 0 16px', color: '#888', fontSize: 13 },
+  tabs: { display: 'flex', gap: 6, margin: '16px 0' },
+  tabBtn: {
+    padding: '7px 18px', border: '1px solid #e5e7eb', borderRadius: 20,
+    background: '#fafafa', cursor: 'pointer', fontSize: 13, color: '#555',
+    transition: 'all 0.15s',
+  },
+  tabBtnActive: { background: '#4f46e5', color: '#fff', border: '1px solid #4f46e5' },
   table: { width: '100%', borderCollapse: 'collapse', fontSize: 14 },
   th: { textAlign: 'left', padding: '10px 8px', borderBottom: '2px solid #eee', color: '#666', fontWeight: 600 },
   td: { padding: '10px 8px', borderBottom: '1px solid #f0f0f0' },
