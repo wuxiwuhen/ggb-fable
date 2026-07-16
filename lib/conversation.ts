@@ -22,7 +22,7 @@ export function rebuildChatMessages(apiMsgs: ApiMessage[]): ChatMsg[] {
 
 // 重建 history(user/assistant 文本, 截 8 条, 给 agent 上下文)
 export function rebuildHistory(apiMsgs: ApiMessage[]): Array<{ role: string; content: string }> {
-  return rebuildChatMessages(apiMsgs).slice(-8).map((m) => ({ role: m.role, content: m.content }));
+  return rebuildChatMessages(apiMsgs).slice(-20).map((m) => ({ role: m.role, content: m.content }));
 }
 
 // 重建 trace(从 tool 消息)

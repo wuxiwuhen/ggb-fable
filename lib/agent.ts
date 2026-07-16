@@ -485,7 +485,6 @@ ${focusStep}
           _toolName: (call.function || call).name,
         });
       }
-      if (hooks.onToken) hooks.onToken('\n');
     }
 
     hooks.onRound?.(maxRounds, true);

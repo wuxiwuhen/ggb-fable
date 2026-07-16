@@ -57,28 +57,40 @@ const PHASE_LABEL: Record<string, string> = {
   reset_canvas: '清空画布',
 };
 
-// 输出气泡"首字文本前"的过程面板: 图片识别阶段 + 各工具阶段(✓完成 / ⟳进行中), 全空则"正在思考…"
+// 输出气泡"首字文本前"的过程面板: 单行动态切换(只显示当前阶段, 不堆叠)
 function AssistantProgress({ msg, trace }: { msg: Msg; trace: TraceItem[] }) {
   const phases = trace.filter((t) => PHASE_LABEL[t.name]);
   const ocrLoading = msg.ocr?.state === 'loading';
-  const showThinking = !ocrLoading && phases.length === 0;
+
+  // 找到第一个进行中的 phase
+  const activeIdx = phases.findIndex((t) => t.result == null);
+  const hasPhases = phases.length > 0;
+  const allDone = hasPhases && activeIdx < 0;
+
+  let label: string;
+  let showSpinner: boolean;
+  if (ocrLoading) {
+    label = '图片识别中';
+    showSpinner = true;
+  } else if (activeIdx >= 0) {
+    // 有阶段正在执行
+    label = PHASE_LABEL[phases[activeIdx].name] || phases[activeIdx].name;
+    showSpinner = true;
+  } else if (allDone) {
+    // 工具阶段全部完成, 等待 LLM 输出最终回复文字
+    label = '正在组织回复';
+    showSpinner = true;
+  } else {
+    label = '正在思考';
+    showSpinner = true;
+  }
+
   return (
     <div className="assistant-progress">
-      {ocrLoading && (
-        <div className="phase-item active"><span className="spinner" /><span>图片识别中…</span></div>
-      )}
-      {phases.map((t, i) => {
-        const active = t.result == null;
-        return (
-          <div key={i} className={`phase-item ${active ? 'active' : 'done'}`}>
-            {active ? <span className="spinner" /> : <span className="phase-check">✓</span>}
-            <span>{PHASE_LABEL[t.name]}{active ? '…' : ''}</span>
-          </div>
-        );
-      })}
-      {showThinking && (
-        <div className="phase-item active"><span className="spinner" /><span>正在思考…</span></div>
-      )}
+      <div className={`phase-item ${showSpinner ? 'active' : 'done'}`}>
+        {showSpinner ? <span className="spinner" /> : <span className="phase-check">✓</span>}
+        <span>{label}{showSpinner ? '…' : ''}</span>
+      </div>
     </div>
   );
 }
@@ -567,7 +579,8 @@ export default function ChatApp() {
           },
           onExec: (cmd, r) => {
             setExecLines((prev) => [...prev, { cmd, result: r }]);
-            schedulePersist();
+            // fire-and-forget: 不 await, 不阻塞 agent 循环; 取消/崩溃时画布 XML 已落库, 切回可续
+            persistCanvasXml().catch(() => {});
           },
         },
       });
@@ -578,7 +591,7 @@ export default function ChatApp() {
       setMessages((prev) => prev.map((m) => (m.id === assistantMsg.id ? { ...m, content: result.finalText, streaming: false } : m)));
 
       // history 累积(截断 8 条, 只存文本)
-      const newHistory = [...history, { role: 'user', content: finalText }, { role: 'assistant', content: result.finalText }].slice(-8);
+      const newHistory = [...history, { role: 'user', content: finalText }, { role: 'assistant', content: result.finalText }].slice(-20);
       setHistory(newHistory);
 
       // AI 全部完成后立即持久化画布
@@ -595,6 +608,8 @@ export default function ChatApp() {
         fetchUsage();
       } else if (aborted) {
         loggerRef.current.errorEvent('user_stop', e);
+        // 保留用户意图到 history: 取消后输入"继续"时 LLM 知道刚才在做什么, 而非拿到空上下文
+        setHistory((prev) => [...prev, { role: 'user', content: finalText }].slice(-20));
         // 兜底标题: 中止时若标题还没生成, 用占位"新会话"让会话进列表可识别
         const st = useSessionStore.getState();
         const cur = st.sessions.find((s) => s.id === st.currentSessionId);
@@ -605,9 +620,16 @@ export default function ChatApp() {
       } else {
         setError(msg);
       }
-      setMessages((prev) => prev.map((m) => (m.id === assistantMsg.id
-        ? { ...m, streaming: false, content: aborted ? m.content : (m.content || '（出错）') }
-        : m)));
+      setMessages((prev) => {
+        const cur = prev.find((m) => m.id === assistantMsg.id);
+        // 取消时若还没有文字内容, 直接移除空气泡
+        if (aborted && cur && !cur.content.trim()) {
+          return prev.filter((m) => m.id !== assistantMsg.id);
+        }
+        return prev.map((m) => (m.id === assistantMsg.id
+          ? { ...m, streaming: false, content: m.content || '（出错）' }
+          : m));
+      });
     } finally {
       // 落库(成功/中止/出错都落): 主动停止的会话也要持久化, 才会出现在历史列表
       loggerRef.current.flush();
@@ -812,7 +834,7 @@ export default function ChatApp() {
                   <img src={m.image} className="msg-image" alt="题目图片（点击放大）" onClick={() => setLightbox(m.image!)} />
                 );
               } else if (m.role === 'assistant') {
-                const preText = m.streaming && !m.content;
+                const preText = m.streaming && !m.content.trim();
                 body = (
                   <>
                     {m.ocr?.state === 'done' && (
