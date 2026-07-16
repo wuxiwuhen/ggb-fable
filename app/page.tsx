@@ -1,7 +1,7 @@
-// 产品落地页(公开): 介绍 GGB Fable + 引导登录/进入工作台
+// 产品落地页(公开): 介绍 GGB Fable + 引导登录/进入工作台 + 案例展示弹窗
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth';
 
@@ -14,6 +14,95 @@ const FEATURES = [
   { ico: '👁️', title: '视觉渲染检查', desc: '截图交视觉模型检查标签遮挡、辅助线型、角弧方向，闭合"画得满不满意"最后一环。' },
 ];
 
+const DEMOS = [
+  {
+    title: '正六边形',
+    desc: '圆的内接正六边形，尺规作图经典构造',
+    type: 'image' as const,
+    src: '/demos/hexagon.png',
+  },
+  {
+    title: '二次函数图像',
+    desc: '自动求顶点、对称轴与 x 轴交点',
+    type: 'image' as const,
+    src: '/demos/quadratic.png',
+  },
+  {
+    title: '圆的周长',
+    desc: '圆沿 x 轴滚动一周，验证周长公式 C=2πr',
+    type: 'video' as const,
+    src: '/demos/rolling-circle.mp4',
+  },
+  {
+    title: '圆锥螺线',
+    desc: '3D 空间 · 动点沿圆锥表面螺旋上升',
+    type: 'video' as const,
+    src: '/demos/helix-cone.mp4',
+  },
+];
+
+// ── 案例展示弹窗：自动轮播 4 个案例 ──
+// 图片: 8s 后自动切; 视频: 播完自动切; 手动切重置计时器
+function DemoModal({ onClose }: { onClose: () => void }) {
+  const [idx, setIdx] = useState(0);
+  const current = DEMOS[idx];
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const nextRef = useRef<() => void>(() => {});
+
+  const next = useCallback(() => {
+    setIdx((i) => (i + 1) % DEMOS.length);
+  }, []);
+
+  // 手动切换: 清计时器, 切到目标, 由 effect 重新调度
+  const goTo = useCallback((i: number) => {
+    if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null; }
+    setIdx(i);
+  }, []);
+
+  const prev = useCallback(() => goTo((idx - 1 + DEMOS.length) % DEMOS.length), [idx, goTo]);
+
+  // 根据当前项类型调度下次切换
+  useEffect(() => {
+    if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null; }
+    if (current.type === 'image') {
+      timerRef.current = setTimeout(next, 8000);
+    }
+    // 视频: 不设定时器, 靠 onEnded 回调切
+    return () => { if (timerRef.current) clearTimeout(timerRef.current); };
+  }, [idx, current.type, next]);
+
+  // 保持 nextRef 最新, 供视频 onEnded 使用
+  nextRef.current = next;
+
+  return (
+    <div className="modal-mask" onClick={onClose}>
+      <div className="demo-modal" onClick={(e) => e.stopPropagation()}>
+        <button className="xhs-modal-close" onClick={onClose}>✕</button>
+
+        <div className="demo-stage">
+          <button className="demo-arrow demo-arrow-left" onClick={prev}>‹</button>
+          {current.type === 'video' ? (
+            <video key={current.src} src={current.src} autoPlay muted playsInline className="demo-media"
+              onEnded={() => nextRef.current()} />
+          ) : (
+            <img key={current.src} src={current.src} alt={current.title} className="demo-media" />
+          )}
+          <button className="demo-arrow demo-arrow-right" onClick={next}>›</button>
+        </div>
+
+        <h2 className="demo-title">{current.title}</h2>
+        <p className="demo-desc">{current.desc}</p>
+
+        <div className="demo-dots">
+          {DEMOS.map((_, i) => (
+            <button key={i} className={`demo-dot${i === idx ? ' active' : ''}`} onClick={() => goTo(i)} />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function LandingPage() {
   const { user, isAdmin, loading, adminLoading } = useAuth();
   const authReady = !loading;
@@ -21,6 +110,7 @@ export default function LandingPage() {
   const ctaHref = user ? '/app' : '/login';
   const ctaLabel = user ? '进入工作台' : '立即体验';
   const [xhsOpen, setXhsOpen] = useState(false);
+  const [demoOpen, setDemoOpen] = useState(false);
 
   return (
     <div className="landing">
@@ -69,7 +159,10 @@ export default function LandingPage() {
         </p>
         <div className="landing-cta fade-up d3">
           {authReady ? (
-            <Link className="btn primary lg" href={ctaHref} style={{ padding: '14px 40px', fontSize: 17 }}>{ctaLabel} →</Link>
+            <>
+              <Link className="btn primary lg" href={ctaHref} style={{ padding: '14px 40px', fontSize: 17 }}>{ctaLabel} →</Link>
+              <button className="btn primary lg" onClick={() => setDemoOpen(true)} style={{ padding: '14px 40px', fontSize: 17, background: '#fff', color: '#4f46e5', border: '2px solid #c7d2fe' }}>案例展示</button>
+            </>
           ) : (
             <span className="btn primary lg" style={{ padding: '14px 40px', fontSize: 17, opacity: 0.7, cursor: 'default' }}>···</span>
           )}
@@ -116,6 +209,9 @@ export default function LandingPage() {
           </div>
         </div>
       )}
+
+      {/* 案例展示弹窗 */}
+      {demoOpen && <DemoModal onClose={() => setDemoOpen(false)} />}
     </div>
   );
 }

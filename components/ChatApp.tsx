@@ -39,13 +39,24 @@ interface Msg {
 }
 
 const EXAMPLES = [
-  { label: '三角形内角和', prompt: '画一个三角形 ABC, 标注三个内角, 并测量内角和' },
-  { label: '二次函数', prompt: '画抛物线 y = x^2 - 4x + 3, 标出顶点、与 x 轴交点' },
-  { label: '动态圆', prompt: '用一个滑块 a 控制圆的半径, 展示圆随半径变化' },
-  { label: '三角函数', prompt: '画单位圆和角 θ 的终边, 展示 sin/cos 的几何意义' },
+  { label: '正六边形', prompt: '画一个圆，作出它的内接正六边形，用不同颜色区分圆和六边形' },
+  { label: '二次函数', prompt: '画抛物线 y = x^2 - 4x + 3, 标出对称轴、顶点、与 x 轴交点' },
+  { label: '圆的周长', prompt: '画一个半径为 r 的圆，让它沿 x 轴纯滚动一周。用滑块 r（1~4，初值2）控制半径。标注圆心起点和终点，展示圆心移动距离 = 圆周长 2πr。启动动画演示滚动过程。' },
+  { label: '圆锥螺线', prompt: '画一个高为6、底面半径为3的圆锥体。在圆锥表面上创建一个动点P，让它从底面边缘沿圆锥表面螺旋上升到顶点，画出P的运动轨迹（圆锥螺线），启动动画展示动点盘旋上升的过程。' },
 ];
 
 let msgId = 0;
+
+// fetch 超时兜底: 浏览器原生 fetch 无默认超时, 网络异常时可能永久挂起
+async function fetchWithTimeout(url: string, ms: number): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), ms);
+  try {
+    return await fetch(url, { cache: 'no-store', signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 // 工具名 → 阶段名词(输出气泡首字文本前, 把工具调用映射成可见的过程阶段)
 const PHASE_LABEL: Record<string, string> = {
@@ -407,7 +418,8 @@ export default function ChatApp() {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch('/api/sessions', { cache: 'no-store' });
+        // 30s 超时兜底: 浏览器 fetch 无默认超时, 网络异常时可能永久挂起 → sessionsLoading 卡死
+        const res = await fetchWithTimeout('/api/sessions', 10000);
         const data = await res.json();
         const list: any[] = data.sessions || [];
         if (cancelled) { setSessionsLoading(false); return; }
@@ -469,7 +481,6 @@ export default function ChatApp() {
     const typed = input.trim();
     const hasImage = !!imgPreview;
     if ((!typed && !hasImage) || sending) return;
-    if (sessionsLoading) return;
     if (!useSessionStore.getState().currentSessionId) {
       await newSession();  // 惰性创建
       // 重入保护: newSession 可能因并发调用而提前返回; 再次确认是否已有会话
@@ -579,8 +590,7 @@ export default function ChatApp() {
           },
           onExec: (cmd, r) => {
             setExecLines((prev) => [...prev, { cmd, result: r }]);
-            // fire-and-forget: 不 await, 不阻塞 agent 循环; 取消/崩溃时画布 XML 已落库, 切回可续
-            persistCanvasXml().catch(() => {});
+            schedulePersist();
           },
         },
       });
@@ -632,7 +642,7 @@ export default function ChatApp() {
       });
     } finally {
       // 落库(成功/中止/出错都落): 主动停止的会话也要持久化, 才会出现在历史列表
-      loggerRef.current.flush();
+      await loggerRef.current.flush();
       setSending(false);
       streamBuf.current = null;
     }
