@@ -353,10 +353,51 @@ export default function ChatApp() {
   }, [config, setSessions, setCurrent, upsert, cancelPersist, persistCanvasXml]);
 
   const clearWorkspace = useCallback(async () => {
-    if (!currentSessionId) return;
-    if (messages.length === 0 && !(ggbRef.current?.getCommandLog() || []).length) return;
-    // 清空前持久化当前画布(防手工内容丢失)
-    await persistCanvasXml();
+    const hasContent = (ggbRef.current?.getCommandLog() || []).length > 0;
+
+    // 有会话且有内容 → 持久化当前画布 → 清空 → 解除关联
+    if (currentSessionId && (messages.length > 0 || hasContent)) {
+      await persistCanvasXml();
+      cancelPersist();
+      abortRef.current?.abort();
+      setError('');
+      setMessages([]);
+      setTrace([]);
+      setExecLines([]);
+      setHistory([]);
+      await ggbRef.current?.clearAll();
+      setCurrent(null);
+      setCanvasPerspective(null);
+      return;
+    }
+
+    // 无会话但有画布内容（如直接在命令面板绘图） → 先捕获 XML → 清空 → 自动保存为新会话
+    if (!currentSessionId && hasContent) {
+      const xml = ggbRef.current?.getXML?.() || '';
+      cancelPersist();
+      abortRef.current?.abort();
+      setError('');
+      setMessages([]);
+      setTrace([]);
+      setExecLines([]);
+      setHistory([]);
+      await ggbRef.current?.clearAll();
+      const id = crypto.randomUUID();
+      const now = new Date().toISOString();
+      upsert({ id, title: '手动绘制', mode: config.mode, model: null, pinned: false, created_at: now, updated_at: now });
+      setCurrent(id);
+      loggerRef.current.setSession(id);
+      setCanvasPerspective(null);
+      setSidebarOpen(false);
+      // 异步落库（含画布 XML + 标题）
+      fetch('/api/sessions', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'create', id, mode: config.mode, model: config.mode === 'trial' ? 'deepseek' : config.getActiveByok()?.model_name, canvas_xml: xml, title: '手动绘制' }),
+      }).catch(() => {});
+      return;
+    }
+
+    // 无会话也无内容 → 仅重置状态（兜底）
     cancelPersist();
     abortRef.current?.abort();
     setError('');
@@ -365,9 +406,8 @@ export default function ChatApp() {
     setExecLines([]);
     setHistory([]);
     await ggbRef.current?.clearAll();
-    setCurrent(null);   // 解除侧边栏选中(旧会话已清空, 不算当前)
     setCanvasPerspective(null);
-  }, [currentSessionId, messages, cancelPersist, persistCanvasXml, setCurrent, ggbRef]);
+  }, [currentSessionId, messages, config, cancelPersist, persistCanvasXml, setCurrent, upsert, ggbRef]);
 
   // 切换会话: 先持久化离开的会话 → 加载 → 重建 chat/trace/history → setXML 还原画布 → 设为当前
   const switchSession = useCallback(async (id: string) => {
