@@ -114,6 +114,7 @@ export default function ChatApp() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [chatCollapsed, setChatCollapsed] = useState(false);
   const [commandPanelOpen, setCommandPanelOpen] = useState(false);
+  const [commandPanelKey, setCommandPanelKey] = useState(0);
   const [canvasPerspective, setCanvasPerspective] = useState<string | null>(null); // 当前画布视角(null=2D)
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [feedbackText, setFeedbackText] = useState('');
@@ -353,27 +354,17 @@ export default function ChatApp() {
   }, [config, setSessions, setCurrent, upsert, cancelPersist, persistCanvasXml]);
 
   const clearWorkspace = useCallback(async () => {
-    const hasContent = (ggbRef.current?.getCommandLog() || []).length > 0;
+    // 重置命令面板（保持在命令面板模式，仅清空输入）
+    setCommandPanelKey((k) => k + 1);
 
-    // 有会话且有内容 → 持久化当前画布 → 清空 → 解除关联
-    if (currentSessionId && (messages.length > 0 || hasContent)) {
-      await persistCanvasXml();
-      cancelPersist();
-      abortRef.current?.abort();
-      setError('');
-      setMessages([]);
-      setTrace([]);
-      setExecLines([]);
-      setHistory([]);
-      await ggbRef.current?.clearAll();
-      setCurrent(null);
-      setCanvasPerspective(null);
-      return;
-    }
+    const hasCommands = (ggbRef.current?.getCommandLog() || []).length > 0;
+    const hasCanvasElements = /<element\b/.test(ggbRef.current?.getXML?.() || '');
+    const hasContent = hasCommands || hasCanvasElements;
 
-    // 无会话但有画布内容（如直接在命令面板绘图） → 先捕获 XML → 清空 → 自动保存为新会话
+    // 无会话但有画布内容（如直接在命令面板绘图） → 捕获 XML + execLines → 清空 → 自动保存为新会话
     if (!currentSessionId && hasContent) {
       const xml = ggbRef.current?.getXML?.() || '';
+      const capturedExecs = execLines.filter((e) => e.result?.ok);  // 入库前捕获成功命令
       cancelPersist();
       abortRef.current?.abort();
       setError('');
@@ -385,18 +376,34 @@ export default function ChatApp() {
       const id = crypto.randomUUID();
       const now = new Date().toISOString();
       upsert({ id, title: '手动绘制', mode: config.mode, model: null, pinned: false, created_at: now, updated_at: now });
-      // 不设 currentSessionId，保持 null，让用户点击侧边栏时走 switchSession 正常加载画布
       setCanvasPerspective(null);
       setSidebarOpen(false);
-      // 异步落库（含画布 XML + 标题）
-      fetch('/api/sessions', {
+      // 创建会话 + 写入画布 XML + 写入命令历史
+      await fetch('/api/sessions', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'create', id, mode: config.mode, model: config.mode === 'trial' ? 'deepseek' : config.getActiveByok()?.model_name, canvas_xml: xml, title: '手动绘制' }),
-      }).catch(() => {});
+      });
+      if (capturedExecs.length > 0) {
+        const events = capturedExecs.map((e) => ({
+          ts: Date.now(),
+          type: 'ggb_exec' as const,
+          command: e.cmd,
+          ok: e.result?.ok ?? true,
+          labels: e.result?.labels ?? '',
+          error: e.result?.error ?? '',
+        }));
+        await fetch('/api/sessions', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'append', sessionId: id, events }),
+        });
+      }
       return;
     }
 
-    // 无会话也无内容 → 仅重置状态（兜底）
+    if (!currentSessionId) return;
+    if (messages.length === 0 && !hasContent) return;
+    // 清空前持久化当前画布(防手工内容丢失)
+    await persistCanvasXml();
     cancelPersist();
     abortRef.current?.abort();
     setError('');
@@ -405,8 +412,9 @@ export default function ChatApp() {
     setExecLines([]);
     setHistory([]);
     await ggbRef.current?.clearAll();
+    setCurrent(null);   // 解除侧边栏选中(旧会话已清空, 不算当前)
     setCanvasPerspective(null);
-  }, [currentSessionId, messages, config, cancelPersist, persistCanvasXml, setCurrent, upsert, ggbRef]);
+  }, [currentSessionId, messages, execLines, cancelPersist, persistCanvasXml, setCurrent, upsert, ggbRef]);
 
   // 切换会话: 先持久化离开的会话 → 加载 → 重建 chat/trace/history → setXML 还原画布 → 设为当前
   const switchSession = useCallback(async (id: string) => {
@@ -874,7 +882,20 @@ export default function ChatApp() {
         {!chatCollapsed && (
         <section className="pane chat-pane">
           {commandPanelOpen ? (
-            <GgbCommandPanel ggbRef={ggbRef} execLines={execLines} currentSessionId={currentSessionId} onClose={() => setCommandPanelOpen(false)} />
+            <GgbCommandPanel
+              key={commandPanelKey}
+              ggbRef={ggbRef}
+              execLines={execLines}
+              currentSessionId={currentSessionId}
+              onClose={() => setCommandPanelOpen(false)}
+              onExec={(cmd, r) => {
+                setExecLines((prev) => [...prev, { cmd, result: r }]);
+                if (useSessionStore.getState().currentSessionId) {
+                  loggerRef.current.ggbExec({ command: cmd, ok: r.ok, labels: r.labels, error: r.error });
+                  loggerRef.current.flush();
+                }
+              }}
+            />
           ) : (
           <>
           <div className="messages">

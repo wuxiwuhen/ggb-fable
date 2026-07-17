@@ -1,7 +1,7 @@
 'use client';
 
 // GeoGebra 命令输入面板：替换对话区，提供手动输入 GGB 命令、载入历史、清空画布等功能
-// 历史数据来源：GGB 内存 commandLog + 当前会话的 execLines（二者合并去重）
+// 手动命令通过 onExec 回调交给 ChatApp 统一入库（ggb_exec → execLines），与 AI 命令同一数据源
 
 import { useState, useCallback, useEffect, useRef } from 'react';
 import type { GGB, GgbExecResult } from '@/lib/ggb';
@@ -12,6 +12,7 @@ interface Props {
   execLines: ExecLine[];
   currentSessionId: string | null;
   onClose: () => void;
+  onExec: (cmd: string, result: GgbExecResult) => void;
 }
 
 interface FailedEntry {
@@ -19,7 +20,7 @@ interface FailedEntry {
   error: string;
 }
 
-export default function GgbCommandPanel({ ggbRef, execLines, currentSessionId, onClose }: Props) {
+export default function GgbCommandPanel({ ggbRef, execLines, currentSessionId, onClose, onExec }: Props) {
   const [commandInput, setCommandInput] = useState('');
   const [failedCommands, setFailedCommands] = useState<FailedEntry[]>([]);
   const [executing, setExecuting] = useState(false);
@@ -58,35 +59,23 @@ export default function GgbCommandPanel({ ggbRef, execLines, currentSessionId, o
     }
   }, [ggbRef]);
 
-  // 载入历史：合并 GGB 内存 commandLog + 会话 execLines → 直接粘贴到输入框
+  // 载入历史：统一从 execLines 读取（AI + 手动命令均入库到此）
   const handleLoadHistory = useCallback(() => {
-    const fromGgb = (ggbRef.current?.getCommandLog() || [])
-      .filter((entry) => entry.ok && !entry.ephemeral);
-
-    const fromSession = execLines
+    const lines = execLines
       .filter((line) => line.result?.ok)
-      .map((line) => ({ cmd: line.cmd }));
-
-    const seen = new Set<string>();
-    const lines: string[] = [];
-    for (const entry of [...fromGgb, ...fromSession]) {
-      const key = entry.cmd.trim();
-      if (!seen.has(key)) {
-        seen.add(key);
-        lines.push(key);
-      }
-    }
+      .map((line) => line.cmd.trim())
+      .filter((cmd, i, arr) => arr.indexOf(cmd) === i);  // 去重
     if (lines.length > 0) {
       setCommandInput(lines.join('\n'));
     }
-  }, [ggbRef, execLines]);
+  }, [execLines]);
 
   // 清空输入框
   const handleClearInput = useCallback(() => {
     setCommandInput('');
   }, []);
 
-  // 执行命令：逐行执行，仅收集失败项
+  // 执行命令：逐行执行，成功回调 onExec 入库，失败收集展示
   const handleExecute = useCallback(async () => {
     const text = commandInput.trim();
     if (!text || !ggbRef.current || executing) return;
@@ -98,7 +87,9 @@ export default function GgbCommandPanel({ ggbRef, execLines, currentSessionId, o
     for (const line of lines) {
       try {
         const r: GgbExecResult = await ggbRef.current.execCommand(line);
-        if (!r.ok) {
+        if (r.ok) {
+          onExec(line, r);
+        } else {
           failed.push({ cmd: line, error: r.error || '执行失败' });
         }
       } catch (e: any) {
@@ -109,7 +100,7 @@ export default function GgbCommandPanel({ ggbRef, execLines, currentSessionId, o
       setFailedCommands(failed);
     }
     setExecuting(false);
-  }, [commandInput, ggbRef, executing]);
+  }, [commandInput, ggbRef, executing, onExec]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -136,7 +127,7 @@ export default function GgbCommandPanel({ ggbRef, execLines, currentSessionId, o
           <button
             className="btn ghost sm"
             onClick={handleLoadHistory}
-            title="仅载入 AI 生成的绘制指令（不含手动操作和临时测量命令）"
+            title="载入本会话中执行成功的 AI 和手动命令"
           >
             📋 载入历史
           </button>
@@ -169,13 +160,13 @@ export default function GgbCommandPanel({ ggbRef, execLines, currentSessionId, o
                 <textarea
                   ref={textareaRef}
                   className="command-textarea"
-                value={commandInput}
-                onChange={(e) => setCommandInput(e.target.value)}
-                onKeyDown={handleKeyDown}
-                placeholder={'输入 GGB 命令，每行一条，如：\nA = (0, 0)\nB = (3, 4)\nCircle(A, B)'}
-                rows={1}
-                spellCheck={false}
-              />
+                  value={commandInput}
+                  onChange={(e) => setCommandInput(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  placeholder={'输入 GGB 命令，每行一条，如：\nA = (0, 0)\nB = (3, 4)\nCircle(A, B)'}
+                  rows={1}
+                  spellCheck={false}
+                />
               </div>
             </div>
             <div className="command-toolbar">

@@ -56,6 +56,8 @@ export async function POST(req: Request) {
       user_id: user.id, mode: body.mode || 'trial', model: body.model || null, title: body.title || null,
     };
     if (body.id) insertData.id = body.id;  // 客户端乐观创建: 预生成 UUID, 不等待服务端返回
+    if (body.canvas_xml !== undefined) insertData.canvas_xml = body.canvas_xml;   // 画布 XML 快照(命令面板手动绘制后保存)
+    if (body.perspective !== undefined) insertData.perspective = body.perspective;
     const { data } = await admin.from('sessions').insert(insertData).select('id').single();
     return json(200, { id: data?.id });
   }
