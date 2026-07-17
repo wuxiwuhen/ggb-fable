@@ -21,6 +21,7 @@ import { useGeogebra } from '@/hooks/useGeogebra';
 import { exportPng, startRecording, stopRecording, recordingFormat } from '@/lib/export-media';
 import MessageContent from './MessageContent';
 import TracePanel, { type TraceItem, type ExecLine } from './TracePanel';
+import GgbCommandPanel from './GgbCommandPanel';
 
 import { useSessionStore, getLastSessionId } from '@/lib/session-store';
 import { rebuildChatMessages, rebuildTrace, rebuildHistory, rebuildExecLines, type ApiMessage } from '@/lib/conversation';
@@ -112,6 +113,7 @@ export default function ChatApp() {
   const { sessions, currentSessionId, setSessions, setCurrent, upsert, patchCurrent } = useSessionStore();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [chatCollapsed, setChatCollapsed] = useState(false);
+  const [commandPanelOpen, setCommandPanelOpen] = useState(false);
   const [canvasPerspective, setCanvasPerspective] = useState<string | null>(null); // 当前画布视角(null=2D)
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [feedbackText, setFeedbackText] = useState('');
@@ -761,10 +763,20 @@ export default function ChatApp() {
             <span className="logo">📐</span>
             <span className="title">GGB Fable</span>
           </Link>
-          <button className="btn ghost" title="对话列表" data-tour="sessions-toggle" onClick={() => setSidebarOpen(true)}>☰</button>
-          <button className="btn ghost" title="清空工作区" onClick={clearWorkspace}>+</button>
-          <button className="btn ghost" title={chatCollapsed ? '展开对话框' : '收起对话框（全屏画布）'} data-tour="collapse-chat" onClick={toggleChatCollapse}>
+          <button className="btn ghost topbar-icon-btn" title="对话列表" data-tour="sessions-toggle" onClick={() => setSidebarOpen(true)}>☰</button>
+          <button className="btn ghost topbar-icon-btn" title="清空工作区" onClick={clearWorkspace}>+</button>
+          <button className="btn ghost topbar-icon-btn" title={chatCollapsed ? '展开对话框' : '收起对话框（全屏画布）'} data-tour="collapse-chat" onClick={toggleChatCollapse}>
             {chatCollapsed ? '◨' : '◧'}
+          </button>
+          <button
+            className={`btn ghost topbar-icon-btn${commandPanelOpen ? ' active' : ''}`}
+            title={commandPanelOpen ? '返回对话模式' : 'GeoGebra 命令面板'}
+            onClick={() => setCommandPanelOpen((v) => !v)}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="4 17 10 11 4 5" />
+              <line x1="12" y1="19" x2="20" y2="19" />
+            </svg>
           </button>
         </div>
         <div className="top-actions">
@@ -822,7 +834,10 @@ export default function ChatApp() {
       <main className="layout">
         {!chatCollapsed && (
         <section className="pane chat-pane">
-
+          {commandPanelOpen ? (
+            <GgbCommandPanel ggbRef={ggbRef} execLines={execLines} currentSessionId={currentSessionId} onClose={() => setCommandPanelOpen(false)} />
+          ) : (
+          <>
           <div className="messages">
             {messages.length === 0 && (
               <div className="welcome">
@@ -919,6 +934,8 @@ export default function ChatApp() {
               {config.mode === 'byok' && !config.isByokValid() ? '⚠ 未配置 BYOK 模型，请到设置页填写' : '就绪 · Cmd/Ctrl+Enter 发送'}
             </div>
           </div>
+          </>
+          )}
         </section>
         )}
 
