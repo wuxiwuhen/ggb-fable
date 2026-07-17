@@ -385,8 +385,7 @@ export default function ChatApp() {
       const id = crypto.randomUUID();
       const now = new Date().toISOString();
       upsert({ id, title: '手动绘制', mode: config.mode, model: null, pinned: false, created_at: now, updated_at: now });
-      setCurrent(id);
-      loggerRef.current.setSession(id);
+      // 不设 currentSessionId，保持 null，让用户点击侧边栏时走 switchSession 正常加载画布
       setCanvasPerspective(null);
       setSidebarOpen(false);
       // 异步落库（含画布 XML + 标题）
