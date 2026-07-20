@@ -197,5 +197,8 @@ INSERT INTO app_config (key, value) VALUES
   ('prompt_version', '{"active":"v1"}'::jsonb)
 ON CONFLICT (key) DO NOTHING;
 
+-- 默认拒绝 anon/authenticated 直连; endpoint 用 service_role 绕过 RLS(同其他表)
+alter table public.app_config enable row level security;
+
 -- 管理员预览覆盖(跨设备): null = 走全局 active
 ALTER TABLE profiles ADD COLUMN IF NOT EXISTS prompt_preview_version text;

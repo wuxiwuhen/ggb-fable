@@ -70,7 +70,7 @@ export function resolvePrompt(
 export interface EffectivePrompt {
   version: string;
   text: string;
-  source: 'global' | 'preview' | 'fallback';
+  source: 'global' | 'preview' | 'fallback';   // 保留供诊断/TracePanel 展示(当前 ChatApp 仅用 text)
 }
 
 // 主入口: 服务端解析生效版本 → 拉文件 → 回退链

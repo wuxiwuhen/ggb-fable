@@ -78,8 +78,9 @@ export async function POST(req: Request) {
       .update({ value: { active: version }, updated_at: new Date().toISOString() })
       .eq('key', 'prompt_version');
     if (e1) return json(500, { error: '发布失败: ' + e1.message });
-    // 发布即对全员含自己生效 → 清掉自己 preview
-    await sb.from('profiles').update({ prompt_preview_version: null }).eq('user_id', adminUser.id);
+    // 同时清掉自己 preview(发布即对全员含自己生效, 避免陷入旧 preview)
+    const { error: e2 } = await sb.from('profiles').update({ prompt_preview_version: null }).eq('user_id', adminUser.id);
+    if (e2) return json(500, { error: '已发布全局版本, 但清除你的预览失败, 请在提示词版本页手动重置预览: ' + e2.message });
     return json(200, { ok: true, active: version, preview: null });
   }
 
