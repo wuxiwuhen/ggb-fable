@@ -185,3 +185,17 @@ alter table public.feedback enable row level security;
 drop policy if exists "feedback_owner_select" on public.feedback;
 create policy "feedback_owner_select" on public.feedback
   for select using (auth.uid() = user_id);
+
+-- ===== 提示词版本化(2026-07-20)=====
+-- 全局应用配置 key/value(active 提示词版本等)
+CREATE TABLE IF NOT EXISTS app_config (
+  key        text primary key,
+  value      jsonb not null,
+  updated_at timestamptz not null default now()
+);
+INSERT INTO app_config (key, value) VALUES
+  ('prompt_version', '{"active":"v1"}'::jsonb)
+ON CONFLICT (key) DO NOTHING;
+
+-- 管理员预览覆盖(跨设备): null = 走全局 active
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS prompt_preview_version text;
