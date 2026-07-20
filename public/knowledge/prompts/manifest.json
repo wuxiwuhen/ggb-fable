@@ -1,0 +1,5 @@
+{
+  "versions": [
+    { "id": "v1", "label": "当前线上版", "description": "从 agent.ts 迁移, 行为零变化" }
+  ]
+}
