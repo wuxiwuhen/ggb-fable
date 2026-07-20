@@ -14,6 +14,7 @@ import { Logger } from '@/lib/logger';
 import { CommandSearch, type EmbedFunction, makeEmbeddingModelKey, TRIAL_MODEL_KEY } from '@/lib/command-search';
 import { AgentEngine, type AgentBackend } from '@/lib/agent';
 import { makeTrialBackend, makeByokBackend } from '@/lib/agent-backend';
+import { getEffectivePrompt, EMERGENCY_PROMPT } from '@/lib/prompt-loader';
 import { makeTrialEmbed, makeByokEmbed } from '@/lib/embed';
 import { chatTrial, visionTrial, visionByok, type TrialContext } from '@/lib/llm';
 import { Vision } from '@/lib/vision';
@@ -157,7 +158,26 @@ export default function ChatApp() {
       csRef.current = cs;
     }
     if (!agentRef.current) {
-      agentRef.current = new AgentEngine({ ggb: ggbRef.current, commandSearch: csRef.current, logger: loggerRef.current });
+      let cancelled = false;
+      getEffectivePrompt().then(({ text }) => {
+        if (cancelled || !ggbRef.current || !csRef.current) return;
+        agentRef.current = new AgentEngine({
+          ggb: ggbRef.current,
+          commandSearch: csRef.current,
+          logger: loggerRef.current,
+          systemPrompt: text,
+        });
+      }).catch(() => {
+        // loader 已有内部回退, 此处理论不会到; 真到则用 EMERGENCY 兜底保证引擎仍可用
+        if (cancelled || !ggbRef.current || !csRef.current) return;
+        agentRef.current = new AgentEngine({
+          ggb: ggbRef.current,
+          commandSearch: csRef.current,
+          logger: loggerRef.current,
+          systemPrompt: EMERGENCY_PROMPT,
+        });
+      });
+      return () => { cancelled = true; };
     }
   }, [ggbReady, embedFn, ggbRef]);
 
