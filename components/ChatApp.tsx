@@ -252,15 +252,20 @@ export default function ChatApp() {
   useEffect(() => {
     const onUnload = () => {
       const sid = useSessionStore.getState().currentSessionId;
-      if (!sid || !ggbRef.current) return;
-      const xml = ggbRef.current.getXML();
-      if (!xml) return;
-      try {
-        navigator.sendBeacon('/api/sessions', new Blob(
-          [JSON.stringify({ action: 'update', id: sid, canvas_xml: xml })],
-          { type: 'application/json' },
-        ));
-      } catch (e) { /* 静默 */ }
+      // 画布 XML 兜底
+      if (sid && ggbRef.current) {
+        const xml = ggbRef.current.getXML();
+        if (xml) {
+          try {
+            navigator.sendBeacon('/api/sessions', new Blob(
+              [JSON.stringify({ action: 'update', id: sid, canvas_xml: xml })],
+              { type: 'application/json' },
+            ));
+          } catch (e) { /* 静默 */ }
+        }
+      }
+      // 消息兜底: 关页面前把残留消息按 sessionId 分组 sendBeacon 落库(与画布对称, 防刷新丢消息)
+      loggerRef.current.flushNow();
       cancelPersist();
     };
     window.addEventListener('beforeunload', onUnload);
@@ -326,9 +331,10 @@ export default function ChatApp() {
   // 不等待服务端 create 响应——消除 send 时的网络卡顿。
   const newSession = useCallback(async () => {
     if (creatingSessionRef.current) return;
-    if (currentSessionId && messages.length === 0 && !(ggbRef.current?.getCommandLog() || []).length) return;
+    const curId = useSessionStore.getState().currentSessionId;   // 读 fresh 值, 避免闭包陈旧
+    if (curId && messages.length === 0 && !(ggbRef.current?.getCommandLog() || []).length) return;
     creatingSessionRef.current = true;
-    if (currentSessionId) await persistCanvasXml();
+    if (curId) await persistCanvasXml();
     cancelPersist();
     abortRef.current?.abort();
     setError('');
@@ -339,7 +345,9 @@ export default function ChatApp() {
       const now = new Date().toISOString();
       upsert({ id, title: null, mode: config.mode, model: null, pinned: false, created_at: now, updated_at: now });
       setCurrent(id);
-      loggerRef.current.setSession(id);
+      // 切换前先把旧会话(curId)的消息可靠落库(分组 fetch), 再切到新会话——与 persistCanvasXml 对称。
+      // 替代旧的 setSession→flushNow(sendBeacon): sendBeacon 不保证送达, 是消息丢失根因。
+      await loggerRef.current.switchTo(id);
       setCanvasPerspective(null);
       setSidebarOpen(false);
       // 异步注册到服务端(不阻塞 UI); flush() 的 append 动作也会自动建会话——双保险
@@ -360,9 +368,10 @@ export default function ChatApp() {
     const hasCommands = (ggbRef.current?.getCommandLog() || []).length > 0;
     const hasCanvasElements = /<element\b/.test(ggbRef.current?.getXML?.() || '');
     const hasContent = hasCommands || hasCanvasElements;
+    const curId = useSessionStore.getState().currentSessionId;   // 读 fresh 值, 避免闭包陈旧
 
     // 无会话但有画布内容（如直接在命令面板绘图） → 捕获 XML + execLines → 清空 → 自动保存为新会话
-    if (!currentSessionId && hasContent) {
+    if (!curId && hasContent) {
       const xml = ggbRef.current?.getXML?.() || '';
       const capturedExecs = execLines.filter((e) => e.result?.ok);  // 入库前捕获成功命令
       cancelPersist();
@@ -400,10 +409,11 @@ export default function ChatApp() {
       return;
     }
 
-    if (!currentSessionId) return;
+    if (!curId) return;
     if (messages.length === 0 && !hasContent) return;
-    // 清空前持久化当前画布(防手工内容丢失)
+    // 清空前持久化当前画布 + 消息(防丢失): 画布走 persistCanvasXml, 消息走 logger.flush, 两者对称 await。
     await persistCanvasXml();
+    await loggerRef.current.flush();   // 旧会话消息可靠落库(分组 fetch), 与画布同等可靠
     cancelPersist();
     abortRef.current?.abort();
     setError('');
@@ -413,12 +423,13 @@ export default function ChatApp() {
     setHistory([]);
     await ggbRef.current?.clearAll();
     setCurrent(null);   // 解除侧边栏选中(旧会话已清空, 不算当前)
+    loggerRef.current.setSession('');  // 标记无会话: 防止后续 ggb.execCommand 内部 ggbExec 把无会话态画图事件 stamp 到旧会话造成污染
     setCanvasPerspective(null);
-  }, [currentSessionId, messages, execLines, cancelPersist, persistCanvasXml, setCurrent, upsert, ggbRef]);
+  }, [messages, execLines, cancelPersist, persistCanvasXml, setCurrent, upsert, ggbRef]);
 
   // 切换会话: 先持久化离开的会话 → 加载 → 重建 chat/trace/history → setXML 还原画布 → 设为当前
   const switchSession = useCallback(async (id: string) => {
-    if (id === currentSessionId) return;
+    if (id === useSessionStore.getState().currentSessionId) return;   // 读 fresh 值, 避免闭包陈旧导致保护失效
     cancelPersist();
     abortRef.current?.abort();
     setError('');
@@ -434,7 +445,9 @@ export default function ChatApp() {
       setHistory(rebuildHistory(messages));
       setExecLines(rebuildExecLines(messages));
       setCurrent(id);                      // 切到新会话(后续自愈 persistCanvasXml 用新 id)
-      loggerRef.current.setSession(id);
+      // 切换前先把离开会话的消息可靠落库(分组 fetch), 再切到新会话——与 persistCanvasXml 对称。
+      // 替代旧的 setSession→flushNow(sendBeacon): sendBeacon 不保证送达, 是消息丢失根因。
+      await loggerRef.current.switchTo(id);
       restoringRef.current = true;
       try {
         // 回退到线上已验证的恢复逻辑: reset + setXML (线上 clearAll 无 setPerspective)
@@ -458,7 +471,7 @@ export default function ChatApp() {
       setError('切换会话失败: ' + (e as any).message);
     }
     setSidebarOpen(false);
-  }, [currentSessionId, setCurrent, persistCanvasXml, cancelPersist, chatCollapsed]);
+  }, [setCurrent, persistCanvasXml, cancelPersist, chatCollapsed]);
 
   // 首次进入: 加载会话列表供侧边栏展示, 不自动恢复会话(刷新后直接空白画布)
   useEffect(() => {
@@ -667,6 +680,9 @@ export default function ChatApp() {
         fetchUsage();
       } else if (aborted) {
         loggerRef.current.errorEvent('user_stop', e);
+        // 补 turn_end(stopped): agent abort 时(throw '已中止')不调 turnEnd, 中止会话会缺 assistant 消息(只剩 user)。
+        // 用流式已累积文本 + 工具数生成 assistant 行, 保证中止会话切回后对话气泡完整。
+        loggerRef.current.turnEnd({ finalText: streamBuf.current?.text || '', toolCount: trace.length, stopped: true });
         // 保留用户意图到 history: 取消后输入"继续"时 LLM 知道刚才在做什么, 而非拿到空上下文
         setHistory((prev) => [...prev, { role: 'user', content: finalText }].slice(-20));
         // 兜底标题: 中止时若标题还没生成, 用占位"新会话"让会话进列表可识别
@@ -890,10 +906,8 @@ export default function ChatApp() {
               onClose={() => setCommandPanelOpen(false)}
               onExec={(cmd, r) => {
                 setExecLines((prev) => [...prev, { cmd, result: r }]);
-                if (useSessionStore.getState().currentSessionId) {
-                  loggerRef.current.ggbExec({ command: cmd, ok: r.ok, labels: r.labels, error: r.error });
-                  loggerRef.current.flush();
-                }
+                // 入库统一由 ggb.execCommand 内部(logger.ggbExec)单源承担, 此处不再重复 push
+                // (原双源导致手动命令历史重复)。无会话态命令不入库, 由 clearWorkspace 路径1 的 capturedExecs 处理。
               }}
             />
           ) : (
