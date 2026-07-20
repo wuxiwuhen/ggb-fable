@@ -30,7 +30,13 @@ interface MessageRow {
   created_at: string;
 }
 
-const TABS = ['额度管理', '用户反馈', '用户指令'] as const;
+interface PromptVersionInfo {
+  id: string;
+  label: string;
+  description?: string;
+}
+
+const TABS = ['额度管理', '用户反馈', '用户指令', '提示词版本'] as const;
 type Tab = (typeof TABS)[number];
 
 export default function AdminPage() {
@@ -43,6 +49,12 @@ export default function AdminPage() {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
   const [loadingTab, setLoadingTab] = useState(false);
+  const [pvActive, setPvActive] = useState<string | null>(null);
+  const [pvPreview, setPvPreview] = useState<string | null>(null);
+  const [pvManifest, setPvManifest] = useState<PromptVersionInfo[]>([]);
+  const [pvSelected, setPvSelected] = useState<string>('');
+  const [pvBusy, setPvBusy] = useState(false);
+  const [pvMsg, setPvMsg] = useState('');
 
   function buildParams(extra: Record<string, string> = {}): string {
     const p = new URLSearchParams(extra);
@@ -80,13 +92,62 @@ export default function AdminPage() {
     setMessageRows(data.rows || []);
   }
 
+  function labelOf(id: string | null): string {
+    if (!id) return '—';
+    return pvManifest.find((v) => v.id === id)?.label || id;
+  }
+
+  async function loadPromptVersions() {
+    setError(''); setLoadingTab(true);
+    const resp = await fetch('/api/admin/prompt-version');
+    setLoadingTab(false);
+    if (resp.status === 403) { setError('需要管理员权限'); return; }
+    if (!resp.ok) { setError('加载失败'); return; }
+    const data = await resp.json();
+    setPvActive(data.active || null);
+    setPvPreview(data.preview || null);
+    setPvManifest(data.manifest?.versions || []);
+    if (!pvSelected) setPvSelected(data.active || data.manifest?.versions?.[0]?.id || '');
+  }
+
+  async function pvPreviewAction() {
+    if (!pvSelected) return;
+    setPvBusy(true); setPvMsg('');
+    try {
+      const resp = await fetch('/api/admin/prompt-version', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'preview', version: pvSelected }),
+      });
+      const data = await resp.json();
+      if (!resp.ok) { setPvMsg('失败: ' + (data.error || resp.status)); return; }
+      setPvPreview(pvSelected);
+      setPvMsg(`已设为仅自己预览「${pvSelected}」(跨设备生效, 刷新 /app 后生效)`);
+    } finally { setPvBusy(false); }
+  }
+
+  async function pvPublishAction() {
+    if (!pvSelected) return;
+    if (!confirm(`确认把「${pvSelected}」发布给所有用户? 所有人下一条消息起生效。`)) return;
+    setPvBusy(true); setPvMsg('');
+    try {
+      const resp = await fetch('/api/admin/prompt-version', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'publish', version: pvSelected }),
+      });
+      const data = await resp.json();
+      if (!resp.ok) { setPvMsg('失败: ' + (data.error || resp.status)); return; }
+      setPvActive(pvSelected); setPvPreview(null);
+      setPvMsg(`已发布「${pvSelected}」给所有用户(自己的预览已同步清除)`);
+    } finally { setPvBusy(false); }
+  }
+
   useEffect(() => { if (user) loadUsage(); /* eslint-disable-next-line */ }, [user]);
   // 搜索触发所有 tab 重新加载
   useEffect(() => {
     if (!user) return;
     if (tab === '额度管理') loadUsage();
     else if (tab === '用户反馈') loadFeedback();
-    else loadMessages();
+    else if (tab === '用户指令') loadMessages();
     /* eslint-disable-next-line */
   }, [search]);
 
@@ -96,6 +157,7 @@ export default function AdminPage() {
     if (tab === '额度管理' && usageRows.length === 0) loadUsage();
     else if (tab === '用户反馈' && feedbackRows.length === 0) loadFeedback();
     else if (tab === '用户指令' && messageRows.length === 0) loadMessages();
+    else if (tab === '提示词版本' && pvManifest.length === 0) loadPromptVersions();
     /* eslint-disable-next-line */
   }, [tab]);
 
@@ -291,6 +353,63 @@ export default function AdminPage() {
                 </tbody>
               </table>
             </div>
+          </>
+        )}
+
+        {/* Tab: 提示词版本 */}
+        {tab === '提示词版本' && (
+          <>
+            <p style={S.sub}>
+              当前线上版本：<b>{pvActive ? labelOf(pvActive) : '—'}</b>
+              ｜我的预览版本：<b>{pvPreview ? labelOf(pvPreview) : '未设置'}</b>
+              <button style={{ ...S.btn, marginLeft: 12 }} onClick={loadPromptVersions} disabled={loadingTab}>刷新</button>
+            </p>
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center', margin: '12px 0', flexWrap: 'wrap' }}>
+              <select
+                value={pvSelected}
+                onChange={(e) => setPvSelected(e.target.value)}
+                style={{ padding: '7px 10px', border: '1px solid #e5e7eb', borderRadius: 8, fontSize: 13 }}
+              >
+                {pvManifest.map((v) => (
+                  <option key={v.id} value={v.id}>{v.id} · {v.label}</option>
+                ))}
+              </select>
+              <button style={S.btn} disabled={pvBusy || !pvSelected} onClick={pvPreviewAction}>仅自己预览</button>
+              <button
+                style={{ ...S.btn, background: '#4f46e5', color: '#fff', borderColor: '#4f46e5' }}
+                disabled={pvBusy || !pvSelected}
+                onClick={pvPublishAction}
+              >发布给所有用户</button>
+              {pvSelected && (
+                <a href={`/knowledge/prompts/${pvSelected}.md`} target="_blank" rel="noreferrer" style={{ fontSize: 13, color: '#4f46e5' }}>查看内容 ↗</a>
+              )}
+            </div>
+            {pvMsg && (
+              <div style={{ background: '#f0f9ff', color: '#0369a1', padding: '10px 14px', borderRadius: 6, marginBottom: 16, fontSize: 13 }}>{pvMsg}</div>
+            )}
+            <table style={S.table}>
+              <thead>
+                <tr>
+                  <th style={S.th}>版本</th>
+                  <th style={S.th}>标签</th>
+                  <th style={S.th}>说明</th>
+                  <th style={S.th}>状态</th>
+                </tr>
+              </thead>
+              <tbody>
+                {pvManifest.map((v) => (
+                  <tr key={v.id}>
+                    <td style={S.td}>{v.id}</td>
+                    <td style={S.td}>{v.label}</td>
+                    <td style={S.td}>{v.description || '-'}</td>
+                    <td style={S.td}>{v.id === pvActive ? '线上' : v.id === pvPreview ? '我的预览' : '-'}</td>
+                  </tr>
+                ))}
+                {pvManifest.length === 0 && !loadingTab && (
+                  <tr><td colSpan={4} style={{ ...S.td, textAlign: 'center', color: '#999' }}>暂无版本</td></tr>
+                )}
+              </tbody>
+            </table>
           </>
         )}
 
