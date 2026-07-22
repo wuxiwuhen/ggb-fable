@@ -2,6 +2,7 @@
 // GET  → { active, preview, manifest }
 // POST { action:"preview"|"publish", version } → 写 profiles 或 app_config
 import { getUserFromCookie, getSupabaseAdmin } from '@/lib/supabase';
+import { getPromptManifest, isKnownVersion } from '@/lib/server-prompts';
 
 export const runtime = 'edge';
 
@@ -20,17 +21,6 @@ function json(status: number, payload: any): Response {
   });
 }
 
-async function readManifest(req: Request): Promise<{ versions: Array<{ id: string }> }> {
-  try {
-    const url = new URL('/knowledge/prompts/manifest.json', req.url);
-    const resp = await fetch(url);
-    if (!resp.ok) return { versions: [] };
-    return await resp.json();
-  } catch {
-    return { versions: [] };
-  }
-}
-
 export async function GET(req: Request) {
   const adminUser = await requireAdmin(req);
   if (!adminUser) return json(403, { error: '需要管理员权限' });
@@ -47,8 +37,7 @@ export async function GET(req: Request) {
     .maybeSingle();
   const preview = prof?.prompt_preview_version || null;
 
-  const manifest = await readManifest(req);
-  return json(200, { active, preview, manifest });
+  return json(200, { active, preview, manifest: getPromptManifest() });
 }
 
 export async function POST(req: Request) {
@@ -61,10 +50,8 @@ export async function POST(req: Request) {
   const version = String(body?.version || '').trim();
   if (!version) return json(400, { error: '缺少 version' });
 
-  // 校验 version 在 manifest 内(防幽灵版本)
-  const manifest = await readManifest(req);
-  const known = (manifest.versions || []).some((v) => v.id === version);
-  if (!known) return json(400, { error: '未知版本: ' + version });
+  // 校验 version 存在(防幽灵版本)
+  if (!isKnownVersion(version)) return json(400, { error: '未知版本: ' + version });
 
   if (action === 'preview') {
     const { error } = await sb.from('profiles').update({ prompt_preview_version: version }).eq('user_id', adminUser.id);

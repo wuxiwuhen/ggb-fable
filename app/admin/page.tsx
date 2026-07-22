@@ -381,7 +381,7 @@ export default function AdminPage() {
                 onClick={pvPublishAction}
               >发布给所有用户</button>
               {pvSelected && (
-                <a href={`/knowledge/prompts/${pvSelected}.md`} target="_blank" rel="noreferrer" style={{ fontSize: 13, color: '#4f46e5' }}>查看内容 ↗</a>
+                <a href={`/api/admin/prompt-version/file?id=${pvSelected}`} target="_blank" rel="noreferrer" style={{ fontSize: 13, color: '#4f46e5' }}>查看内容 ↗</a>
               )}
             </div>
             {pvMsg && (
