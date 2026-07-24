@@ -24,27 +24,60 @@ export async function GET(req: Request) {
 
   const url = new URL(req.url);
   const searchEmail = url.searchParams.get('email')?.trim().toLowerCase();
-  const limit = Math.min(Number(url.searchParams.get('limit')) || 10, 200);
+  const limit = Math.min(Number(url.searchParams.get('limit')) || 200, 500);
 
   const admin = getSupabaseAdmin();
-  const { data: usage } = await admin.from('usage').select('user_id, used, trial_limit').limit(limit);
-  const { data: profiles } = await admin.from('profiles').select('user_id, email');
-  const emailMap = new Map((profiles || []).map((p: any) => [p.user_id, p.email]));
 
-  let rows = (usage || []).map((u: any) => ({
+  // 邮箱搜索: 先在 profiles 表按 email 匹配到 user_id, 再回查 usage。
+  // 必须先过滤再取数 —— 旧实现「先 limit 再在内存里 filter」会导致
+  // 用户数超过 limit 时把目标用户截掉, 连邮箱搜索都搜不到(线上已发生)。
+  if (searchEmail) {
+    const { data: matchedProfiles } = await admin
+      .from('profiles')
+      .select('user_id')
+      .ilike('email', `%${searchEmail}%`)
+      .limit(50);
+
+    const matchedIds = (matchedProfiles || []).map((p: any) => p.user_id);
+    if (matchedIds.length === 0) return json(200, { rows: [] });
+
+    const { data: usage } = await admin
+      .from('usage')
+      .select('user_id, used, trial_limit')
+      // usage.user_id 是主键, 与 matchedIds 一一对应(且 matchedIds 已被上面 limit(50) 兜底),
+      // 查询最多返回 50 行 —— 这里不再加 limit, 让「搜索结果=全部匹配」的意图干净
+      .in('user_id', matchedIds)
+      .order('updated_at', { ascending: false });
+
+    return json(200, { rows: await enrichUsage(usage, admin) });
+  }
+
+  // 无搜索: 按最近更新排序取 limit 条(加 order by, 避免无序漏人)
+  const { data: usage } = await admin
+    .from('usage')
+    .select('user_id, used, trial_limit')
+    .order('updated_at', { ascending: false })
+    .limit(limit);
+
+  return json(200, { rows: await enrichUsage(usage, admin) });
+}
+
+// usage 行配对 email(LEFT JOIN profiles), 搜索/列表两条路径复用
+async function enrichUsage(usage: any[] | null, admin: any) {
+  if (!usage || usage.length === 0) return [];
+  const userIds = [...new Set(usage.map((u: any) => u.user_id))];
+  const { data: profiles } = await admin
+    .from('profiles')
+    .select('user_id, email')
+    .in('user_id', userIds);
+  const emailMap = new Map((profiles || []).map((p: any) => [p.user_id, p.email]));
+  return usage.map((u: any) => ({
     user_id: u.user_id,
     email: emailMap.get(u.user_id) || '',
     used: u.used,
     limit: u.trial_limit,
     remaining: Math.max(0, u.trial_limit - u.used),
   }));
-
-  // 邮箱搜索
-  if (searchEmail) {
-    rows = rows.filter((r) => r.email.toLowerCase().includes(searchEmail));
-  }
-
-  return json(200, { rows });
 }
 
 export async function POST(req: Request) {
