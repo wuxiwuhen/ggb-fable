@@ -38,12 +38,15 @@ interface PromptVersionInfo {
 
 const TABS = ['额度管理', '用户反馈', '用户指令', '提示词版本'] as const;
 type Tab = (typeof TABS)[number];
+const PAGE_SIZE = 20; // 额度管理每页条数
 
 export default function AdminPage() {
   const { user, loading, isAdmin, adminLoading } = useAuth();
   const [tab, setTab] = useState<Tab>('额度管理');
   const [search, setSearch] = useState('');
   const [usageRows, setUsageRows] = useState<UsageRow[]>([]);
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
   const [feedbackRows, setFeedbackRows] = useState<FeedbackRow[]>([]);
   const [messageRows, setMessageRows] = useState<MessageRow[]>([]);
   const [error, setError] = useState('');
@@ -62,14 +65,22 @@ export default function AdminPage() {
     return p.toString();
   }
 
-  async function loadUsage() {
+  async function loadUsage(targetPage: number) {
     setError(''); setLoadingTab(true);
-    const resp = await fetch(`/api/admin/usage?${buildParams({ limit: '10' })}`);
+    const resp = await fetch(`/api/admin/usage?${buildParams({ page: String(targetPage), pageSize: String(PAGE_SIZE) })}`);
     setLoadingTab(false);
     if (resp.status === 403) { setError('需要管理员权限'); return; }
     if (!resp.ok) { setError('加载失败'); return; }
     const data = await resp.json();
+    const t = data.total ?? 0;
+    // 越界兜底: 当前页空且非第 1 页(如翻页期间有用户注销) → 回退到末页重查
+    if ((!data.rows || data.rows.length === 0) && targetPage > 1 && t > 0) {
+      const last = Math.max(1, Math.ceil(t / PAGE_SIZE));
+      if (last < targetPage) return loadUsage(last);
+    }
     setUsageRows(data.rows || []);
+    setTotal(t);
+    setPage(targetPage);
   }
 
   async function loadFeedback() {
@@ -141,11 +152,11 @@ export default function AdminPage() {
     } finally { setPvBusy(false); }
   }
 
-  useEffect(() => { if (user) loadUsage(); /* eslint-disable-next-line */ }, [user]);
+  useEffect(() => { if (user) loadUsage(1); /* eslint-disable-next-line */ }, [user]);
   // 搜索触发所有 tab 重新加载
   useEffect(() => {
     if (!user) return;
-    if (tab === '额度管理') loadUsage();
+    if (tab === '额度管理') loadUsage(1); // 搜索时回到第 1 页
     else if (tab === '用户反馈') loadFeedback();
     else if (tab === '用户指令') loadMessages();
     /* eslint-disable-next-line */
@@ -154,7 +165,7 @@ export default function AdminPage() {
   // tab 切换时按需加载
   useEffect(() => {
     if (!user) return;
-    if (tab === '额度管理' && usageRows.length === 0) loadUsage();
+    if (tab === '额度管理' && usageRows.length === 0) loadUsage(page);
     else if (tab === '用户反馈' && feedbackRows.length === 0) loadFeedback();
     else if (tab === '用户指令' && messageRows.length === 0) loadMessages();
     else if (tab === '提示词版本' && pvManifest.length === 0) loadPromptVersions();
@@ -169,7 +180,7 @@ export default function AdminPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ user_id: userId, action: 'refresh' }),
       });
-      await loadUsage();
+      await loadUsage(page);
     } finally { setBusy(null); }
   }
 
@@ -185,7 +196,7 @@ export default function AdminPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ user_id: userId, action: 'set_limit', limit: n }),
       });
-      await loadUsage();
+      await loadUsage(page);
     } finally { setBusy(null); }
   }
 
@@ -203,6 +214,10 @@ export default function AdminPage() {
       </main>
     );
   }
+
+  // 额度管理分页派生值
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const pageNumbers = Array.from({ length: totalPages }, (_, i) => i + 1);
 
   return (
     <main style={S.wrap}>
@@ -243,8 +258,8 @@ export default function AdminPage() {
         {tab === '额度管理' && (
           <>
             <p style={S.sub}>
-              {search ? `搜索 "${search}" · ` : ''}显示前 {usageRows.length} 条
-              <button style={{ ...S.btn, marginLeft: 12 }} onClick={loadUsage} disabled={loadingTab}>刷新</button>
+              {search ? `搜索 "${search}" · 匹配 ${total} 人` : `共 ${total} 人`}
+              <button style={{ ...S.btn, marginLeft: 12 }} onClick={() => loadUsage(page)} disabled={loadingTab}>刷新</button>
             </p>
             <table style={S.table}>
               <thead>
@@ -277,6 +292,25 @@ export default function AdminPage() {
                 )}
               </tbody>
             </table>
+
+            {/* 分页器: 仅一页时不显示 */}
+            {total > PAGE_SIZE && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 16, flexWrap: 'wrap', fontSize: 13 }}>
+                <button style={S.btn} disabled={loadingTab || page <= 1} onClick={() => loadUsage(page - 1)}>‹ 上一页</button>
+                {pageNumbers.map((n) => (
+                  <button
+                    key={n}
+                    disabled={loadingTab}
+                    onClick={() => loadUsage(n)}
+                    style={{ ...S.btn, ...(n === page ? { background: '#4f46e5', color: '#fff', borderColor: '#4f46e5' } : {}) }}
+                  >
+                    {n}
+                  </button>
+                ))}
+                <button style={S.btn} disabled={loadingTab || page >= totalPages} onClick={() => loadUsage(page + 1)}>下一页 ›</button>
+                <span style={{ color: '#888', marginLeft: 4 }}>第 {page} 页 / 共 {totalPages} 页</span>
+              </div>
+            )}
           </>
         )}
 

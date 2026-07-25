@@ -23,61 +23,54 @@ export async function GET(req: Request) {
   if (!adminUser) return json(403, { error: '需要管理员权限' });
 
   const url = new URL(req.url);
-  const searchEmail = url.searchParams.get('email')?.trim().toLowerCase();
-  const limit = Math.min(Number(url.searchParams.get('limit')) || 200, 500);
+  const page = Math.max(1, Number(url.searchParams.get('page')) || 1);
+  const pageSize = Math.min(Number(url.searchParams.get('pageSize')) || 20, 100);
+  const email = url.searchParams.get('email')?.trim().toLowerCase() || '';
+  const from = (page - 1) * pageSize;
+  const to = from + pageSize - 1;
 
   const admin = getSupabaseAdmin();
 
-  // 邮箱搜索: 先在 profiles 表按 email 匹配到 user_id, 再回查 usage。
-  // 必须先过滤再取数 —— 旧实现「先 limit 再在内存里 filter」会导致
-  // 用户数超过 limit 时把目标用户截掉, 连邮箱搜索都搜不到(线上已发生)。
-  if (searchEmail) {
-    const { data: matchedProfiles } = await admin
-      .from('profiles')
-      .select('user_id')
-      .ilike('email', `%${searchEmail}%`)
-      .limit(50);
+  // 主查询: profiles(所有注册用户) + 总数(count='exact') + 可选邮箱过滤 + 分页(range)。
+  // 以 profiles 为数据源, 确保注册未试用(used=0)的用户也能看到; email 直接在 profiles
+  // 上, 搜索无需两跳。count='exact' 一并拿到总人数, 供前端渲染分页器。
+  let query = admin
+    .from('profiles')
+    .select('user_id, email, is_admin, created_at', { count: 'exact' })
+    .order('created_at', { ascending: false })
+    .range(from, to);
+  if (email) query = query.ilike('email', `%${email}%`);
 
-    const matchedIds = (matchedProfiles || []).map((p: any) => p.user_id);
-    if (matchedIds.length === 0) return json(200, { rows: [] });
+  const { data: profileRows, count, error } = await query;
+  if (error) return json(500, { error: error.message });
 
-    const { data: usage } = await admin
+  // 补 usage(当前页这批用户的 used / trial_limit), 内存合并 + coalesce 兜底。
+  // 正常情况注册触发器已为每个用户建 usage 行, 兜底仅防触发器遗漏的老数据。
+  const DEFAULT_LIMIT = 5; // 对应 schema 里 trial_limit default / 注册触发器 trial_default
+  const ids = (profileRows || []).map((p: any) => p.user_id);
+  const usageMap = new Map<string, { used: number; trial_limit: number }>();
+  if (ids.length) {
+    const { data: uRows } = await admin
       .from('usage')
       .select('user_id, used, trial_limit')
-      // usage.user_id 是主键, 与 matchedIds 一一对应(且 matchedIds 已被上面 limit(50) 兜底),
-      // 查询最多返回 50 行 —— 这里不再加 limit, 让「搜索结果=全部匹配」的意图干净
-      .in('user_id', matchedIds)
-      .order('updated_at', { ascending: false });
-
-    return json(200, { rows: await enrichUsage(usage, admin) });
+      .in('user_id', ids);
+    (uRows || []).forEach((u: any) => usageMap.set(u.user_id, { used: u.used, trial_limit: u.trial_limit }));
   }
 
-  // 无搜索: 按最近更新排序取 limit 条(加 order by, 避免无序漏人)
-  const { data: usage } = await admin
-    .from('usage')
-    .select('user_id, used, trial_limit')
-    .order('updated_at', { ascending: false })
-    .limit(limit);
+  const rows = (profileRows || []).map((p: any) => {
+    const u = usageMap.get(p.user_id);
+    const limit = u?.trial_limit ?? DEFAULT_LIMIT;
+    const used = u?.used ?? 0;
+    return {
+      user_id: p.user_id,
+      email: p.email || '',
+      used,
+      limit,
+      remaining: Math.max(0, limit - used),
+    };
+  });
 
-  return json(200, { rows: await enrichUsage(usage, admin) });
-}
-
-// usage 行配对 email(LEFT JOIN profiles), 搜索/列表两条路径复用
-async function enrichUsage(usage: any[] | null, admin: any) {
-  if (!usage || usage.length === 0) return [];
-  const userIds = [...new Set(usage.map((u: any) => u.user_id))];
-  const { data: profiles } = await admin
-    .from('profiles')
-    .select('user_id, email')
-    .in('user_id', userIds);
-  const emailMap = new Map((profiles || []).map((p: any) => [p.user_id, p.email]));
-  return usage.map((u: any) => ({
-    user_id: u.user_id,
-    email: emailMap.get(u.user_id) || '',
-    used: u.used,
-    limit: u.trial_limit,
-    remaining: Math.max(0, u.trial_limit - u.used),
-  }));
+  return json(200, { rows, total: count ?? 0, page, pageSize });
 }
 
 export async function POST(req: Request) {
