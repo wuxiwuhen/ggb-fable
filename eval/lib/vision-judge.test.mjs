@@ -26,6 +26,31 @@ test('judgeSingle 解析"问题:" 行为 issue + 对应项 false', async () => {
   assert.ok(r.items.some((i) => !i.ok));
 });
 
+test('judgeSingle items 带 guards(I1), 失败项带 failureClass', async () => {
+  mockFetch('问题: 辅助线该虚线却实线');
+  const r = await judgeSingle({ png: 'data:image/png;base64,AAA', rubric: DEFAULT_RUBRIC, ctx, glm });
+  // 每项都有 guards 数组(spec §9 强制必填, 喂 L1 归因)
+  assert.ok(r.items.every((i) => Array.isArray(i.guards) && i.guards.length), '所有 item 带 guards');
+  // 失败项带 failureClass, 通过项不带
+  const failed = r.items.find((i) => !i.ok);
+  assert.ok(failed && failed.failureClass, '失败项带 failureClass');
+  const passed = r.items.find((i) => i.ok);
+  assert.ok(!('failureClass' in passed), '通过项不带 failureClass');
+});
+
+test('judgePaired items 带 guards(I1)', async () => {
+  mockFetch('偏好: A\n问题B: 辅助线该虚线却实线');
+  const r = await judgePaired({ pngA: 'data:image/png;base64,A', pngB: 'data:image/png;base64,B', rubric: DEFAULT_RUBRIC, ctx, glm });
+  assert.ok(r.items.every((i) => Array.isArray(i.guards) && i.guards.length), '所有 item 带 guards');
+});
+
+test('judgeSingle 兼容字符串 rubric(自定义 visual_rubric)', async () => {
+  mockFetch('验收通过');
+  const r = await judgeSingle({ png: 'data:image/png;base64,AAA', rubric: ['自定义项是否 ok'], ctx, glm });
+  assert.equal(r.items.length, 1);
+  assert.deepEqual(r.items[0].guards, ['视觉规范']);
+});
+
 test('judgePaired 解析偏好 A/B/tie', async () => {
   mockFetch('偏好: A\n问题A: 标签遮挡');
   const r = await judgePaired({ pngA: 'data:image/png;base64,A', pngB: 'data:image/png;base64,B', rubric: DEFAULT_RUBRIC, ctx, glm });

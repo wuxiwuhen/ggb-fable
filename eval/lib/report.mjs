@@ -11,6 +11,11 @@ export function renderMarkdown({ runMeta, caseRuns, aggregate, attribution, base
   L.push(`- prompt 版本: **${runMeta.promptVersion}** | 样本数: ${runMeta.samples} | 整体通过率: ${(aggregate.overallPassRate * 100).toFixed(0)}%`, '');
   L.push('## 总览(维度)');
   L.push(`- 正确性: ${(aggregate.byDimension.correctness * 100).toFixed(0)}% | 健壮性: ${(aggregate.byDimension.robustness * 100).toFixed(0)}% | 视觉: ${(aggregate.byDimension.visual * 100).toFixed(0)}%`, '');
+  // I2: spec §10 防 overfit 信号——train vs holdout 分项分, 让人肉眼察觉"train 涨但 holdout 跌"。
+  if (aggregate.bySplit && aggregate.bySplit.train && aggregate.bySplit.holdout) {
+    const fmt = (s) => `正确 ${(s.byDimension.correctness * 100).toFixed(0)}% / 健壮 ${(s.byDimension.robustness * 100).toFixed(0)}% / 视觉 ${(s.byDimension.visual * 100).toFixed(0)}% (整体 ${(s.overallPassRate * 100).toFixed(0)}%)`;
+    L.push(`- train: ${fmt(aggregate.bySplit.train)} | holdout: ${fmt(aggregate.bySplit.holdout)}`, '');
+  }
   // 配对偏好(judgePaired, spec §5.2): A=对照版, B=本版
   const paired = caseRuns.flatMap((c) => c.samples.map((s) => s.visual?.preference).filter(Boolean));
   if (paired.length) {

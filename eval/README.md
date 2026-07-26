@@ -39,3 +39,19 @@ pnpm eval:test                                 # 跑 eval 模块单测(*.test.mj
 - `eval/baseline.json`: 回归基准, **入库**。
 - `eval/reports/*.md` / `*.png` / `*.xml` / `*.results.json`: 单次 run 产物, **不入库**(见 `.gitignore`)。
 - `eval/cases/_smoke-parabola.yaml`: 管线自检 case, 非真实评测数据(见文件头注释)。
+
+## 已知限制 (Phase 2)
+
+这些是 Phase 1 的明确权衡, Phase 2 计划改进:
+
+- **I3 — `?eval=1` 是生产可达的 eval 旁路**:
+  runner 通过 `app/app/page.tsx` 的 `?eval=1` query 触发 eval 旁路(跳过登录重定向, 让匿名 BYOK 也能进 ChatApp)。
+  仅 BYOK 流程, **不暴露任何资源**(无 quota / 无服务端 key / 无 token 发放), 但属 app 改动
+  (spec §7.1 原定"零侵入"); 生产构建里这行逻辑始终在。Phase 2 考虑更稳的 eval-mode 信号
+  (如构建期注入 `process.env.NEXT_PUBLIC_EVAL_MODE` 或独立 eval 入口路由)。
+
+- **I4 — runner 靠 console log 字符串嗅探 CommandSearch 就绪**:
+  `eval/lib/runner.mjs` 监听 `console` 输出 `向量全部缓存` / `跳过预热` 来判断 CommandSearch 初始化完成
+  (search_command 依赖, 必须就绪才能让 agent 跑)。若 app 改这些 log 字符串, eval 会静默退化
+  (等不到 ready → 20s 超时 → send 时 agentRef 仍 null → toolRounds=0, 全 case "通过"假象)。
+  Phase 2 改用明确的 window 标志(如 `window.__ggbAgentReady`), 让"未就绪"显式失败而非静默通过。
