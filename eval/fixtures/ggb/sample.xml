@@ -1,0 +1,16 @@
+<?xml version="1.0"?>
+<geogebra format="5.0">
+<construction title="" author="">
+  <element type="point" label="A">
+    <coords x="1" y="2" z="1"/>
+    <isIndependent bool="true"/>
+  </element>
+  <element type="numeric" label="k">
+    <slider min="0" max="10" inc="0.1"/>
+    <value val="5"/>
+  </element>
+  <element type="circle" label="c"/>
+  <expression label="B" exp="B = Midpoint(A, c)"/>
+  <command name="Circle"><input a0="A"/><output a0="c"/></command>
+</construction>
+</geogebra>
