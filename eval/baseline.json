@@ -1,0 +1,18 @@
+{
+  "byDimension": {
+    "correctness": 0,
+    "robustness": 1,
+    "visual": 0.5
+  },
+  "byRule": {
+    "约束闭环": 0
+  },
+  "overallPassRate": 0,
+  "cases": [
+    {
+      "id": "_smoke-parabola",
+      "split": "train",
+      "passRate": 0
+    }
+  ]
+}

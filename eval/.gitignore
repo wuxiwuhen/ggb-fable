@@ -1,3 +1,4 @@
 reports/*.png
 reports/*.xml
 reports/*.results.json
+reports/*.md

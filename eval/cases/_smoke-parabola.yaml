@@ -1,3 +1,4 @@
+# 自检用 case(跑通管线), 非真实评测数据; 真实 case 用 pnpm eval:intake 入库
 id: _smoke-parabola
 meta:
   title: 冒烟-抛物线顶点
