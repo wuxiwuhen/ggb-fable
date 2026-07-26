@@ -1,0 +1,18 @@
+id: _smoke-parabola
+meta:
+  title: 冒烟-抛物线顶点
+  problem: 画抛物线 y = x^2 - 4x + 3, 标出顶点和与 x 轴的交点
+  dimension: 2D
+  topic: [函数, 二次函数]
+  difficulty: 1
+  key_insight: 顶点 (2,-1), 与 x 轴交于 x=1 和 x=3
+  animation: { hasAnimation: false }
+  source: { url: 'eval-smoke', ggb_file: null }
+reference: { objectInventory: [], freeVars: [] }
+assertions:
+  - kind: object_exists
+    find: { type: 'function', min: 1 }   # 抛物线对象(类型名以 agent 实际为准, 跑通后调)
+    guards: ['约束闭环']
+visual_rubric: inherit
+split: train
+provenance: { derived_from: 'eval/smoke', reviewed: true, version: 1 }

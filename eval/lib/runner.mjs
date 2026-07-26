@@ -74,7 +74,9 @@ async function runSample(browser, case_, promptVersion, glm, comparePng) {
   const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
   try {
     await setupPage(page, promptVersion, glm);
-    await page.goto('http://localhost:3000', { waitUntil: 'domcontentloaded' });
+    // Fix A: 工作台在 /app(非 /), 且 /app 有 auth 门控(app/app/page.tsx 的 useAuth 跳 /login)。
+    // ?eval=1 触发 Fix B 的 eval 旁路, 跳过登录重定向, 让匿名 BYOK 也能进 ChatApp。
+    await page.goto('http://localhost:3000/app?eval=1', { waitUntil: 'domcontentloaded' });
     await page.waitForSelector('#ggb-container', { timeout: 60000 });
     await page.waitForFunction(() => !!window.ggbApplet?.getXML, { timeout: 60000 });
 
