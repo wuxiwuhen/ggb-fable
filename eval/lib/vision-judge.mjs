@@ -60,6 +60,19 @@ export async function judgePaired({ pngA, pngB, rubric, ctx, glm }) {
   const raw = await callGlmVision(glm, prompt, [pngA, pngB]);
   const pref = /偏好[:：]\s*(A|B|平|tie)/i.exec(raw);
   const preference = pref ? ({ 'A': 'A', 'B': 'B', '平': 'tie', 'tie': 'tie' }[pref[1].toUpperCase()] || 'tie') : 'tie';
-  const issues = parseIssues(raw.replace(/^偏好.*$/im, ''));
-  return { preference, items: rubric.map((name) => ({ name, a_ok: !issues.some((i) => i.startsWith('问题A') && i.includes(kw(name))), b_ok: !issues.some((i) => i.startsWith('问题B') && i.includes(kw(name))) })), issues };
+  // 配对模式专用解析: "问题A: ..." / "问题B: ..." → {side, text}
+  // (不用 parseIssues: 它的正则要求冒号紧跟"问题", 不匹配 "问题A:" 这种 side 标记插在中间的格式)
+  const paired = [...raw.matchAll(/^\s*问题([AB])[:：]\s*(.+)$/gm)].map((m) => ({ side: m[1], text: m[2].trim() })).filter((p) => p.text);
+  return {
+    preference,
+    items: rubric.map((name) => {
+      const k = kw(name);
+      return {
+        name,
+        a_ok: !paired.some((p) => p.side === 'A' && p.text.includes(k)),
+        b_ok: !paired.some((p) => p.side === 'B' && p.text.includes(k)),
+      };
+    }),
+    issues: paired.map((p) => `${p.side}: ${p.text}`),
+  };
 }

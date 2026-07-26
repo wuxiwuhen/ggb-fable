@@ -32,6 +32,21 @@ test('judgePaired 解析偏好 A/B/tie', async () => {
   assert.equal(r.preference, 'A');
 });
 
+test('judgePaired per-item a_ok/b_ok 随 问题A/问题B 变化(不再恒 true)', async () => {
+  // 回归: 旧实现 parseIssues 正则不匹配 "问题B:", 导致 b_ok 恒 true; 现应随 issue 变化。
+  mockFetch('偏好: A\n问题B: 辅助线该虚线却实线');
+  const r = await judgePaired({ pngA: 'data:image/png;base64,A', pngB: 'data:image/png;base64,B', rubric: DEFAULT_RUBRIC, ctx, glm });
+  const aux = r.items.find((i) => i.name.includes('辅助线'));
+  assert.equal(r.preference, 'A');
+  assert.equal(aux.a_ok, true, '无 问题A → a_ok true');
+  assert.equal(aux.b_ok, false, '有 问题B 辅助线 → b_ok false');
+  // 未被点名的项双方均 ok
+  const other = r.items.find((i) => i.name.includes('角弧'));
+  assert.equal(other.a_ok, true, '无 issue 的项 A 侧 ok');
+  assert.equal(other.b_ok, true, '无 issue 的项 B 侧 ok');
+  assert.ok(r.issues.some((i) => i.startsWith('B:')), 'flat issues 含 B 侧标记');
+});
+
 test('callGlmVision 请求体含 image_url content 数组', async () => {
   let captured;
   global.fetch = async (_url, init) => { captured = JSON.parse(init.body); return { ok: true, json: async () => ({ choices: [{ message: { content: '验收通过' } }] }) }; };
