@@ -26,7 +26,13 @@ function readPromptText(version) {
 // (见 playwright-core/lib/client/clientHelper.js evaluationScript)。因此这里改为返回真实函数,
 // 让 addInitScript 把第二参(cfg)正确序列化后注入。其余 BYOK 字段与 brief 一致(zustand persist 形状)。
 function byokInitScript(_glm) {
-  return (c) => { try { localStorage.setItem('ggb-fable-config', JSON.stringify(c)); } catch (e) {} };
+  return (c) => {
+    try {
+      localStorage.setItem('ggb-fable-config', JSON.stringify(c));
+      // 跳过新手引导: eval 模式无 user 触发 tour, tour-mask 会遮挡发送按钮导致 click 超时
+      localStorage.setItem('ggb-fable-onboarding-v2', JSON.stringify({ seen: true }));
+    } catch (e) {}
+  };
 }
 
 async function setupPage(page, promptVersion, glm) {
@@ -49,6 +55,9 @@ async function setupPage(page, promptVersion, glm) {
     } catch {}
     await route.fulfill({ status: 200, contentType: 'application/json', body: '{}' });
   });
+  // 监听 CommandSearch 就绪(发 send 前等 agent 初始化完成, 见 runSample)
+  page.__csReady = false;
+  page.on('console', (m) => { if (/向量全部缓存|跳过预热/.test(m.text())) page.__csReady = true; });
   await page.addInitScript(byokInitScript(glm), {
     state: { mode: 'byok', byokProfiles: [{ name: 'eval', api_key: glm.api_key, base_url: glm.base_url, model_name: process.env.GLM_MODEL || 'glm-4.6' }], activeProfileName: 'eval', vision: { api_key: glm.api_key, base_url: glm.base_url, model_name: glm.model }, embedding: {}, maxToolRounds: 30 }, version: 0,
   });
@@ -79,6 +88,13 @@ async function runSample(browser, case_, promptVersion, glm, comparePng) {
     await page.goto('http://localhost:3000/app?eval=1', { waitUntil: 'domcontentloaded' });
     await page.waitForSelector('#ggb-container', { timeout: 60000 });
     await page.waitForFunction(() => !!window.ggbApplet?.getXML, { timeout: 60000 });
+
+    // 等 agent 就绪: CommandSearch 是 search_command 依赖, 其初始化(useEffect 在 ggbReady 后异步跑)
+    // 完成意味着 agent 引擎也已构造(getEffectivePrompt.then); 再 grace 确保 agentRef 设值,
+    // 否则 ChatApp send 会因 agentRef null 在 "画布未就绪" 处提前 return, agent 根本不跑。
+    const csStart = Date.now();
+    while (!page.__csReady && Date.now() - csStart < 20000) await page.waitForTimeout(300);
+    await page.waitForTimeout(1500);
 
     await page.fill('textarea:not(.feedback-textarea)', case_.meta.problem);
     // 在点击 send 之前快照事件数, waitForTurnEnd 只看此后新增的事件。
