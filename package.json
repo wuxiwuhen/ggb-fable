@@ -7,7 +7,11 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "eval": "node --env-file=.env.local eval/scripts/run.mjs",
+    "eval:test": "node --test eval/lib/**/*.test.mjs",
+    "eval:intake": "node --env-file=.env.local eval/scripts/intake.mjs",
+    "eval:manual": "node eval/scripts/manual.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.5.2",
@@ -27,6 +31,9 @@
     "@types/node": "^22.10.7",
     "@types/react": "^19.0.7",
     "@types/react-dom": "^19.0.3",
-    "typescript": "^5.7.3"
+    "fflate": "^0.8.3",
+    "playwright": "^1.55.0",
+    "typescript": "^5.7.3",
+    "yaml": "^2.9.0"
   }
 }
