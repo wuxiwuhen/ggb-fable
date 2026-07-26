@@ -127,7 +127,10 @@ export async function POST(req: Request) {
 
   if (!upstream.ok || !upstream.body) {
     const txt = await upstream.text().catch(() => '');
-    return json(upstream.status || 502, { error: `上游模型请求失败: ${txt.slice(0, 300)}` });
+    // 固定 502, 不透传厂商状态码 —— 厂商 402(余额不足)/429(限流)会撞 app 业务专用码
+    // (402=试用次数用完, 429=防失控上限), 一旦透传前端就把"厂商没钱"误报成"试用用完"。
+    // 统一 502=上游错误, 真实原因带在 error 文本里交给前端友好展示。
+    return json(502, { error: `上游模型请求失败: ${txt.slice(0, 300)}` });
   }
 
   // 5) 签发/续期 token(本轮过后累计+1轮, 累计本次输入 token)

@@ -57,6 +57,26 @@ async function safeText(resp: Response): Promise<string> {
   try { return await resp.text(); } catch { return ''; }
 }
 
+// 从后端响应取 error 文本(后端统一返回 {error: string}); 解析失败则回退原始片段
+async function readRespError(resp: Response): Promise<string> {
+  const txt = await safeText(resp);
+  try { const j = JSON.parse(txt); if (typeof j?.error === 'string') return j.error; } catch {}
+  return txt.slice(0, 500);
+}
+
+// 上游厂商错误(后端统一 502)转对人友好提示 —— 避免英文技术细节吓到 K12 用户,
+// 也避免被误读成"试用次数用完"(那是业务 402 的语义; 厂商 402 已在后端隔离成 502)
+function friendlyUpstreamError(msg: string): string {
+  const low = msg.toLowerCase();
+  if (/insufficient balance|余额不足|quota|配额/.test(low))
+    return 'AI 服务额度不足, 暂时无法生成, 请联系管理员';
+  if (/rate limit|too many requests|繁忙/.test(low))
+    return 'AI 服务繁忙, 请稍后重试';
+  if (/timeout|timed out|超时/.test(low))
+    return 'AI 服务响应超时, 请稍后重试';
+  return 'AI 服务暂时不可用, 请稍后重试';
+}
+
 // ── SSE 解析: 累积 assistant 文本 + tool_calls(两路共用, 逻辑不变) ──
 async function parseSSE(
   body: ReadableStream<Uint8Array>,
@@ -205,14 +225,17 @@ export async function chatTrial({
   });
 
   if (!resp.ok) {
-    const txt = await safeText(resp);
-    // 402 = 额度用完, 抛特定错误便于 UI 提示
+    const msg = await readRespError(resp);
+    // 402 = 试用次数用完(业务专用码; 厂商 402 已在后端隔离成 502, 不会到这里)
     if (resp.status === 402) {
       const err = new Error('TRIAL_EXHAUSTED');
-      (err as any).detail = txt;
+      (err as any).detail = msg;
       throw err;
     }
-    throw new Error(`试用请求失败 ${resp.status}: ${txt.slice(0, 500)}`);
+    // 502 = 上游厂商错误(余额不足/限流/超时等) → 友好提示, 不暴露技术细节
+    if (resp.status === 502) throw new Error(friendlyUpstreamError(msg));
+    // 其他(401 未登录 / 400 请求体 / 429 防失控等) → 透出后端原始中文信息
+    throw new Error(msg || `试用请求失败 ${resp.status}`);
   }
 
   // 后端在响应头回传 trial_token(首次签发或续期)
@@ -284,13 +307,14 @@ export async function visionTrial({ image, prompt, signal, trialCtx, model }: Vi
     signal,
   });
   if (!resp.ok) {
-    const txt = await safeText(resp);
+    const msg = await readRespError(resp);
     if (resp.status === 402) {
       const err = new Error('TRIAL_EXHAUSTED');
-      (err as any).detail = txt;
+      (err as any).detail = msg;
       throw err;
     }
-    throw new Error(`试用视觉请求失败 ${resp.status}: ${txt.slice(0, 500)}`);
+    if (resp.status === 502) throw new Error(friendlyUpstreamError(msg));
+    throw new Error(msg || `试用视觉请求失败 ${resp.status}`);
   }
   const newToken = resp.headers.get('x-trial-token');
   if (newToken && newToken !== trialCtx.token) trialCtx.setToken(newToken);

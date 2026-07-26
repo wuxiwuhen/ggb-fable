@@ -70,7 +70,8 @@ export async function POST(req: Request) {
 
   if (!upstream.ok) {
     const txt = await upstream.text().catch(() => '');
-    return json(upstream.status, { error: `视觉模型请求失败: ${txt.slice(0, 300)}` });
+    // 固定 502, 不透传厂商码(避免厂商 402 撞业务 402=试用用完, 见 trial/llm 注释)
+    return json(502, { error: `视觉模型请求失败: ${txt.slice(0, 300)}` });
   }
 
   const json_resp = await upstream.json();

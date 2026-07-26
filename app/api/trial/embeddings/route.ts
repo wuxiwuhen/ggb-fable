@@ -35,7 +35,8 @@ export async function POST(req: Request) {
 
   if (!upstream.ok) {
     const txt = await upstream.text().catch(() => '');
-    return json(upstream.status, { error: `embedding 请求失败: ${txt.slice(0, 200)}` });
+    // 固定 502, 不透传厂商码(避免撞业务专用码, 见 trial/llm 注释)
+    return json(502, { error: `embedding 请求失败: ${txt.slice(0, 200)}` });
   }
   const data = await upstream.json();
   // 透传 GLM 的 data[].embedding
