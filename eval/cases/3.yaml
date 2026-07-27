@@ -1,0 +1,29 @@
+id: "3"
+meta:
+  title: 正方形+中点证明
+  problem: 如图，四边形 ABFG 和 ACDE 分别是以三角形 ABC 的边 AC、AB 为边，向三角形 ABC 外侧作的正方形。连接 EG，O 是 EG 的中点。请画出这个图形：三角形 ABC、以 AC 为边的正方形 ACDE、以 AB 为边的正方形 ABFG、线段 EG 及其中点 O。
+  dimension: 2D
+  topic: [正方形, 几何证明, 旋转全等]
+  difficulty: 2
+  key_insight: 双正方形（以 △ABC 两边向外作）+ EG 中点 O，求证 AO=½BC 且 AO⊥BC（旋转 90° 全等）。本 case 只评估 agent 画出核心几何。
+  animation: { hasAnimation: false }
+  source: { url: 社区课件, ggb_file: fixtures/ggb/3.ggb }
+reference:
+  note: 原 .ggb 是含分步提示的证明课件(gold), 见 fixtures/reference/3.json。本 case 只评估核心几何(正方形/三角形/中点)。
+assertions:
+  - kind: object_exists
+    find: { type: polygon, min: 2 }
+    guards: [约束闭环]
+  - kind: object_exists
+    find: { type: point, min: 3 }
+    guards: [约束闭环]
+  - kind: object_exists
+    find: { type: segment, min: 1 }
+    guards: [约束闭环]
+visual_rubric: inherit
+split: holdout
+provenance:
+  derived_from: raw/3/
+  author: claude+human
+  reviewed: true
+  version: 2

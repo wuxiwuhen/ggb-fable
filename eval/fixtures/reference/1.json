@@ -1,0 +1,379 @@
+{
+  "objectInventory": [
+    {
+      "type": "numeric",
+      "count": 11
+    },
+    {
+      "type": "line",
+      "count": 2
+    },
+    {
+      "type": "function",
+      "count": 1
+    },
+    {
+      "type": "point",
+      "count": 10
+    },
+    {
+      "type": "polygon",
+      "count": 1
+    },
+    {
+      "type": "segment",
+      "count": 8
+    },
+    {
+      "type": "text",
+      "count": 10
+    },
+    {
+      "type": "boolean",
+      "count": 1
+    },
+    {
+      "type": "button",
+      "count": 3
+    },
+    {
+      "type": "vector",
+      "count": 2
+    },
+    {
+      "type": "textfield",
+      "count": 2
+    },
+    {
+      "type": "image",
+      "count": 1
+    }
+  ],
+  "freeVars": [
+    {
+      "name": "d",
+      "type": "slider",
+      "min": -5,
+      "max": 5,
+      "inc": null
+    },
+    {
+      "name": "k",
+      "type": "slider",
+      "min": -5,
+      "max": 5,
+      "inc": null
+    },
+    {
+      "name": "a",
+      "type": "slider",
+      "min": -2,
+      "max": 2,
+      "inc": null
+    },
+    {
+      "name": "hint",
+      "type": "slider",
+      "min": 0,
+      "max": 5,
+      "inc": null
+    },
+    {
+      "name": "wl",
+      "type": "slider",
+      "min": -5,
+      "max": 5,
+      "inc": null
+    },
+    {
+      "name": "wr",
+      "type": "slider",
+      "min": -5,
+      "max": 20,
+      "inc": null
+    },
+    {
+      "name": "wu",
+      "type": "slider",
+      "min": -5,
+      "max": 20,
+      "inc": null
+    },
+    {
+      "name": "wd",
+      "type": "slider",
+      "min": -5,
+      "max": 5,
+      "inc": null
+    },
+    {
+      "name": "QType",
+      "type": "slider",
+      "min": 0,
+      "max": 2,
+      "inc": null
+    }
+  ],
+  "elements": [
+    {
+      "label": "d",
+      "type": "numeric",
+      "definition": ""
+    },
+    {
+      "label": "k",
+      "type": "numeric",
+      "definition": ""
+    },
+    {
+      "label": "a",
+      "type": "numeric",
+      "definition": ""
+    },
+    {
+      "label": "b",
+      "type": "numeric",
+      "definition": "-1 / 2"
+    },
+    {
+      "label": "c",
+      "type": "numeric",
+      "definition": "-3 / 2"
+    },
+    {
+      "label": "g",
+      "type": "line",
+      "definition": "y = (k * x) + d"
+    },
+    {
+      "label": "f",
+      "type": "function",
+      "definition": "f(x) = (a * x^(2)) + (b * x) + c"
+    },
+    {
+      "label": "A",
+      "type": "point",
+      "definition": ""
+    },
+    {
+      "label": "hint",
+      "type": "numeric",
+      "definition": ""
+    },
+    {
+      "label": "Q",
+      "type": "point",
+      "definition": "A + (hint * (2, 0))"
+    },
+    {
+      "label": "wl",
+      "type": "numeric",
+      "definition": ""
+    },
+    {
+      "label": "wr",
+      "type": "numeric",
+      "definition": ""
+    },
+    {
+      "label": "wu",
+      "type": "numeric",
+      "definition": ""
+    },
+    {
+      "label": "wd",
+      "type": "numeric",
+      "definition": ""
+    },
+    {
+      "label": "wn",
+      "type": "polygon",
+      "definition": ""
+    },
+    {
+      "label": "wnd",
+      "type": "segment",
+      "definition": ""
+    },
+    {
+      "label": "wnr",
+      "type": "segment",
+      "definition": ""
+    },
+    {
+      "label": "wnu",
+      "type": "segment",
+      "definition": ""
+    },
+    {
+      "label": "wnl",
+      "type": "segment",
+      "definition": ""
+    },
+    {
+      "label": "text8",
+      "type": "text",
+      "definition": "&quot;二次函数中的将军饮马-上&quot;"
+    },
+    {
+      "label": "blFig",
+      "type": "boolean",
+      "definition": ""
+    },
+    {
+      "label": "bt1",
+      "type": "button",
+      "definition": ""
+    },
+    {
+      "label": "bt2",
+      "type": "button",
+      "definition": ""
+    },
+    {
+      "label": "QT1",
+      "type": "text",
+      "definition": "&quot;抛物线 $y=x^2-\\frac{1}{2}x -\\frac{3}{2}$ 与直线$y =  x - 2$ 交于 $A,B$，&#xa;$E$ 在对称轴上，$F$ 在 $x$ 轴， 求 $AE+EF+FB$ 的最小值。&quot;"
+    },
+    {
+      "label": "QType",
+      "type": "numeric",
+      "definition": ""
+    },
+    {
+      "label": "text10",
+      "type": "text",
+      "definition": "&quot;提示&quot;"
+    },
+    {
+      "label": "FigL",
+      "type": "point",
+      "definition": "(-9.5, -1)"
+    },
+    {
+      "label": "text11",
+      "type": "text",
+      "definition": "&quot;探究&quot;"
+    },
+    {
+      "label": "O",
+      "type": "point",
+      "definition": ""
+    },
+    {
+      "label": "xaxis",
+      "type": "vector",
+      "definition": ""
+    },
+    {
+      "label": "yaxis",
+      "type": "vector",
+      "definition": ""
+    },
+    {
+      "label": "FigR",
+      "type": "point",
+      "definition": "(wl, -1)"
+    },
+    {
+      "label": "bt0",
+      "type": "button",
+      "definition": ""
+    },
+    {
+      "label": "B",
+      "type": "point",
+      "definition": ""
+    },
+    {
+      "label": "saxis",
+      "type": "line",
+      "definition": "x = ((-b)) / ((2 * a))"
+    },
+    {
+      "label": "E",
+      "type": "point",
+      "definition": ""
+    },
+    {
+      "label": "F",
+      "type": "point",
+      "definition": ""
+    },
+    {
+      "label": "sAE",
+      "type": "segment",
+      "definition": ""
+    },
+    {
+      "label": "sEF",
+      "type": "segment",
+      "definition": ""
+    },
+    {
+      "label": "sFB",
+      "type": "segment",
+      "definition": ""
+    },
+    {
+      "label": "A&apos;",
+      "type": "point",
+      "definition": ""
+    },
+    {
+      "label": "B&apos;",
+      "type": "point",
+      "definition": ""
+    },
+    {
+      "label": "text4",
+      "type": "text",
+      "definition": "&quot;连接 $A&apos;B&apos;$ 交对称轴、$x$ 轴于 $E&apos;$, $F&apos;$ &quot;"
+    },
+    {
+      "label": "sA&apos;B&apos;",
+      "type": "segment",
+      "definition": ""
+    },
+    {
+      "label": "InputBox1",
+      "type": "textfield",
+      "definition": ""
+    },
+    {
+      "label": "InputBox2",
+      "type": "textfield",
+      "definition": ""
+    },
+    {
+      "label": "text6",
+      "type": "text",
+      "definition": "&quot;直线：$y =  \\;\\;\\;   x + ( \\;\\;\\;\\;\\; )$&quot;"
+    },
+    {
+      "label": "text1",
+      "type": "text",
+      "definition": "&quot;移动 $E,F$ 观察 $AE+EF+FB = &quot; + (LaTeX[sAE + sEF + sFB]) + &quot;$ &quot;"
+    },
+    {
+      "label": "text5",
+      "type": "text",
+      "definition": "&quot;则 $\\textcolor{#F0F}{AE+EF+FB}$ 的最小值为$\\textcolor{#080}{A&apos;B&apos;} = &quot; + (LaTeX[SurdText[sA&apos;B&apos;]]) + &quot; \\approx  &quot; + (LaTeX[sA&apos;B&apos;]) + &quot;$&quot;"
+    },
+    {
+      "label": "text3",
+      "type": "text",
+      "definition": "&quot;作 $B$ 对 $x$ 轴的对称点 $B&apos;=&quot; + (LaTeX[B]) + &quot;$ &quot;"
+    },
+    {
+      "label": "text2",
+      "type": "text",
+      "definition": "&quot;作 $A$ 对对称轴的对称点 $A&apos;=&quot; + (LaTeX[A&apos;]) + &quot; $&quot;"
+    },
+    {
+      "label": "pic2",
+      "type": "image",
+      "definition": ""
+    }
+  ]
+}

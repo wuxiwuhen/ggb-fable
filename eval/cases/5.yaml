@@ -1,0 +1,25 @@
+id: "5"
+meta:
+  title: 正方形内等腰三角形内心
+  problem: 如图，以正方形 ABCD 的边 BC 为一边向正方形内部作等腰 △BCE（BE=BC），过 E 作 EH⊥BC 于 H。点 P 是 Rt△BEH 的内心，连接 AP。若 AB=2，请画出这个图形（含内心 P），并求 AP 的最小值。
+  dimension: 2D
+  topic: [正方形, 等腰三角形, 内心, 最值]
+  difficulty: 3
+  key_insight: 正方形内作等腰△BCE，P 是 Rt△BEH 内心，AP 最小值（内心在角平分线弧上）。agent 画核心几何 + 内心。
+  animation: { hasAnimation: false }
+  source: { url: 社区课件, ggb_file: fixtures/ggb/5.ggb }
+reference:
+  note: 原 .ggb 含内心+轨迹, 见 fixtures/reference/5.json。
+assertions:
+  - kind: object_exists
+    find: { type: polygon, min: 1 }
+    guards: [约束闭环]
+  - kind: object_exists
+    find: { type: point, min: 5 }
+    guards: [约束闭环]
+  - kind: object_exists
+    find: { type: segment, min: 3 }
+    guards: [约束闭环]
+visual_rubric: inherit
+split: train
+provenance: { derived_from: raw/5/, author: claude+human, reviewed: true, version: 2 }

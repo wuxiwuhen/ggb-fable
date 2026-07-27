@@ -1,0 +1,26 @@
+id: "4"
+meta:
+  title: Rt△动点-中点运动
+  problem: 如图，在 Rt△ABC 中，∠A=90°，AB=6，AC=8。D、E 分别是边 AB、AC 的中点。点 P 从点 D 出发沿 DE 方向运动，过 P 作 PQ⊥BC 于 Q，过 Q 作 QR⊥BA 交 AC 于 R，当 Q 与 C 重合时 P 停止运动。设 BQ=x，QR=y。请画出这个图形，包含动点 P 的运动。
+  dimension: 2D
+  topic: [直角三角形, 动点, 中考]
+  difficulty: 3
+  key_insight: Rt△中点动点题，P 沿 DE 运动，PQ⊥BC、QR⊥BA 构造，求 QR 与 BQ 的函数关系。agent 画核心几何 + 动点。
+  animation: { hasAnimation: true, slider: P_pos }
+  representativeFrame: { slider: P_pos, value: 0.5 }
+  source: { url: 社区课件, ggb_file: fixtures/ggb/4.ggb }
+reference:
+  note: 原 .ggb 含动点+轨迹+不可拖元素(SetFixed), 见 fixtures/reference/4.json。
+assertions:
+  - kind: object_exists
+    find: { type: polygon, min: 1 }
+    guards: [约束闭环]
+  - kind: object_exists
+    find: { type: point, min: 5 }
+    guards: [约束闭环]
+  - kind: object_exists
+    find: { type: segment, min: 3 }
+    guards: [约束闭环]
+visual_rubric: inherit
+split: train
+provenance: { derived_from: raw/4/, author: claude+human, reviewed: true, version: 2 }

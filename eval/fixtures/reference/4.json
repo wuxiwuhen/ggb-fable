@@ -1,0 +1,229 @@
+{
+  "objectInventory": [
+    {
+      "type": "numeric",
+      "count": 3
+    },
+    {
+      "type": "point",
+      "count": 15
+    },
+    {
+      "type": "segment",
+      "count": 6
+    },
+    {
+      "type": "text",
+      "count": 2
+    },
+    {
+      "type": "polygon",
+      "count": 1
+    },
+    {
+      "type": "polyline",
+      "count": 1
+    },
+    {
+      "type": "angle",
+      "count": 2
+    },
+    {
+      "type": "button",
+      "count": 1
+    },
+    {
+      "type": "boolean",
+      "count": 1
+    },
+    {
+      "type": "list",
+      "count": 1
+    },
+    {
+      "type": "locus",
+      "count": 1
+    }
+  ],
+  "freeVars": [
+    {
+      "name": "t",
+      "type": "slider",
+      "min": 1.8,
+      "max": 10,
+      "inc": null
+    }
+  ],
+  "elements": [
+    {
+      "label": "t",
+      "type": "numeric",
+      "definition": ""
+    },
+    {
+      "label": "A",
+      "type": "point",
+      "definition": ""
+    },
+    {
+      "label": "B",
+      "type": "point",
+      "definition": ""
+    },
+    {
+      "label": "D",
+      "type": "point",
+      "definition": ""
+    },
+    {
+      "label": "DF",
+      "type": "segment",
+      "definition": ""
+    },
+    {
+      "label": "C",
+      "type": "point",
+      "definition": ""
+    },
+    {
+      "label": "E",
+      "type": "point",
+      "definition": ""
+    },
+    {
+      "label": "P",
+      "type": "point",
+      "definition": "(t, 2.4)"
+    },
+    {
+      "label": "Q",
+      "type": "point",
+      "definition": "(t, 0)"
+    },
+    {
+      "label": "R",
+      "type": "point",
+      "definition": ""
+    },
+    {
+      "label": "PR",
+      "type": "segment",
+      "definition": ""
+    },
+    {
+      "label": "text1",
+      "type": "text",
+      "definition": "&quot;如图,在\\text{Rt}ABC中,∠A=90°,AB=6,AC=8,D、E分别是边AB、AC的中点,点P从点D出\\\\&#10;发沿DE方向运动,过点P作PQ⊥BC于点Q,过点Q作QR⊥BA交AC于点R,当点Q与点C\\\\&#10;重合时,点P停止运动.设BQ=x,QR=y.\\\\&#10;(1)\\hspace{1em}求点D到BC的距离DH的长;\\\\&#10;(2)\\hspace{1em}求y关于x的函数关系式(不要求写出自变量的取值范围);\\\\&#10;(3)\\hspace{1em}是否存在点P,使PQR为等腰三角形?若存在,请求出所有满足要求的x的值;若不存在,请说明理由.&quot;"
+    },
+    {
+      "label": "polygon",
+      "type": "polygon",
+      "definition": ""
+    },
+    {
+      "label": "ABC",
+      "type": "polyline",
+      "definition": ""
+    },
+    {
+      "label": "DE",
+      "type": "segment",
+      "definition": ""
+    },
+    {
+      "label": "H",
+      "type": "point",
+      "definition": "(x(D), 0)"
+    },
+    {
+      "label": "DH",
+      "type": "segment",
+      "definition": ""
+    },
+    {
+      "label": "β",
+      "type": "angle",
+      "definition": ""
+    },
+    {
+      "label": "α",
+      "type": "angle",
+      "definition": ""
+    },
+    {
+      "label": "button1",
+      "type": "button",
+      "definition": ""
+    },
+    {
+      "label": "s",
+      "type": "numeric",
+      "definition": ""
+    },
+    {
+      "label": "run",
+      "type": "boolean",
+      "definition": ""
+    },
+    {
+      "label": "u",
+      "type": "numeric",
+      "definition": ""
+    },
+    {
+      "label": "O&apos;",
+      "type": "point",
+      "definition": ""
+    },
+    {
+      "label": "X&apos;",
+      "type": "point",
+      "definition": ""
+    },
+    {
+      "label": "Y&apos;",
+      "type": "point",
+      "definition": ""
+    },
+    {
+      "label": "I",
+      "type": "point",
+      "definition": "(t + 12, 0)"
+    },
+    {
+      "label": "G",
+      "type": "point",
+      "definition": "(t + 12, s)"
+    },
+    {
+      "label": "IG",
+      "type": "segment",
+      "definition": ""
+    },
+    {
+      "label": "L_1",
+      "type": "list",
+      "definition": "{O&apos;, X&apos;, Y&apos;, Vector[(11.5, 0), (23, 0)], Vector[(12, -0.5), (12, 6)]}"
+    },
+    {
+      "label": "loc1",
+      "type": "locus",
+      "definition": ""
+    },
+    {
+      "label": "text2",
+      "type": "text",
+      "definition": "&quot;PQ=&quot; + (LaTeX[2.4]) + &quot;\\\\&#10;PR=&quot; + (LaTeX[u]) + &quot;\\\\&#10;QR=&quot; + (LaTeX[s]) + &quot;&quot;"
+    },
+    {
+      "label": "S",
+      "type": "point",
+      "definition": ""
+    },
+    {
+      "label": "RS",
+      "type": "segment",
+      "definition": ""
+    }
+  ]
+}

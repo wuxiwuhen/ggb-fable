@@ -1,18 +1,93 @@
 {
   "byDimension": {
-    "correctness": 0,
+    "correctness": 0.8947368421052632,
     "robustness": 1,
-    "visual": 0.5
+    "visual": 0.7678571428571429
   },
   "byRule": {
-    "约束闭环": 0
+    "约束闭环": 0.8947368421052632,
+    "视觉规范·标签": 0.42857142857142855,
+    "视觉规范·线型": 0.5714285714285714,
+    "视觉规范·画布范围": 1,
+    "视觉规范·角弧默认不标": 1,
+    "视觉规范·配色": 0.8571428571428571,
+    "LaTeX铁律": 1,
+    "视觉规范": 0.8571428571428571
   },
-  "overallPassRate": 0,
+  "overallPassRate": 0.7142857142857143,
+  "bySplit": {
+    "train": {
+      "byDimension": {
+        "correctness": 0.8461538461538461,
+        "robustness": 1,
+        "visual": 0.725
+      },
+      "byRule": {
+        "约束闭环": 0.8461538461538461,
+        "视觉规范·标签": 0.4,
+        "视觉规范·线型": 0.4,
+        "视觉规范·画布范围": 1,
+        "视觉规范·角弧默认不标": 1,
+        "视觉规范·配色": 0.8,
+        "LaTeX铁律": 1,
+        "视觉规范": 0.8
+      },
+      "overallPassRate": 0.6
+    },
+    "holdout": {
+      "byDimension": {
+        "correctness": 1,
+        "robustness": 1,
+        "visual": 0.875
+      },
+      "byRule": {
+        "约束闭环": 1,
+        "视觉规范·标签": 0.5,
+        "视觉规范·线型": 1,
+        "视觉规范·画布范围": 1,
+        "视觉规范·角弧默认不标": 1,
+        "视觉规范·配色": 1,
+        "LaTeX铁律": 1,
+        "视觉规范": 1
+      },
+      "overallPassRate": 1
+    }
+  },
   "cases": [
+    {
+      "id": "1",
+      "split": "train",
+      "passRate": 0
+    },
+    {
+      "id": "2",
+      "split": "train",
+      "passRate": 1
+    },
+    {
+      "id": "3",
+      "split": "holdout",
+      "passRate": 1
+    },
+    {
+      "id": "4",
+      "split": "train",
+      "passRate": 0
+    },
+    {
+      "id": "5",
+      "split": "train",
+      "passRate": 1
+    },
+    {
+      "id": "6",
+      "split": "holdout",
+      "passRate": 1
+    },
     {
       "id": "_smoke-parabola",
       "split": "train",
-      "passRate": 0
+      "passRate": 1
     }
   ]
 }

@@ -1,0 +1,760 @@
+{
+  "objectInventory": [
+    {
+      "type": "image",
+      "count": 5
+    },
+    {
+      "type": "numeric",
+      "count": 11
+    },
+    {
+      "type": "text",
+      "count": 25
+    },
+    {
+      "type": "button",
+      "count": 2
+    },
+    {
+      "type": "boolean",
+      "count": 2
+    },
+    {
+      "type": "function",
+      "count": 2
+    },
+    {
+      "type": "point",
+      "count": 21
+    },
+    {
+      "type": "polygon",
+      "count": 10
+    },
+    {
+      "type": "segment",
+      "count": 42
+    },
+    {
+      "type": "angle",
+      "count": 7
+    }
+  ],
+  "freeVars": [
+    {
+      "name": "wl",
+      "type": "slider",
+      "min": -5,
+      "max": 5,
+      "inc": null
+    },
+    {
+      "name": "wr",
+      "type": "slider",
+      "min": -5,
+      "max": 10,
+      "inc": null
+    },
+    {
+      "name": "wu",
+      "type": "slider",
+      "min": -5,
+      "max": 5,
+      "inc": null
+    },
+    {
+      "name": "wd",
+      "type": "slider",
+      "min": -5,
+      "max": 5,
+      "inc": null
+    },
+    {
+      "name": "QType",
+      "type": "slider",
+      "min": -5,
+      "max": 5,
+      "inc": null
+    },
+    {
+      "name": "qn",
+      "type": "slider",
+      "min": 1,
+      "max": 3,
+      "inc": null
+    },
+    {
+      "name": "hn",
+      "type": "slider",
+      "min": 0,
+      "max": 8,
+      "inc": null
+    },
+    {
+      "name": "lk",
+      "type": "slider",
+      "min": -5,
+      "max": 5,
+      "inc": null
+    },
+    {
+      "name": "lb",
+      "type": "slider",
+      "min": -5,
+      "max": 5,
+      "inc": null
+    },
+    {
+      "name": "t1",
+      "type": "slider",
+      "min": 0,
+      "max": 1,
+      "inc": null
+    },
+    {
+      "name": "t3",
+      "type": "slider",
+      "min": 0,
+      "max": 1,
+      "inc": null
+    }
+  ],
+  "elements": [
+    {
+      "label": "pic1",
+      "type": "image",
+      "definition": ""
+    },
+    {
+      "label": "wl",
+      "type": "numeric",
+      "definition": ""
+    },
+    {
+      "label": "wr",
+      "type": "numeric",
+      "definition": ""
+    },
+    {
+      "label": "wu",
+      "type": "numeric",
+      "definition": ""
+    },
+    {
+      "label": "wd",
+      "type": "numeric",
+      "definition": ""
+    },
+    {
+      "label": "text1",
+      "type": "text",
+      "definition": "&quot;正方形组图下&quot;"
+    },
+    {
+      "label": "bt1",
+      "type": "button",
+      "definition": ""
+    },
+    {
+      "label": "bt2",
+      "type": "button",
+      "definition": ""
+    },
+    {
+      "label": "QType",
+      "type": "numeric",
+      "definition": ""
+    },
+    {
+      "label": "qn",
+      "type": "numeric",
+      "definition": ""
+    },
+    {
+      "label": "qnText",
+      "type": "text",
+      "definition": "&quot;问题(&quot; + (LaTeX[qn]) + &quot;)&quot;"
+    },
+    {
+      "label": "Fig1_1",
+      "type": "image",
+      "definition": ""
+    },
+    {
+      "label": "blFig1",
+      "type": "boolean",
+      "definition": ""
+    },
+    {
+      "label": "blFig2",
+      "type": "boolean",
+      "definition": ""
+    },
+    {
+      "label": "FigBC2",
+      "type": "image",
+      "definition": ""
+    },
+    {
+      "label": "text2",
+      "type": "text",
+      "definition": "&quot;如图，四边形 ABFG, ACDE 是以  \\triangle ABC 的边 AC、AB 为边向  \\triangle ABC  外作的正方形\\\\&#xa;连结  EG，若  O  为  EG  的中点。\\\\&#xa;求证  (1)  AO = \\frac{1}{2} BC \\quad (2)  AO \\bot BC\\\\ &quot;"
+    },
+    {
+      "label": "hn",
+      "type": "numeric",
+      "definition": ""
+    },
+    {
+      "label": "text3",
+      "type": "text",
+      "definition": "&quot;提示&quot;"
+    },
+    {
+      "label": "fa",
+      "type": "function",
+      "definition": "fa(x) = If[-2 &lt; x &lt; 0, x^(2)]"
+    },
+    {
+      "label": "fb",
+      "type": "function",
+      "definition": "fb(x) = If[0 &lt; x &lt; 2, x^(2)]"
+    },
+    {
+      "label": "lk",
+      "type": "numeric",
+      "definition": ""
+    },
+    {
+      "label": "lb",
+      "type": "numeric",
+      "definition": ""
+    },
+    {
+      "label": "hint11",
+      "type": "text",
+      "definition": "&quot;延长  \\textcolor{red}{AO}  至  OM  使得  \\textcolor{red}{AO} = OM&quot;"
+    },
+    {
+      "label": "hint12",
+      "type": "text",
+      "definition": "&quot;连接  GM ，可得  \\textcolor{#080}{\\triangle GOM} ≌ \\textcolor{#0A0}{\\triangle EOA }&quot;"
+    },
+    {
+      "label": "hint13",
+      "type": "text",
+      "definition": "&quot;\\because ACDE, BAFG 是正方形&quot;"
+    },
+    {
+      "label": "hint14",
+      "type": "text",
+      "definition": "&quot;\\Rightarrow GM = AE = AC, AG = AB&quot;"
+    },
+    {
+      "label": "hint21",
+      "type": "text",
+      "definition": "&quot;\\because \\triangle AGM ≌ \\triangle BAC \\Rightarrow \\textcolor{#0A0}{\\angle GAM} = \\textcolor{#0A0}{\\angle ABC }&quot;"
+    },
+    {
+      "label": "hint22",
+      "type": "text",
+      "definition": "&quot;且  \\textcolor{#F80}{\\angle BAH} + \\textcolor{#0A0}{\\angle GAM} = 90^\\circ&quot;"
+    },
+    {
+      "label": "hint23",
+      "type": "text",
+      "definition": "&quot;可得  \\textcolor{#F80}{\\angle BAH} + \\textcolor{#0A0}{\\angle ABH} = 90^\\circ&quot;"
+    },
+    {
+      "label": "hint24",
+      "type": "text",
+      "definition": "&quot;因此  AO \\bot BC&quot;"
+    },
+    {
+      "label": "hint25",
+      "type": "text",
+      "definition": "&quot;&quot;"
+    },
+    {
+      "label": "B",
+      "type": "point",
+      "definition": ""
+    },
+    {
+      "label": "C",
+      "type": "point",
+      "definition": ""
+    },
+    {
+      "label": "A",
+      "type": "point",
+      "definition": ""
+    },
+    {
+      "label": "plAC4",
+      "type": "polygon",
+      "definition": ""
+    },
+    {
+      "label": "f",
+      "type": "segment",
+      "definition": ""
+    },
+    {
+      "label": "g",
+      "type": "segment",
+      "definition": ""
+    },
+    {
+      "label": "h",
+      "type": "segment",
+      "definition": ""
+    },
+    {
+      "label": "i",
+      "type": "segment",
+      "definition": ""
+    },
+    {
+      "label": "D",
+      "type": "point",
+      "definition": ""
+    },
+    {
+      "label": "E",
+      "type": "point",
+      "definition": ""
+    },
+    {
+      "label": "plBA4",
+      "type": "polygon",
+      "definition": ""
+    },
+    {
+      "label": "j",
+      "type": "segment",
+      "definition": ""
+    },
+    {
+      "label": "k",
+      "type": "segment",
+      "definition": ""
+    },
+    {
+      "label": "l",
+      "type": "segment",
+      "definition": ""
+    },
+    {
+      "label": "m",
+      "type": "segment",
+      "definition": ""
+    },
+    {
+      "label": "G",
+      "type": "point",
+      "definition": ""
+    },
+    {
+      "label": "F",
+      "type": "point",
+      "definition": ""
+    },
+    {
+      "label": "sBC",
+      "type": "segment",
+      "definition": ""
+    },
+    {
+      "label": "O",
+      "type": "point",
+      "definition": "(G + E) / 2"
+    },
+    {
+      "label": "text4",
+      "type": "text",
+      "definition": "&quot;\\because GM /\\!/ AE  \\therefore \\textcolor{#0A0}{\\angle MGA} + \\textcolor{#F80}{\\angle GAE} = 180^\\circ &quot;"
+    },
+    {
+      "label": "text5",
+      "type": "text",
+      "definition": "&quot;同时  \\textcolor{#0A0}{\\angle{ BAC}}  + \\textcolor{#F80}{\\angle GAE} = 180^\\circ &quot;"
+    },
+    {
+      "label": "M",
+      "type": "point",
+      "definition": "(2 * O) - A"
+    },
+    {
+      "label": "sEF",
+      "type": "segment",
+      "definition": ""
+    },
+    {
+      "label": "text6",
+      "type": "text",
+      "definition": "&quot;作  GM \\bot AO, NE \\bot AO&quot;"
+    },
+    {
+      "label": "text7",
+      "type": "text",
+      "definition": "&quot;\\because \\triangle AGM  ≌  \\triangle BAH  &#xa;\\therefore GM = AH &quot;"
+    },
+    {
+      "label": "text8",
+      "type": "text",
+      "definition": "&quot;\\because \\triangle AEN  ≌  \\triangle C A H\\therefore NE = AH &quot;"
+    },
+    {
+      "label": "text9",
+      "type": "text",
+      "definition": "&quot;由 \\angle GOM = \\angle EON , \\angle GMO = \\angle ENO = 90^\\circ &quot;"
+    },
+    {
+      "label": "text10",
+      "type": "text",
+      "definition": "&quot;可得  GM = NE&quot;"
+    },
+    {
+      "label": "text11",
+      "type": "text",
+      "definition": "&quot;可得  \\triangle GMO  ≌  \\triangle ENO&quot;"
+    },
+    {
+      "label": "t1",
+      "type": "numeric",
+      "definition": ""
+    },
+    {
+      "label": "A&apos;_1",
+      "type": "point",
+      "definition": ""
+    },
+    {
+      "label": "F&apos;_1",
+      "type": "point",
+      "definition": ""
+    },
+    {
+      "label": "C&apos;",
+      "type": "point",
+      "definition": ""
+    },
+    {
+      "label": "pic2",
+      "type": "image",
+      "definition": ""
+    },
+    {
+      "label": "pic3",
+      "type": "image",
+      "definition": ""
+    },
+    {
+      "label": "sAO",
+      "type": "segment",
+      "definition": ""
+    },
+    {
+      "label": "H",
+      "type": "point",
+      "definition": ""
+    },
+    {
+      "label": "text12",
+      "type": "text",
+      "definition": "&quot;可得  \\textcolor{#0A0}{\\angle MGA} = \\textcolor{#0A0}{\\angle BAC }&quot;"
+    },
+    {
+      "label": "text13",
+      "type": "text",
+      "definition": "&quot;因此  \\textcolor{#0AA}{\\triangle GAM} ≌ \\textcolor{#0AA}{\\triangle ABC} \\Rightarrow \\textcolor{red}{AO} = \\frac{1}{2} BC&quot;"
+    },
+    {
+      "label": "sOM",
+      "type": "segment",
+      "definition": ""
+    },
+    {
+      "label": "sGM",
+      "type": "segment",
+      "definition": ""
+    },
+    {
+      "label": "A&apos;_2",
+      "type": "point",
+      "definition": ""
+    },
+    {
+      "label": "O&apos;",
+      "type": "point",
+      "definition": ""
+    },
+    {
+      "label": "E&apos;_1",
+      "type": "point",
+      "definition": ""
+    },
+    {
+      "label": "plAOE",
+      "type": "polygon",
+      "definition": ""
+    },
+    {
+      "label": "e&apos;_1",
+      "type": "segment",
+      "definition": ""
+    },
+    {
+      "label": "a&apos;_2",
+      "type": "segment",
+      "definition": ""
+    },
+    {
+      "label": "o&apos;",
+      "type": "segment",
+      "definition": ""
+    },
+    {
+      "label": "aAGM",
+      "type": "angle",
+      "definition": ""
+    },
+    {
+      "label": "aEAG",
+      "type": "angle",
+      "definition": ""
+    },
+    {
+      "label": "aCAB",
+      "type": "angle",
+      "definition": ""
+    },
+    {
+      "label": "sAH",
+      "type": "segment",
+      "definition": ""
+    },
+    {
+      "label": "aAHB",
+      "type": "angle",
+      "definition": ""
+    },
+    {
+      "label": "aMAG",
+      "type": "angle",
+      "definition": ""
+    },
+    {
+      "label": "aCBA",
+      "type": "angle",
+      "definition": ""
+    },
+    {
+      "label": "aBAH",
+      "type": "angle",
+      "definition": ""
+    },
+    {
+      "label": "text14",
+      "type": "text",
+      "definition": "&quot;如图，四边形 ABFG, ACDE 是以  \\triangle ABC 的边 AC、AB 为边向  \\triangle ABC  外作的正方形\\\\连结  EG，  若 AH \\bot BC  ，求证  O  为  EG  的中点。 &quot;"
+    },
+    {
+      "label": "M3",
+      "type": "point",
+      "definition": ""
+    },
+    {
+      "label": "N",
+      "type": "point",
+      "definition": ""
+    },
+    {
+      "label": "sGM3",
+      "type": "segment",
+      "definition": ""
+    },
+    {
+      "label": "sEN",
+      "type": "segment",
+      "definition": ""
+    },
+    {
+      "label": "sOM3",
+      "type": "segment",
+      "definition": ""
+    },
+    {
+      "label": "sON",
+      "type": "segment",
+      "definition": ""
+    },
+    {
+      "label": "text15",
+      "type": "text",
+      "definition": "&quot;\\Rightarrow GO = EO&quot;"
+    },
+    {
+      "label": "plAGM3",
+      "type": "polygon",
+      "definition": ""
+    },
+    {
+      "label": "m3",
+      "type": "segment",
+      "definition": ""
+    },
+    {
+      "label": "a",
+      "type": "segment",
+      "definition": ""
+    },
+    {
+      "label": "g_1",
+      "type": "segment",
+      "definition": ""
+    },
+    {
+      "label": "plBAH",
+      "type": "polygon",
+      "definition": ""
+    },
+    {
+      "label": "h_1",
+      "type": "segment",
+      "definition": ""
+    },
+    {
+      "label": "b",
+      "type": "segment",
+      "definition": ""
+    },
+    {
+      "label": "a_1",
+      "type": "segment",
+      "definition": ""
+    },
+    {
+      "label": "plANE",
+      "type": "polygon",
+      "definition": ""
+    },
+    {
+      "label": "e",
+      "type": "segment",
+      "definition": ""
+    },
+    {
+      "label": "a_2",
+      "type": "segment",
+      "definition": ""
+    },
+    {
+      "label": "n",
+      "type": "segment",
+      "definition": ""
+    },
+    {
+      "label": "plCHA",
+      "type": "polygon",
+      "definition": ""
+    },
+    {
+      "label": "a_3",
+      "type": "segment",
+      "definition": ""
+    },
+    {
+      "label": "c",
+      "type": "segment",
+      "definition": ""
+    },
+    {
+      "label": "h_2",
+      "type": "segment",
+      "definition": ""
+    },
+    {
+      "label": "t3",
+      "type": "numeric",
+      "definition": ""
+    },
+    {
+      "label": "O&apos;_1",
+      "type": "point",
+      "definition": ""
+    },
+    {
+      "label": "N&apos;",
+      "type": "point",
+      "definition": ""
+    },
+    {
+      "label": "E&apos;",
+      "type": "point",
+      "definition": ""
+    },
+    {
+      "label": "tONE",
+      "type": "polygon",
+      "definition": ""
+    },
+    {
+      "label": "e&apos;",
+      "type": "segment",
+      "definition": ""
+    },
+    {
+      "label": "o&apos;_1",
+      "type": "segment",
+      "definition": ""
+    },
+    {
+      "label": "n&apos;",
+      "type": "segment",
+      "definition": ""
+    },
+    {
+      "label": "plGAM",
+      "type": "polygon",
+      "definition": ""
+    },
+    {
+      "label": "m_1",
+      "type": "segment",
+      "definition": ""
+    },
+    {
+      "label": "g_2",
+      "type": "segment",
+      "definition": ""
+    },
+    {
+      "label": "a_4",
+      "type": "segment",
+      "definition": ""
+    },
+    {
+      "label": "plABC",
+      "type": "polygon",
+      "definition": ""
+    },
+    {
+      "label": "c_1",
+      "type": "segment",
+      "definition": ""
+    },
+    {
+      "label": "a_5",
+      "type": "segment",
+      "definition": ""
+    },
+    {
+      "label": "b_1",
+      "type": "segment",
+      "definition": ""
+    }
+  ]
+}

@@ -1,0 +1,150 @@
+{
+  "objectInventory": [
+    {
+      "type": "point",
+      "count": 8
+    },
+    {
+      "type": "conicpart",
+      "count": 1
+    },
+    {
+      "type": "text",
+      "count": 1
+    },
+    {
+      "type": "polygon",
+      "count": 1
+    },
+    {
+      "type": "segment",
+      "count": 10
+    },
+    {
+      "type": "locus",
+      "count": 1
+    },
+    {
+      "type": "conic",
+      "count": 1
+    }
+  ],
+  "freeVars": [],
+  "elements": [
+    {
+      "label": "C",
+      "type": "point",
+      "definition": ""
+    },
+    {
+      "label": "A",
+      "type": "point",
+      "definition": ""
+    },
+    {
+      "label": "B",
+      "type": "point",
+      "definition": ""
+    },
+    {
+      "label": "h",
+      "type": "conicpart",
+      "definition": ""
+    },
+    {
+      "label": "text1",
+      "type": "text",
+      "definition": "&quot;如图,以正方形ABCD的边BC为一边向内部做一等腰\\triangle BCE,\\;BE=BC,过E做EH⊥BC,\\\\&#10;点P是\\text{Rt}\\triangle BEH的内心,连接AP,若AB=2,则AP的最小值为\\underline{\\hspace{5em}.&quot;"
+    },
+    {
+      "label": "D",
+      "type": "point",
+      "definition": ""
+    },
+    {
+      "label": "poly1",
+      "type": "polygon",
+      "definition": ""
+    },
+    {
+      "label": "a",
+      "type": "segment",
+      "definition": ""
+    },
+    {
+      "label": "b",
+      "type": "segment",
+      "definition": ""
+    },
+    {
+      "label": "c",
+      "type": "segment",
+      "definition": ""
+    },
+    {
+      "label": "d",
+      "type": "segment",
+      "definition": ""
+    },
+    {
+      "label": "E",
+      "type": "point",
+      "definition": ""
+    },
+    {
+      "label": "e",
+      "type": "segment",
+      "definition": ""
+    },
+    {
+      "label": "f",
+      "type": "segment",
+      "definition": ""
+    },
+    {
+      "label": "H",
+      "type": "point",
+      "definition": ""
+    },
+    {
+      "label": "g",
+      "type": "segment",
+      "definition": ""
+    },
+    {
+      "label": "P",
+      "type": "point",
+      "definition": ""
+    },
+    {
+      "label": "i",
+      "type": "segment",
+      "definition": ""
+    },
+    {
+      "label": "loc1",
+      "type": "locus",
+      "definition": ""
+    },
+    {
+      "label": "k",
+      "type": "conic",
+      "definition": ""
+    },
+    {
+      "label": "F",
+      "type": "point",
+      "definition": ""
+    },
+    {
+      "label": "l",
+      "type": "segment",
+      "definition": ""
+    },
+    {
+      "label": "m",
+      "type": "segment",
+      "definition": ""
+    }
+  ]
+}

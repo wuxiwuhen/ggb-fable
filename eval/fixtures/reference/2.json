@@ -1,0 +1,574 @@
+{
+  "objectInventory": [
+    {
+      "type": "numeric",
+      "count": 12
+    },
+    {
+      "type": "point",
+      "count": 10
+    },
+    {
+      "type": "image",
+      "count": 6
+    },
+    {
+      "type": "text",
+      "count": 27
+    },
+    {
+      "type": "boolean",
+      "count": 2
+    },
+    {
+      "type": "function",
+      "count": 2
+    },
+    {
+      "type": "button",
+      "count": 1
+    },
+    {
+      "type": "segment",
+      "count": 20
+    },
+    {
+      "type": "conic",
+      "count": 1
+    },
+    {
+      "type": "angle",
+      "count": 6
+    },
+    {
+      "type": "polygon",
+      "count": 2
+    }
+  ],
+  "freeVars": [
+    {
+      "name": "rAFFE",
+      "type": "slider",
+      "min": 1,
+      "max": 3,
+      "inc": null
+    },
+    {
+      "name": "wl",
+      "type": "slider",
+      "min": -5,
+      "max": 5,
+      "inc": null
+    },
+    {
+      "name": "wr",
+      "type": "slider",
+      "min": -5,
+      "max": 10,
+      "inc": null
+    },
+    {
+      "name": "wu",
+      "type": "slider",
+      "min": -5,
+      "max": 5,
+      "inc": null
+    },
+    {
+      "name": "wd",
+      "type": "slider",
+      "min": -5,
+      "max": 5,
+      "inc": null
+    },
+    {
+      "name": "QType",
+      "type": "slider",
+      "min": -5,
+      "max": 5,
+      "inc": null
+    },
+    {
+      "name": "qn",
+      "type": "slider",
+      "min": 1,
+      "max": 4,
+      "inc": null
+    },
+    {
+      "name": "hn",
+      "type": "slider",
+      "min": 0,
+      "max": 5,
+      "inc": null
+    },
+    {
+      "name": "lk",
+      "type": "slider",
+      "min": -5,
+      "max": 5,
+      "inc": null
+    },
+    {
+      "name": "lb",
+      "type": "slider",
+      "min": -5,
+      "max": 5,
+      "inc": null
+    },
+    {
+      "name": "pn",
+      "type": "slider",
+      "min": 0,
+      "max": 4,
+      "inc": null
+    }
+  ],
+  "elements": [
+    {
+      "label": "rAFFE",
+      "type": "numeric",
+      "definition": ""
+    },
+    {
+      "label": "E",
+      "type": "point",
+      "definition": "(0, 0)"
+    },
+    {
+      "label": "C",
+      "type": "point",
+      "definition": "E + (10, 0)"
+    },
+    {
+      "label": "B",
+      "type": "point",
+      "definition": "(1 / (1 + (2 * rAFFE)) * (C - E)) + E"
+    },
+    {
+      "label": "A",
+      "type": "point",
+      "definition": "B + (ί^(2 / 3) * (C - B))"
+    },
+    {
+      "label": "rangle",
+      "type": "numeric",
+      "definition": ""
+    },
+    {
+      "label": "pic1",
+      "type": "image",
+      "definition": ""
+    },
+    {
+      "label": "wl",
+      "type": "numeric",
+      "definition": ""
+    },
+    {
+      "label": "wr",
+      "type": "numeric",
+      "definition": ""
+    },
+    {
+      "label": "wu",
+      "type": "numeric",
+      "definition": ""
+    },
+    {
+      "label": "wd",
+      "type": "numeric",
+      "definition": ""
+    },
+    {
+      "label": "text1",
+      "type": "text",
+      "definition": "&quot;19宁波26-圆中的函数与计算&quot;"
+    },
+    {
+      "label": "QType",
+      "type": "numeric",
+      "definition": ""
+    },
+    {
+      "label": "qn",
+      "type": "numeric",
+      "definition": ""
+    },
+    {
+      "label": "qnText",
+      "type": "text",
+      "definition": "&quot;问题(&quot; + (LaTeX[qn]) + &quot;)&quot;"
+    },
+    {
+      "label": "blFig1",
+      "type": "boolean",
+      "definition": ""
+    },
+    {
+      "label": "blFig2",
+      "type": "boolean",
+      "definition": ""
+    },
+    {
+      "label": "hn",
+      "type": "numeric",
+      "definition": ""
+    },
+    {
+      "label": "text3",
+      "type": "text",
+      "definition": "&quot;提示&quot;"
+    },
+    {
+      "label": "fa",
+      "type": "function",
+      "definition": "fa(x) = If[-2 &lt; x &lt; 0, x^(2)]"
+    },
+    {
+      "label": "fb",
+      "type": "function",
+      "definition": "fb(x) = If[0 &lt; x &lt; 2, x^(2)]"
+    },
+    {
+      "label": "lk",
+      "type": "numeric",
+      "definition": ""
+    },
+    {
+      "label": "lb",
+      "type": "numeric",
+      "definition": ""
+    },
+    {
+      "label": "hint21",
+      "type": "text",
+      "definition": "&quot;\\small \\because \\textcolor{#F80}{\\angle BED} = \\angle \\textcolor{#F80}{DAC} = 60^\\circ  且  \\textcolor{#F0A}{\\angle ADE} = \\textcolor{#F0A}{\\angle ACE} = 60^\\circ&quot;"
+    },
+    {
+      "label": "hint25",
+      "type": "text",
+      "definition": "&quot;&quot;"
+    },
+    {
+      "label": "pn",
+      "type": "numeric",
+      "definition": ""
+    },
+    {
+      "label": "text12",
+      "type": "text",
+      "definition": "&quot;图(&quot; + (LaTeX[pn]) + &quot;)&quot;"
+    },
+    {
+      "label": "button1",
+      "type": "button",
+      "definition": ""
+    },
+    {
+      "label": "text11",
+      "type": "text",
+      "definition": "&quot;O  经等边 \\triangle ABC  的顶点  A,C ,分别与  AB, BC  的延长线交于 D, E. BF\\bot EC &quot;"
+    },
+    {
+      "label": "pic6",
+      "type": "image",
+      "definition": ""
+    },
+    {
+      "label": "text5",
+      "type": "text",
+      "definition": "&quot;\\small BC = 6, BE = 2 , AG = 3\\sqrt{3}&quot;"
+    },
+    {
+      "label": "text6",
+      "type": "text",
+      "definition": "&quot;\\small AE = \\sqrt{25+27}=\\sqrt{52} = 2\\sqrt{13}&quot;"
+    },
+    {
+      "label": "text9",
+      "type": "text",
+      "definition": "&quot;\\small &quot;"
+    },
+    {
+      "label": "sBA",
+      "type": "segment",
+      "definition": ""
+    },
+    {
+      "label": "text2",
+      "type": "text",
+      "definition": "&quot;(1) 求证 BD = BE&quot;"
+    },
+    {
+      "label": "text15",
+      "type": "text",
+      "definition": "&quot;(2) 当  AF: EF = 3:2 , AC =6, 求 AE 的长&quot;"
+    },
+    {
+      "label": "text17",
+      "type": "text",
+      "definition": "&quot;(3) 设 \\frac{AF}{EF}=x, \\tan \\angle DAE = y, 求  y 对  x 的函数表达式&quot;"
+    },
+    {
+      "label": "text4",
+      "type": "text",
+      "definition": "&quot;\\small 设  BH = b, 则  BE = 2b &quot;"
+    },
+    {
+      "label": "text10",
+      "type": "text",
+      "definition": "&quot;\\small \\because \\frac{BG}{BE}=\\frac{AF}{EF}= x \\Rightarrow BG= 2xb, &quot;"
+    },
+    {
+      "label": "text13",
+      "type": "text",
+      "definition": "&quot;\\small \\Rightarrow AH = AB+BH = 4xb+b&quot;"
+    },
+    {
+      "label": "text14",
+      "type": "text",
+      "definition": "&quot;\\small  y = \\tan \\angle DAE = \\frac{EH}{AH}=\\frac{\\sqrt{3}}{4x+1}&quot;"
+    },
+    {
+      "label": "text20",
+      "type": "text",
+      "definition": "&quot;\\small 得  \\textcolor{#F80}{\\angle DEB} = \\textcolor{#F08}{\\angle BDE}  \\Rightarrow BD= BE&quot;"
+    },
+    {
+      "label": "text16",
+      "type": "text",
+      "definition": "&quot;\\Rightarrow OP = \\frac{91}{24} \\Rightarrow \\overset{\\Large \\frown}{\\small PQ} = \\frac{91}{48}\\pi &lt; AP&quot;"
+    },
+    {
+      "label": "pic2",
+      "type": "image",
+      "definition": ""
+    },
+    {
+      "label": "pic3",
+      "type": "image",
+      "definition": ""
+    },
+    {
+      "label": "pic4",
+      "type": "image",
+      "definition": ""
+    },
+    {
+      "label": "pic5",
+      "type": "image",
+      "definition": ""
+    },
+    {
+      "label": "sBC",
+      "type": "segment",
+      "definition": ""
+    },
+    {
+      "label": "sBE",
+      "type": "segment",
+      "definition": ""
+    },
+    {
+      "label": "sAC",
+      "type": "segment",
+      "definition": ""
+    },
+    {
+      "label": "sAE",
+      "type": "segment",
+      "definition": ""
+    },
+    {
+      "label": "F",
+      "type": "point",
+      "definition": ""
+    },
+    {
+      "label": "sBF",
+      "type": "segment",
+      "definition": ""
+    },
+    {
+      "label": "O",
+      "type": "point",
+      "definition": ""
+    },
+    {
+      "label": "G",
+      "type": "point",
+      "definition": ""
+    },
+    {
+      "label": "sAG",
+      "type": "segment",
+      "definition": ""
+    },
+    {
+      "label": "cO",
+      "type": "conic",
+      "definition": ""
+    },
+    {
+      "label": "D",
+      "type": "point",
+      "definition": ""
+    },
+    {
+      "label": "sBD",
+      "type": "segment",
+      "definition": ""
+    },
+    {
+      "label": "sDE",
+      "type": "segment",
+      "definition": ""
+    },
+    {
+      "label": "aFBE",
+      "type": "angle",
+      "definition": ""
+    },
+    {
+      "label": "aAGE",
+      "type": "angle",
+      "definition": ""
+    },
+    {
+      "label": "aDEB",
+      "type": "angle",
+      "definition": ""
+    },
+    {
+      "label": "aDAC",
+      "type": "angle",
+      "definition": ""
+    },
+    {
+      "label": "aACE",
+      "type": "angle",
+      "definition": ""
+    },
+    {
+      "label": "aADE",
+      "type": "angle",
+      "definition": ""
+    },
+    {
+      "label": "sOF",
+      "type": "segment",
+      "definition": ""
+    },
+    {
+      "label": "sOB",
+      "type": "segment",
+      "definition": ""
+    },
+    {
+      "label": "M",
+      "type": "point",
+      "definition": ""
+    },
+    {
+      "label": "sOM",
+      "type": "segment",
+      "definition": ""
+    },
+    {
+      "label": "H",
+      "type": "point",
+      "definition": ""
+    },
+    {
+      "label": "sEH",
+      "type": "segment",
+      "definition": ""
+    },
+    {
+      "label": "sBH",
+      "type": "segment",
+      "definition": ""
+    },
+    {
+      "label": "text18",
+      "type": "text",
+      "definition": "&quot;\\small \\frac{AG}{BF} = \\frac{AE}{EF} = \\frac{EF+AF}{EF} = 1+x&quot;"
+    },
+    {
+      "label": "text19",
+      "type": "text",
+      "definition": "&quot;\\small \\frac{EC}{BM} = \\frac{4xb+2b}{2xb-b}=\\frac{4x+2}{2x-1}&quot;"
+    },
+    {
+      "label": "text21",
+      "type": "text",
+      "definition": "&quot;\\because \\frac{S_{\\triangle AEG}}{S_{\\triangle OFB}}= \\frac{AG\\cdot EC}{ BF \\cdot BM} = 10&quot;"
+    },
+    {
+      "label": "text22",
+      "type": "text",
+      "definition": "&quot;\\Rightarrow 2x^2-7x+6 =0, x = 2  或  \\frac{3}{2}&quot;"
+    },
+    {
+      "label": "text23",
+      "type": "text",
+      "definition": "&quot;y = \\frac{\\sqrt{3}}{9} 或 \\frac{\\sqrt{3}}{7}&quot;"
+    },
+    {
+      "label": "text24",
+      "type": "text",
+      "definition": "&quot;(4) 连接  OF, OB , 若  \\triangle AEC  面积是  \\triangle OFB  的  10  倍, 求  y  的值.&quot;"
+    },
+    {
+      "label": "plPFB",
+      "type": "polygon",
+      "definition": ""
+    },
+    {
+      "label": "b",
+      "type": "segment",
+      "definition": ""
+    },
+    {
+      "label": "o",
+      "type": "segment",
+      "definition": ""
+    },
+    {
+      "label": "f",
+      "type": "segment",
+      "definition": ""
+    },
+    {
+      "label": "text7",
+      "type": "text",
+      "definition": "&quot;\\footnotesize \\frac{AF}{EF}= &quot; + (LaTeX[rAFFE]) + &quot;&quot;"
+    },
+    {
+      "label": "plAEC",
+      "type": "polygon",
+      "definition": ""
+    },
+    {
+      "label": "c",
+      "type": "segment",
+      "definition": ""
+    },
+    {
+      "label": "a",
+      "type": "segment",
+      "definition": ""
+    },
+    {
+      "label": "e",
+      "type": "segment",
+      "definition": ""
+    },
+    {
+      "label": "text8",
+      "type": "text",
+      "definition": "&quot;\\footnotesize \\frac{S_{\\triangle AEC}}{S_{\\triangle OBF}} =&quot; + (LaTeX[plAEC / plPFB]) + &quot;&quot;"
+    }
+  ]
+}

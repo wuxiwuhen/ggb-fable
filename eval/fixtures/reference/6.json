@@ -1,0 +1,176 @@
+{
+  "objectInventory": [
+    {
+      "type": "point",
+      "count": 11
+    },
+    {
+      "type": "segment",
+      "count": 11
+    },
+    {
+      "type": "polygon",
+      "count": 2
+    },
+    {
+      "type": "line",
+      "count": 3
+    },
+    {
+      "type": "text",
+      "count": 1
+    },
+    {
+      "type": "locus",
+      "count": 1
+    }
+  ],
+  "freeVars": [],
+  "elements": [
+    {
+      "label": "A",
+      "type": "point",
+      "definition": ""
+    },
+    {
+      "label": "B",
+      "type": "point",
+      "definition": ""
+    },
+    {
+      "label": "C",
+      "type": "point",
+      "definition": ""
+    },
+    {
+      "label": "D",
+      "type": "point",
+      "definition": ""
+    },
+    {
+      "label": "f",
+      "type": "segment",
+      "definition": ""
+    },
+    {
+      "label": "P",
+      "type": "point",
+      "definition": ""
+    },
+    {
+      "label": "多边形1",
+      "type": "polygon",
+      "definition": ""
+    },
+    {
+      "label": "g",
+      "type": "segment",
+      "definition": ""
+    },
+    {
+      "label": "h",
+      "type": "segment",
+      "definition": ""
+    },
+    {
+      "label": "i",
+      "type": "segment",
+      "definition": ""
+    },
+    {
+      "label": "E",
+      "type": "point",
+      "definition": ""
+    },
+    {
+      "label": "多边形2",
+      "type": "polygon",
+      "definition": ""
+    },
+    {
+      "label": "j",
+      "type": "segment",
+      "definition": ""
+    },
+    {
+      "label": "k",
+      "type": "segment",
+      "definition": ""
+    },
+    {
+      "label": "l",
+      "type": "segment",
+      "definition": ""
+    },
+    {
+      "label": "F",
+      "type": "point",
+      "definition": ""
+    },
+    {
+      "label": "m",
+      "type": "segment",
+      "definition": ""
+    },
+    {
+      "label": "M",
+      "type": "point",
+      "definition": ""
+    },
+    {
+      "label": "n",
+      "type": "line",
+      "definition": ""
+    },
+    {
+      "label": "p",
+      "type": "line",
+      "definition": ""
+    },
+    {
+      "label": "G",
+      "type": "point",
+      "definition": ""
+    },
+    {
+      "label": "H",
+      "type": "point",
+      "definition": ""
+    },
+    {
+      "label": "q",
+      "type": "segment",
+      "definition": ""
+    },
+    {
+      "label": "r",
+      "type": "segment",
+      "definition": ""
+    },
+    {
+      "label": "s",
+      "type": "line",
+      "definition": ""
+    },
+    {
+      "label": "I",
+      "type": "point",
+      "definition": ""
+    },
+    {
+      "label": "t",
+      "type": "segment",
+      "definition": ""
+    },
+    {
+      "label": "文本1",
+      "type": "text",
+      "definition": "&quot;如图,C、D是线段AB上两点,且AC=BD=\\frac{1}{6}AB,点P是线段CD上一个动点,\\\\&#10;在AB同侧分别作等边\\triangle PAE和等边\\triangle PBF,M为线段EF的中点.\\;在点P从点C\\\\&#10;移到点D时,点M运动的路径长度为\\underline{\\hspace{3em}}.&quot;"
+    },
+    {
+      "label": "轨迹1",
+      "type": "locus",
+      "definition": ""
+    }
+  ]
+}

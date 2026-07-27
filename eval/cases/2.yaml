@@ -1,0 +1,29 @@
+id: "2"
+meta:
+  title: 19宁波26-圆中等边三角形
+  problem: 圆 O 经过等边三角形 ABC 的顶点 A、C，分别与边 AB、BC 的延长线交于点 D、E，且 BF⊥EC。已知 BC = 6, BE = 2。请画出这个图形：等边三角形 ABC、圆 O（经过 A、C 两点）、点 D（在 AB 的延长线上）和点 E（在 BC 的延长线上）。
+  dimension: 2D
+  topic: [圆, 等边三角形, 中考压轴]
+  difficulty: 3
+  key_insight: 圆过等边△两顶点交延长线，BF⊥EC 构造。原题含 4 小问（求证 BD=BE / 求 AE / 函数表达式 / 面积比），本 case 只评估 agent 画出核心几何（圆+等边△+交点）。
+  animation: { hasAnimation: false }
+  source: { url: 社区课件(19宁波26), ggb_file: fixtures/ggb/2.ggb }
+reference:
+  note: 原 .ggb 是含分步提示+交互的中考压轴课件(gold), 完整结构见 fixtures/reference/2.json。本 case 只评估核心几何。
+assertions:
+  - kind: object_exists
+    find: { type: conic, min: 1 }
+    guards: [约束闭环]
+  - kind: object_exists
+    find: { type: point, min: 3 }
+    guards: [约束闭环]
+  - kind: object_exists
+    find: { type: segment, min: 1 }
+    guards: [约束闭环]
+visual_rubric: inherit
+split: train
+provenance:
+  derived_from: raw/2/
+  author: claude+human
+  reviewed: true
+  version: 2

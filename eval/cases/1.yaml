@@ -1,0 +1,29 @@
+id: "1"
+meta:
+  title: 将军饮马-二次函数
+  problem: 抛物线 y = x^2 - (1/2)x - 3/2 与直线 y = x - 2 相交于 A、B 两点。点 E 在该抛物线的对称轴上，点 F 在 x 轴上，求 AE + EF + FB 的最小值。
+  dimension: 2D
+  topic: [二次函数, 将军饮马, 对称变换]
+  difficulty: 3
+  key_insight: 将军饮马——作 A 关于对称轴的对称点 A'、B 关于 x 轴的对称点 B'，则 AE+EF+FB 的最小值等于线段 A'B' 的长度。
+  animation: { hasAnimation: false }
+  source: { url: 社区课件, ggb_file: fixtures/ggb/1.ggb }
+reference:
+  note: 原 .ggb 是含分步提示+交互 slider+按钮的教学课件(gold), 非单纯几何构造; 完整结构见 fixtures/reference/1.json。本 case 只评估 agent 画出题目核心几何(function 抛物线/line 直线/point 交点)的能力, 不要求复现课件 UI。
+assertions:
+  - kind: object_exists
+    find: { type: function, min: 1 }
+    guards: [约束闭环]
+  - kind: object_exists
+    find: { type: line, min: 1 }
+    guards: [约束闭环]
+  - kind: object_exists
+    find: { type: point, min: 2 }
+    guards: [约束闭环]
+visual_rubric: inherit
+split: train
+provenance:
+  derived_from: raw/1/
+  author: claude+human
+  reviewed: true
+  version: 2

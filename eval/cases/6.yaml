@@ -1,0 +1,26 @@
+id: "6"
+meta:
+  title: 双等边三角形+中点轨迹
+  problem: 如图，C、D 是线段 AB 上两点，且 AC=BD=1/6·AB。点 P 是线段 CD 上的动点，在 AB 同侧分别作等边 △PAE 和等边 △PBF，M 为线段 EF 的中点。请画出这个图形，包含动点 P 从 C 移到 D 时点 M 的运动轨迹。
+  dimension: 2D
+  topic: [等边三角形, 动点轨迹, 中考]
+  difficulty: 3
+  key_insight: 双等边△PAE/PBF + EF 中点 M，P 运动时 M 轨迹为线段。agent 画核心几何 + M 轨迹。
+  animation: { hasAnimation: true, slider: P_pos }
+  representativeFrame: { slider: P_pos, value: 0.5 }
+  source: { url: 社区课件, ggb_file: fixtures/ggb/6.ggb }
+reference:
+  note: 原 .ggb 含动点 + M 轨迹, 见 fixtures/reference/6.json。
+assertions:
+  - kind: object_exists
+    find: { type: polygon, min: 1 }
+    guards: [约束闭环]
+  - kind: object_exists
+    find: { type: point, min: 5 }
+    guards: [约束闭环]
+  - kind: object_exists
+    find: { type: segment, min: 3 }
+    guards: [约束闭环]
+visual_rubric: inherit
+split: holdout
+provenance: { derived_from: raw/6/, author: claude+human, reviewed: true, version: 2 }
