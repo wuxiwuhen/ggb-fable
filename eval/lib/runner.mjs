@@ -59,7 +59,7 @@ async function setupPage(page, promptVersion, glm) {
   page.__csReady = false;
   page.on('console', (m) => { if (/向量全部缓存|跳过预热/.test(m.text())) page.__csReady = true; });
   await page.addInitScript(byokInitScript(glm), {
-    state: { mode: 'byok', byokProfiles: [{ name: 'eval', api_key: glm.api_key, base_url: glm.base_url, model_name: process.env.GLM_MODEL || 'glm-4.6' }], activeProfileName: 'eval', vision: { api_key: glm.api_key, base_url: glm.base_url, model_name: glm.model }, embedding: {}, maxToolRounds: 30 }, version: 0,
+    state: { mode: 'byok', byokProfiles: [{ name: 'eval', api_key: process.env.DEEPSEEK_API_KEY, base_url: process.env.DEEPSEEK_BASE_URL, model_name: process.env.DEEPSEEK_MODEL || 'deepseek-v4-pro' }], activeProfileName: 'eval', vision: { api_key: glm.api_key, base_url: glm.base_url, model_name: glm.model }, embedding: {}, maxToolRounds: 30 }, version: 0,
   });
 }
 
@@ -69,7 +69,7 @@ async function setupPage(page, promptVersion, glm) {
 // React 还没把 send-btn 换成 stop, 第一次 poll 立即返回 true → 提前退出, agent 根本没开始。
 // 改用语义化的 turn_end 事件: 它由 logger ~400ms flush + 拦截器写入, 在 500ms poll 周期内可见。
 // eventsBefore 是"点击 send 前"已累积的事件数, 只看之后新增的 turn_end, 防止复用 page 时旧事件误命中。
-async function waitForTurnEnd(page, eventsBefore, timeoutMs = 120000) {
+async function waitForTurnEnd(page, eventsBefore, timeoutMs = 300000) {
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
     const evs = page.__evalEvents || [];
