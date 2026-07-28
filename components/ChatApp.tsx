@@ -1160,7 +1160,7 @@ export default function ChatApp() {
               </button>
             </div>
             <div className="modal-actions" style={{ marginTop: 14 }}>
-              <button className="btn ghost" onClick={toggleShare}>关闭分享</button>
+              <button className="btn ghost" onClick={async () => { await toggleShare(); setShareOpen(false); }}>关闭分享</button>
               <button className="btn primary" onClick={() => setShareOpen(false)}>完成</button>
             </div>
           </div>

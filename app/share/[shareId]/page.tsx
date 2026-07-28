@@ -160,7 +160,6 @@ export default function SharePage() {
                   alignSelf: m.role === 'user' ? 'flex-end' : 'flex-start',
                   background: m.role === 'user' ? '#e8f0fe' : '#f5f5f5',
                 }}>
-                  <div style={S.bubbleRole}>{m.role === 'user' ? '👤' : '🤖'}</div>
                   <MessageContent content={m.content} />
                 </div>
               ))
@@ -290,6 +289,5 @@ const S: Record<string, any> = {
     lineHeight: 1.55,
     wordBreak: 'break-word' as const,
   },
-  bubbleRole: { fontSize: 12, marginBottom: 2 },
   emptyHint: { color: '#999', fontSize: 13, textAlign: 'center' as const, marginTop: 24 },
 };

@@ -36,3 +36,4 @@ yarn-error.log*
 # mcp配置
 .mcp.json
 .gstack/
+CLAUDE.md
