@@ -923,8 +923,8 @@ export default function ChatApp() {
               {/* 分享按钮 */}
               <button
                 className={`btn ghost ${shareEnabled ? 'active' : ''}`}
-                title={shareEnabled ? '关闭分享' : '分享会话'}
-                onClick={toggleShare}
+                title={shareEnabled ? '查看分享链接' : '分享会话'}
+                onClick={() => { if (shareEnabled) { setShareOpen(true); } else { toggleShare(); } }}
                 disabled={shareToggling || !currentSessionId}
               >
                 {shareToggling ? '⏳' : shareEnabled ? '🔗' : '🔗'} {shareEnabled ? '已分享' : '分享'}

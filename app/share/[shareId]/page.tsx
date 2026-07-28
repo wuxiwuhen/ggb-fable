@@ -13,14 +13,17 @@ const DEPLOY_SRC = 'https://www.geogebra.org/apps/deployggb.js';
 let scriptPromise: Promise<void> | null = null;
 function loadDeployScript(): Promise<void> {
   if (typeof window === 'undefined') return Promise.reject(new Error('SSR'));
-  if ((window as any).GGBApplet) return Promise.resolve();
+  if ((window as any).GGBApplet) {
+    scriptPromise = Promise.resolve();  // 成功后重置缓存，避免失败缓存污染
+    return scriptPromise;
+  }
   if (scriptPromise) return scriptPromise;
   scriptPromise = new Promise((resolve, reject) => {
     const s = document.createElement('script');
     s.src = DEPLOY_SRC;
     s.async = true;
     s.onload = () => resolve();
-    s.onerror = () => reject(new Error('deployggb.js 加载失败'));
+    s.onerror = () => { scriptPromise = null; reject(new Error('deployggb.js 加载失败')); };
     document.head.appendChild(s);
   });
   return scriptPromise;
@@ -35,6 +38,7 @@ export default function SharePage() {
   const [title, setTitle] = useState('');
   const [messages, setMessages] = useState<ChatMsg[]>([]);
   const [mobile, setMobile] = useState(false);
+  const [ggbReady, setGgbReady] = useState(false);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const ggbRef = useRef<GGB | null>(null);
@@ -60,7 +64,7 @@ export default function SharePage() {
     }
   }, []);
 
-  // 初始化 GGB + 加载数据
+  // 初始化: 先加载数据, 再初始化 GGB
   useEffect(() => {
     if (initDone.current) return;
     initDone.current = true;
@@ -69,10 +73,8 @@ export default function SharePage() {
 
     (async () => {
       try {
-        const [res] = await Promise.all([
-          fetch(`/api/share?shareId=${encodeURIComponent(shareId)}`, { cache: 'no-store' }),
-          loadDeployScript().catch(() => {}),
-        ]);
+        // 1. 请求分享数据
+        const res = await fetch(`/api/share?shareId=${encodeURIComponent(shareId)}`, { cache: 'no-store' });
 
         if (!res.ok) {
           if (res.status === 404) { if (!cancelled) setState('not-found'); }
@@ -81,16 +83,15 @@ export default function SharePage() {
         }
         const data = await res.json();
         const { session, messages: apiMsgs } = data;
-
         if (cancelled) return;
-        setTitle(session.title || '未命名会话');
 
+        setTitle(session.title || '未命名会话');
         const chatMsgs = rebuildChatMessages(apiMsgs || []);
         setMessages(chatMsgs);
 
-        if (!containerRef.current) return;
+        // 2. 加载 GeoGebra 并初始化
         await loadDeployScript();
-        if (cancelled || !containerRef.current) return;
+        if (cancelled) return;
 
         const ggb = new GGB();
         ggbRef.current = ggb;
@@ -106,7 +107,6 @@ export default function SharePage() {
           useBrowserForJS: true,
           language: 'zh',
         });
-
         if (cancelled) return;
 
         if (session.canvas_xml) {
@@ -116,9 +116,9 @@ export default function SharePage() {
           try { ggb.getAPI()?.setPerspective?.(session.perspective); } catch {}
         }
 
-        // 等 applet 完全就绪后 setSize
         setTimeout(applySize, 200);
         setTimeout(applySize, 600);
+        setGgbReady(true);
 
         setState('ok');
       } catch (e: any) {
@@ -134,22 +134,28 @@ export default function SharePage() {
 
   // 窗口 resize 时更新 GGB 尺寸
   useEffect(() => {
-    if (state !== 'ok') return;
+    if (!ggbReady) return;
     const el = containerRef.current;
     if (!el) return;
     const ro = new ResizeObserver(applySize);
     ro.observe(el);
     window.addEventListener('resize', applySize);
     return () => { ro.disconnect(); window.removeEventListener('resize', applySize); };
-  }, [state, applySize]);
+  }, [ggbReady, applySize]);
 
   // ------ 渲染 ------
 
   if (state === 'loading') {
     return (
-      <div style={S.center}>
-        <div style={S.spinner} />
-        <p style={S.hint}>正在加载分享…</p>
+      <div style={S.wrapper}>
+        {/* 容器始终渲染，但 loading 时隐藏，确保 GGB.init 能找到 DOM 节点 */}
+        <div style={{ ...S.center, position: 'absolute', inset: 0, zIndex: 1, background: '#fafbfc' }}>
+          <div style={S.spinner} />
+          <p style={S.hint}>正在加载分享…</p>
+        </div>
+        <div style={{ flex: 1, visibility: 'hidden' }}>
+          <div id="ggb-share-container" ref={containerRef} style={{ width: '100%', height: '100%' }} />
+        </div>
       </div>
     );
   }
@@ -183,12 +189,10 @@ export default function SharePage() {
       </header>
 
       <div style={{ ...S.content, flexDirection: mobile ? 'column' : 'row' }}>
-        {/* 画布 */}
         <div style={S.canvasWrap(mobile)}>
           <div id="ggb-share-container" ref={containerRef} style={S.canvas} />
         </div>
 
-        {/* 对话 */}
         <div style={S.chat(mobile)}>
           <div style={S.chatHeader}>对话记录</div>
           <div style={S.chatList}>
@@ -214,7 +218,7 @@ export default function SharePage() {
 }
 
 const S: Record<string, any> = {
-  wrapper: { minHeight: '100vh', display: 'flex', flexDirection: 'column', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif', color: '#333' },
+  wrapper: { minHeight: '100vh', display: 'flex', flexDirection: 'column', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif', color: '#333', position: 'relative' as const },
   center: { minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 40, gap: 12 },
   spinner: { width: 32, height: 32, border: '3px solid #e0e0e0', borderTopColor: '#4285f4', borderRadius: '50%', animation: 'spin 0.8s linear infinite' },
   iconLarge: { fontSize: 48, margin: 0 },
