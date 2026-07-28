@@ -528,14 +528,22 @@ export default function ChatApp() {
       const p = chatCollapsed ? (base === 'T' ? 'AT' : 'AG') : base;
       try { ggbRef.current?.getAPI()?.setPerspective?.(p); } catch {}
       setCanvasPerspective(base);
+
+      // 恢复分享状态(如果该会话已开启分享)
+      if (session?.share_enabled && session?.share_id) {
+        setShareEnabled(true);
+        setShareId(session.share_id);
+        setShareOpen(false);  // 不自动弹窗
+      } else {
+        setShareEnabled(false);
+        setShareId(null);
+        setShareOpen(false);
+      }
     } catch (e) {
       setError('切换会话失败: ' + (e as any).message);
     }
     setSidebarOpen(false);
   }, [setCurrent, persistCanvasXml, cancelPersist, chatCollapsed]);
-
-  // 切会话后重置分享状态(新会话默认未分享)
-  useEffect(() => { setShareEnabled(false); setShareId(null); setShareOpen(false); }, [currentSessionId]);
 
   // 首次进入: 加载会话列表供侧边栏展示, 不自动恢复会话(刷新后直接空白画布)
   useEffect(() => {
