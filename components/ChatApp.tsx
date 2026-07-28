@@ -204,7 +204,6 @@ export default function ChatApp() {
   const [shareEnabled, setShareEnabled] = useState(false);
   const [shareId, setShareId] = useState<string | null>(null);
   const [shareOpen, setShareOpen] = useState(false);
-  const [shareToggling, setShareToggling] = useState(false);
 
 
   // 仅首次调用生效(用于新手引导第2步预填示例, 上一步返回时不重填)
@@ -349,13 +348,23 @@ export default function ChatApp() {
     }
   }, [recording]);
 
-  // ── 分享开关 ──
+  // ── 分享开关(乐观更新: 先改 UI 再同步 API) ──
   const toggleShare = useCallback(async () => {
     const sid = useSessionStore.getState().currentSessionId;
     if (!sid) return;
-    setShareToggling(true);
+    const next = !shareEnabled;
+
+    // 乐观更新 UI
+    if (next) {
+      setShareEnabled(true);
+      setShareOpen(true);  // 立即弹窗
+    } else {
+      setShareEnabled(false);
+      setShareOpen(false);
+    }
+
+    // 异步同步 API(不阻塞 UI)
     try {
-      const next = !shareEnabled;
       const res = await fetch('/api/sessions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -364,13 +373,14 @@ export default function ChatApp() {
       });
       if (!res.ok) throw new Error(`请求失败 (${res.status})`);
       const data = await res.json();
+      // 以服务端为准修正(如 share_id)
       setShareEnabled(data.share_enabled);
       if (data.share_id) setShareId(data.share_id);
-      if (next) setShareOpen(true);  // 开启时弹出分享链接
     } catch (e: any) {
       setError(e.message || '分享操作失败');
-    } finally {
-      setShareToggling(false);
+      // 回滚
+      setShareEnabled(!next);
+      if (next) setShareOpen(false);
     }
   }, [shareEnabled]);
 
@@ -925,9 +935,9 @@ export default function ChatApp() {
                 className={`btn ghost ${shareEnabled ? 'active' : ''}`}
                 title={shareEnabled ? '查看分享链接' : '分享会话'}
                 onClick={() => { if (shareEnabled) { setShareOpen(true); } else { toggleShare(); } }}
-                disabled={shareToggling || !currentSessionId}
+                disabled={!currentSessionId}
               >
-                {shareToggling ? '⏳' : shareEnabled ? '🔗' : '🔗'} {shareEnabled ? '已分享' : '分享'}
+                🔗 {shareEnabled ? '已分享' : '分享'}
               </button>
               <div className="export-wrap" ref={exportMenuRef}>
                 <button className="btn ghost" data-tour="export" onClick={() => setExportOpen((v) => !v)}>
