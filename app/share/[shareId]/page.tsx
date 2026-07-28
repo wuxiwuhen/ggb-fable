@@ -198,7 +198,7 @@ export default function SharePage() {
   return (
     <div style={S.wrapper}>
       <header style={S.header}>
-        <span style={S.headerTitle}>{state === 'ok' ? title : '分享'}</span>
+        <span style={S.headerTitle} title={title}>{state === 'ok' ? (title.length > 4 ? title.slice(0, 4) + '...' : title) : '分享'}</span>
         <span style={S.headerBadge}>只读 · 分享链接</span>
         <div style={{ flex: 1 }} />
         {state === 'ok' && origXmlRef.current && (
