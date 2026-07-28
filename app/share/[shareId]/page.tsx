@@ -1,8 +1,7 @@
 'use client';
 
 // 公开分享页: 通过 /share/<shareId> 查看只读画布 + 对话历史, 无需登录
-// 布局: 左侧对话记录 + 右侧画布(与登录用户体验一致)
-// 画布始终撑满, 对话区域独立滚动(复用主应用 .layout/.pane 模式)
+// 布局始终渲染(避免 DOM 重建导致 GGB 实例丢失), loading/error 用覆盖层
 
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useParams } from 'next/navigation';
@@ -46,7 +45,6 @@ export default function SharePage() {
   const ggbRef = useRef<GGB | null>(null);
   const initDone = useRef(false);
 
-  // 移动端检测
   useEffect(() => {
     const mq = window.matchMedia('(max-width: 640px)');
     setMobile(mq.matches);
@@ -55,7 +53,6 @@ export default function SharePage() {
     return () => mq.removeEventListener('change', on);
   }, []);
 
-  // GGB canvas 尺寸适配
   const applySize = useCallback(() => {
     const api = ggbRef.current?.getAPI() as any;
     const el = containerRef.current;
@@ -66,7 +63,6 @@ export default function SharePage() {
     }
   }, []);
 
-  // 初始化: 先加载数据, 再初始化 GGB
   useEffect(() => {
     if (initDone.current) return;
     initDone.current = true;
@@ -87,8 +83,7 @@ export default function SharePage() {
         if (cancelled) return;
 
         setTitle(session.title || '未命名会话');
-        const chatMsgs = rebuildChatMessages(apiMsgs || []);
-        setMessages(chatMsgs);
+        setMessages(rebuildChatMessages(apiMsgs || []));
 
         await loadDeployScript();
         if (cancelled) return;
@@ -119,7 +114,6 @@ export default function SharePage() {
         setTimeout(applySize, 200);
         setTimeout(applySize, 600);
         setGgbReady(true);
-
         setState('ok');
       } catch (e: any) {
         if (!cancelled) {
@@ -132,7 +126,6 @@ export default function SharePage() {
     return () => { cancelled = true; };
   }, [shareId, applySize]);
 
-  // 窗口 resize 时更新 GGB 尺寸
   useEffect(() => {
     if (!ggbReady) return;
     const el = containerRef.current;
@@ -143,56 +136,18 @@ export default function SharePage() {
     return () => { ro.disconnect(); window.removeEventListener('resize', applySize); };
   }, [ggbReady, applySize]);
 
-  // ------ 渲染 ------
-
-  // 加载态: 容器始终渲染(隐藏), 确保 GGB.init 能找到 DOM
-  if (state === 'loading') {
-    return (
-      <div style={S.wrapper}>
-        <div style={{ ...S.center, position: 'absolute', inset: 0, zIndex: 1, background: '#f7f8fa' }}>
-          <div style={S.spinner} />
-          <p style={S.hint}>正在加载分享…</p>
-        </div>
-        <div style={{ flex: 1, visibility: 'hidden' }}>
-          <div id="ggb-share-container" ref={containerRef} style={{ width: '100%', height: '100%' }} />
-        </div>
-      </div>
-    );
-  }
-
-  if (state === 'not-found') {
-    return (
-      <div style={S.center}>
-        <p style={S.iconLarge}>🔗</p>
-        <h2 style={S.heading}>分享不存在或已关闭</h2>
-        <p style={S.hint}>该链接可能已被分享者关闭，或者链接地址有误</p>
-      </div>
-    );
-  }
-
-  if (state === 'error') {
-    return (
-      <div style={S.center}>
-        <p style={S.iconLarge}>⚠️</p>
-        <h2 style={S.heading}>加载失败</h2>
-        <p style={S.hint}>{errorMsg}</p>
-        <button style={S.retryBtn} onClick={() => window.location.reload()}>重试</button>
-      </div>
-    );
-  }
-
   const isMobile = mobile;
 
   return (
     <div style={S.wrapper}>
       <header style={S.header}>
-        <span style={S.headerTitle}>{title}</span>
+        <span style={S.headerTitle}>{state === 'ok' ? title : '分享'}</span>
         <span style={S.headerBadge}>只读 · 分享链接</span>
       </header>
 
-      {/* 主体: 复用主应用的 .layout 模式 —— 左侧对话 + 右侧画布 */}
+      {/* 主体布局始终渲染，GGB 容器不随 state 变化而重建 */}
       <div style={{ ...S.layout, flexDirection: isMobile ? 'column' : 'row' }}>
-        {/* 左侧: 对话记录(固定宽度, 独立滚动) */}
+        {/* 左侧: 对话记录 */}
         <div style={S.chatPane(isMobile)}>
           <div style={S.chatHeader}>对话记录</div>
           <div style={S.messages}>
@@ -213,17 +168,43 @@ export default function SharePage() {
           </div>
         </div>
 
-        {/* 右侧: 画布(撑满剩余空间) */}
+        {/* 右侧: 画布 */}
         <div style={S.canvasPane}>
           <div id="ggb-share-container" ref={containerRef} style={S.canvasWrap} />
         </div>
       </div>
+
+      {/* 覆盖层: loading / not-found / error */}
+      {state !== 'ok' && (
+        <div style={S.overlay}>
+          {state === 'loading' && (
+            <>
+              <div style={S.spinner} />
+              <p style={S.hint}>正在加载分享…</p>
+            </>
+          )}
+          {state === 'not-found' && (
+            <>
+              <p style={S.iconLarge}>🔗</p>
+              <h2 style={S.heading}>分享不存在或已关闭</h2>
+              <p style={S.hint}>该链接可能已被分享者关闭，或者链接地址有误</p>
+            </>
+          )}
+          {state === 'error' && (
+            <>
+              <p style={S.iconLarge}>⚠️</p>
+              <h2 style={S.heading}>加载失败</h2>
+              <p style={S.hint}>{errorMsg}</p>
+              <button style={S.retryBtn} onClick={() => window.location.reload()}>重试</button>
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 }
 
 const S: Record<string, any> = {
-  // 整页: 100vh + overflow:hidden 防止 body 层滚动条
   wrapper: {
     height: '100vh',
     display: 'flex',
@@ -231,17 +212,17 @@ const S: Record<string, any> = {
     fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
     color: '#333',
     overflow: 'hidden',
-    position: 'relative' as const,
   },
-  // 加载/错误/404 居中
-  center: {
-    height: '100vh',
+  overlay: {
+    position: 'absolute' as const,
+    inset: 0,
+    zIndex: 10,
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 40,
     gap: 12,
+    background: '#f7f8fa',
   },
   spinner: { width: 32, height: 32, border: '3px solid #e0e0e0', borderTopColor: '#4285f4', borderRadius: '50%', animation: 'spin 0.8s linear infinite' },
   iconLarge: { fontSize: 48, margin: 0 },
@@ -249,7 +230,6 @@ const S: Record<string, any> = {
   hint: { color: '#888', fontSize: 14, margin: 0 },
   retryBtn: { marginTop: 8, padding: '8px 20px', border: '1px solid #ddd', borderRadius: 6, background: '#fff', cursor: 'pointer', fontSize: 14 },
 
-  // 顶栏
   header: {
     display: 'flex',
     alignItems: 'center',
@@ -262,10 +242,8 @@ const S: Record<string, any> = {
   headerTitle: { fontWeight: 600, fontSize: 15 },
   headerBadge: { fontSize: 12, color: '#888', background: '#f0f0f0', padding: '2px 8px', borderRadius: 4 },
 
-  // 主体布局: flex:1 + overflow:hidden (关键: 禁止溢出到 body 滚动条)
   layout: { flex: 1, display: 'flex', overflow: 'hidden', minHeight: 0 },
 
-  // 对话面板: 固定宽度(桌面) / 全宽(手机), 内部独立滚动
   chatPane: (mobile: boolean) => ({
     width: mobile ? '100%' : '44%',
     minWidth: mobile ? undefined : 360,
@@ -279,16 +257,8 @@ const S: Record<string, any> = {
     background: '#fff',
     flexShrink: 0,
   }),
-  chatHeader: {
-    padding: '10px 16px',
-    borderBottom: '1px solid #eee',
-    fontWeight: 600,
-    fontSize: 14,
-    color: '#666',
-    flexShrink: 0,
-  },
+  chatHeader: { padding: '10px 16px', borderBottom: '1px solid #eee', fontWeight: 600, fontSize: 14, color: '#666', flexShrink: 0 },
 
-  // 消息列表: flex:1 + overflow-y:auto → 只有这里滚动
   messages: {
     flex: 1,
     overflowY: 'auto' as const,
@@ -298,7 +268,6 @@ const S: Record<string, any> = {
     gap: 10,
   },
 
-  // 画布面板: 撑满剩余空间
   canvasPane: {
     flex: 1,
     minWidth: 0,
@@ -313,7 +282,6 @@ const S: Record<string, any> = {
     inset: 0,
   } as React.CSSProperties,
 
-  // 消息气泡
   bubble: {
     maxWidth: '90%',
     padding: '8px 12px',
