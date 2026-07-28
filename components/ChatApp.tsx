@@ -217,6 +217,7 @@ export default function ChatApp() {
   const [shareEnabled, setShareEnabled] = useState(false);
   const [shareId, setShareId] = useState<string | null>(null);
   const [shareOpen, setShareOpen] = useState(false);
+  const [shareChatVisible, setShareChatVisible] = useState(true);
 
 
   // 仅首次调用生效(用于新手引导第2步预填示例, 上一步返回时不重填)
@@ -370,8 +371,10 @@ export default function ChatApp() {
     // 乐观更新 UI
     if (next) {
       setShareEnabled(true);
-      setShareId(null);  // 清空旧链接, 等 API 返回新链接再填充(避免闪现旧值)
+      setShareId(null);
       setShareOpen(true);
+      // 首次开启时默认显示对话
+      if (!shareEnabled) setShareChatVisible(true);
     } else {
       setShareEnabled(false);
       setShareId(null);
@@ -383,21 +386,35 @@ export default function ChatApp() {
       const res = await fetch('/api/sessions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'share', id: sid, share_enabled: next }),
+        body: JSON.stringify({ action: 'share', id: sid, share_enabled: next, share_chat_visible: next ? true : undefined }),
         cache: 'no-store',
       });
       if (!res.ok) throw new Error(`请求失败 (${res.status})`);
       const data = await res.json();
-      // 以服务端为准修正(如 share_id)
       setShareEnabled(data.share_enabled);
       if (data.share_id) setShareId(data.share_id);
+      if (typeof data.share_chat_visible === 'boolean') setShareChatVisible(data.share_chat_visible);
     } catch (e: any) {
       setError(e.message || '分享操作失败');
-      // 回滚
       setShareEnabled(!next);
       if (next) setShareOpen(false);
     }
   }, [shareEnabled]);
+
+  // 仅切换对话可见性(不改链接)
+  const toggleChatVisible = useCallback(async (visible: boolean) => {
+    const sid = useSessionStore.getState().currentSessionId;
+    if (!sid || !shareId) return;
+    setShareChatVisible(visible);  // 乐观
+    fetch('/api/sessions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'share', id: sid, share_chat_visible: visible }),
+      cache: 'no-store',
+    }).catch(() => {
+      setShareChatVisible(!visible);  // 回滚
+    });
+  }, [shareId]);
 
   // ── 会话管理(云端) ──
 
@@ -548,7 +565,8 @@ export default function ChatApp() {
       if (session?.share_enabled && session?.share_id) {
         setShareEnabled(true);
         setShareId(session.share_id);
-        setShareOpen(false);  // 不自动弹窗
+        setShareChatVisible(session?.share_chat_visible ?? true);
+        setShareOpen(false);
       } else {
         setShareEnabled(false);
         setShareId(null);
@@ -1202,6 +1220,15 @@ export default function ChatApp() {
                 <span style={{ flex: 1, color: '#aaa', fontSize: 12 }}>正在生成链接…</span>
               )}
             </div>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12, cursor: 'pointer', fontSize: 13, color: '#555' }}>
+              <input
+                type="checkbox"
+                checked={!shareChatVisible}
+                onChange={(e) => toggleChatVisible(!e.target.checked)}
+                style={{ width: 16, height: 16, cursor: 'pointer' }}
+              />
+              仅分享画布，不显示对话记录
+            </label>
             <div className="modal-actions" style={{ marginTop: 14 }}>
               <button className="btn ghost" onClick={async () => { await toggleShare(); setShareOpen(false); }}>关闭分享</button>
               <button className="btn primary" onClick={() => setShareOpen(false)}>完成</button>

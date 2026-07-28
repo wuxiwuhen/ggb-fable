@@ -36,6 +36,7 @@ export default function SharePage() {
   const [messages, setMessages] = useState<ChatMsg[]>([]);
   const [mobile, setMobile] = useState(false);
   const [ggbReady, setGgbReady] = useState(false);
+  const [chatVisible, setChatVisible] = useState(true);  // 分享时是否显示对话
 
   const canvasPaneRef = useRef<HTMLDivElement>(null);
   const ggbRef = useRef<GGB | null>(null);
@@ -88,6 +89,7 @@ export default function SharePage() {
         if (cancelled) return;
 
         setTitle(session.title || '未命名会话');
+        setChatVisible(session.share_chat_visible !== false);  // null/undefined 默认为 true
         if (session.canvas_xml) origXmlRef.current = session.canvas_xml;
         setMessages(rebuildChatMessages(apiMsgs || []));
 
@@ -205,25 +207,27 @@ export default function SharePage() {
       </header>
 
       <div style={{ ...S.layout, flexDirection: isMobile ? 'column' : 'row' }}>
-        {/* 左侧: 对话 */}
-        <div style={S.chatPane(isMobile)}>
-          <div style={S.chatHeader}>对话记录</div>
-          <div style={S.messages}>
-            {messages.length === 0 ? (
-              <p style={S.emptyHint}>暂无对话记录</p>
-            ) : (
-              messages.map((m, i) => (
-                <div key={i} style={{
-                  ...S.bubble,
-                  alignSelf: m.role === 'user' ? 'flex-end' : 'flex-start',
-                  background: m.role === 'user' ? '#e8f0fe' : '#f5f5f5',
-                }}>
-                  <MessageContent content={m.content} />
-                </div>
-              ))
-            )}
+        {/* 左侧: 对话(仅 chatVisible 为 true 时显示) */}
+        {chatVisible && (
+          <div style={S.chatPane(isMobile)}>
+            <div style={S.chatHeader}>对话记录</div>
+            <div style={S.messages}>
+              {messages.length === 0 ? (
+                <p style={S.emptyHint}>暂无对话记录</p>
+              ) : (
+                messages.map((m, i) => (
+                  <div key={i} style={{
+                    ...S.bubble,
+                    alignSelf: m.role === 'user' ? 'flex-end' : 'flex-start',
+                    background: m.role === 'user' ? '#e8f0fe' : '#f5f5f5',
+                  }}>
+                    <MessageContent content={m.content} />
+                  </div>
+                ))
+              )}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* 右侧: 画布(对齐主应用 .canvas-wrap → #ggb-container 嵌套) */}
         <div ref={canvasPaneRef} style={S.canvasPane}>

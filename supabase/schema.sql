@@ -172,6 +172,7 @@ alter table public.sessions add column if not exists pinned boolean default fals
 alter table public.sessions add column if not exists perspective text;
 alter table public.sessions add column if not exists share_id uuid unique default null;
 alter table public.sessions add column if not exists share_enabled boolean not null default false;
+alter table public.sessions add column if not exists share_chat_visible boolean not null default true;
 
 create index if not exists idx_sessions_share_id on public.sessions(share_id) where share_id is not null;
 

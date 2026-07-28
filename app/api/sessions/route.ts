@@ -109,7 +109,7 @@ export async function POST(req: Request) {
   }
 
   if (body.action === 'share') {
-    // 开关分享: 生成/清除 share_id
+    // 开关分享: 生成/清除 share_id; 可选 share_chat_visible 控制对话可见性
     const { data: existing } = await admin.from('sessions')
       .select('id, user_id, share_id, share_enabled')
       .eq('id', body.id).maybeSingle();
@@ -117,11 +117,17 @@ export async function POST(req: Request) {
 
     if (body.share_enabled) {
       const shareId = existing.share_id || crypto.randomUUID();
-      await admin.from('sessions').update({
-        share_enabled: true,
-        share_id: shareId,
-      }).eq('id', body.id);
-      return json(200, { share_id: shareId, share_enabled: true });
+      const patch: any = { share_enabled: true, share_id: shareId };
+      if (typeof body.share_chat_visible === 'boolean') patch.share_chat_visible = body.share_chat_visible;
+      await admin.from('sessions').update(patch).eq('id', body.id);
+      // 读回确认值
+      const { data: updated } = await admin.from('sessions')
+        .select('share_id, share_enabled, share_chat_visible').eq('id', body.id).single();
+      return json(200, { share_id: shareId, share_enabled: true, share_chat_visible: updated?.share_chat_visible ?? true });
+    } else if (typeof body.share_chat_visible === 'boolean' && existing.share_enabled) {
+      // 只改对话可见性，不重新生成链接
+      await admin.from('sessions').update({ share_chat_visible: body.share_chat_visible }).eq('id', body.id);
+      return json(200, { share_id: existing.share_id, share_enabled: true, share_chat_visible: body.share_chat_visible });
     } else {
       await admin.from('sessions').update({
         share_enabled: false,
