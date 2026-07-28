@@ -1,6 +1,8 @@
 'use client';
 
 // 公开分享页: 通过 /share/<shareId> 查看只读画布 + 对话历史, 无需登录
+// 布局: 左侧对话记录 + 右侧画布(与登录用户体验一致)
+// 画布始终撑满, 对话区域独立滚动(复用主应用 .layout/.pane 模式)
 
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useParams } from 'next/navigation';
@@ -14,7 +16,7 @@ let scriptPromise: Promise<void> | null = null;
 function loadDeployScript(): Promise<void> {
   if (typeof window === 'undefined') return Promise.reject(new Error('SSR'));
   if ((window as any).GGBApplet) {
-    scriptPromise = Promise.resolve();  // 成功后重置缓存，避免失败缓存污染
+    scriptPromise = Promise.resolve();
     return scriptPromise;
   }
   if (scriptPromise) return scriptPromise;
@@ -73,7 +75,6 @@ export default function SharePage() {
 
     (async () => {
       try {
-        // 1. 请求分享数据
         const res = await fetch(`/api/share?shareId=${encodeURIComponent(shareId)}`, { cache: 'no-store' });
 
         if (!res.ok) {
@@ -89,7 +90,6 @@ export default function SharePage() {
         const chatMsgs = rebuildChatMessages(apiMsgs || []);
         setMessages(chatMsgs);
 
-        // 2. 加载 GeoGebra 并初始化
         await loadDeployScript();
         if (cancelled) return;
 
@@ -145,11 +145,11 @@ export default function SharePage() {
 
   // ------ 渲染 ------
 
+  // 加载态: 容器始终渲染(隐藏), 确保 GGB.init 能找到 DOM
   if (state === 'loading') {
     return (
       <div style={S.wrapper}>
-        {/* 容器始终渲染，但 loading 时隐藏，确保 GGB.init 能找到 DOM 节点 */}
-        <div style={{ ...S.center, position: 'absolute', inset: 0, zIndex: 1, background: '#fafbfc' }}>
+        <div style={{ ...S.center, position: 'absolute', inset: 0, zIndex: 1, background: '#f7f8fa' }}>
           <div style={S.spinner} />
           <p style={S.hint}>正在加载分享…</p>
         </div>
@@ -181,6 +181,8 @@ export default function SharePage() {
     );
   }
 
+  const isMobile = mobile;
+
   return (
     <div style={S.wrapper}>
       <header style={S.header}>
@@ -188,14 +190,12 @@ export default function SharePage() {
         <span style={S.headerBadge}>只读 · 分享链接</span>
       </header>
 
-      <div style={{ ...S.content, flexDirection: mobile ? 'column' : 'row' }}>
-        <div style={S.canvasWrap(mobile)}>
-          <div id="ggb-share-container" ref={containerRef} style={S.canvas} />
-        </div>
-
-        <div style={S.chat(mobile)}>
+      {/* 主体: 复用主应用的 .layout 模式 —— 左侧对话 + 右侧画布 */}
+      <div style={{ ...S.layout, flexDirection: isMobile ? 'column' : 'row' }}>
+        {/* 左侧: 对话记录(固定宽度, 独立滚动) */}
+        <div style={S.chatPane(isMobile)}>
           <div style={S.chatHeader}>对话记录</div>
-          <div style={S.chatList}>
+          <div style={S.messages}>
             {messages.length === 0 ? (
               <p style={S.emptyHint}>暂无对话记录</p>
             ) : (
@@ -212,29 +212,116 @@ export default function SharePage() {
             )}
           </div>
         </div>
+
+        {/* 右侧: 画布(撑满剩余空间) */}
+        <div style={S.canvasPane}>
+          <div id="ggb-share-container" ref={containerRef} style={S.canvasWrap} />
+        </div>
       </div>
     </div>
   );
 }
 
 const S: Record<string, any> = {
-  wrapper: { minHeight: '100vh', display: 'flex', flexDirection: 'column', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif', color: '#333', position: 'relative' as const },
-  center: { minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 40, gap: 12 },
+  // 整页: 100vh + overflow:hidden 防止 body 层滚动条
+  wrapper: {
+    height: '100vh',
+    display: 'flex',
+    flexDirection: 'column',
+    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+    color: '#333',
+    overflow: 'hidden',
+    position: 'relative' as const,
+  },
+  // 加载/错误/404 居中
+  center: {
+    height: '100vh',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 40,
+    gap: 12,
+  },
   spinner: { width: 32, height: 32, border: '3px solid #e0e0e0', borderTopColor: '#4285f4', borderRadius: '50%', animation: 'spin 0.8s linear infinite' },
   iconLarge: { fontSize: 48, margin: 0 },
   heading: { fontSize: 20, fontWeight: 600, margin: 0 },
   hint: { color: '#888', fontSize: 14, margin: 0 },
   retryBtn: { marginTop: 8, padding: '8px 20px', border: '1px solid #ddd', borderRadius: 6, background: '#fff', cursor: 'pointer', fontSize: 14 },
-  header: { display: 'flex', alignItems: 'center', gap: 12, padding: '10px 20px', borderBottom: '1px solid #eee', background: '#fafafa' },
+
+  // 顶栏
+  header: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 12,
+    padding: '10px 20px',
+    borderBottom: '1px solid #e5e7eb',
+    background: '#fafafa',
+    flexShrink: 0,
+  },
   headerTitle: { fontWeight: 600, fontSize: 15 },
   headerBadge: { fontSize: 12, color: '#888', background: '#f0f0f0', padding: '2px 8px', borderRadius: 4 },
-  content: { flex: 1, display: 'flex', overflow: 'hidden' },
-  canvasWrap: (mobile: boolean) => ({ flex: 1, minWidth: 0, minHeight: mobile ? '55vh' : 0, position: 'relative' as const }),
-  canvas: { width: '100%', height: '100%', position: 'absolute' as const, inset: 0 },
-  chat: (mobile: boolean) => ({ width: mobile ? '100%' : 360, maxHeight: mobile ? '45vh' : 'none', display: 'flex', flexDirection: 'column', borderLeft: mobile ? 'none' : '1px solid #eee', borderTop: mobile ? '1px solid #eee' : 'none', background: '#fff' }),
-  chatHeader: { padding: '10px 16px', borderBottom: '1px solid #eee', fontWeight: 600, fontSize: 14, color: '#666' },
-  chatList: { flex: 1, overflowY: 'auto', padding: 12, display: 'flex', flexDirection: 'column', gap: 10 },
-  bubble: { maxWidth: '90%', padding: '8px 12px', borderRadius: 8, fontSize: 14, lineHeight: 1.55, wordBreak: 'break-word' as const },
+
+  // 主体布局: flex:1 + overflow:hidden (关键: 禁止溢出到 body 滚动条)
+  layout: { flex: 1, display: 'flex', overflow: 'hidden', minHeight: 0 },
+
+  // 对话面板: 固定宽度(桌面) / 全宽(手机), 内部独立滚动
+  chatPane: (mobile: boolean) => ({
+    width: mobile ? '100%' : '44%',
+    minWidth: mobile ? undefined : 360,
+    maxWidth: mobile ? undefined : 500,
+    maxHeight: mobile ? '45vh' : undefined,
+    display: 'flex',
+    flexDirection: 'column',
+    overflow: 'hidden',
+    borderRight: mobile ? undefined : '1px solid #e5e7eb',
+    borderBottom: mobile ? '1px solid #e5e7eb' : undefined,
+    background: '#fff',
+    flexShrink: 0,
+  }),
+  chatHeader: {
+    padding: '10px 16px',
+    borderBottom: '1px solid #eee',
+    fontWeight: 600,
+    fontSize: 14,
+    color: '#666',
+    flexShrink: 0,
+  },
+
+  // 消息列表: flex:1 + overflow-y:auto → 只有这里滚动
+  messages: {
+    flex: 1,
+    overflowY: 'auto' as const,
+    padding: '12px 16px',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 10,
+  },
+
+  // 画布面板: 撑满剩余空间
+  canvasPane: {
+    flex: 1,
+    minWidth: 0,
+    background: '#fafbfc',
+    position: 'relative' as const,
+    overflow: 'hidden',
+  },
+  canvasWrap: {
+    width: '100%',
+    height: '100%',
+    position: 'absolute' as const,
+    inset: 0,
+  } as React.CSSProperties,
+
+  // 消息气泡
+  bubble: {
+    maxWidth: '90%',
+    padding: '8px 12px',
+    borderRadius: 8,
+    fontSize: 14,
+    lineHeight: 1.55,
+    wordBreak: 'break-word' as const,
+  },
   bubbleRole: { fontSize: 12, marginBottom: 2 },
-  emptyHint: { color: '#999', fontSize: 13, textAlign: 'center', marginTop: 24 },
+  emptyHint: { color: '#999', fontSize: 13, textAlign: 'center' as const, marginTop: 24 },
 };
