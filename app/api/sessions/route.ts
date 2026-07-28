@@ -108,6 +108,29 @@ export async function POST(req: Request) {
     return json(200, { ok: true, n: rows.length, sessionId });
   }
 
+  if (body.action === 'share') {
+    // 开关分享: 生成/清除 share_id
+    const { data: existing } = await admin.from('sessions')
+      .select('id, user_id, share_id, share_enabled')
+      .eq('id', body.id).maybeSingle();
+    if (!existing || existing.user_id !== user.id) return json(404, { error: '会话不存在' });
+
+    if (body.share_enabled) {
+      const shareId = existing.share_id || crypto.randomUUID();
+      await admin.from('sessions').update({
+        share_enabled: true,
+        share_id: shareId,
+      }).eq('id', body.id);
+      return json(200, { share_id: shareId, share_enabled: true });
+    } else {
+      await admin.from('sessions').update({
+        share_enabled: false,
+        share_id: null,
+      }).eq('id', body.id);
+      return json(200, { share_enabled: false });
+    }
+  }
+
   return json(400, { error: '未知 action' });
 }
 

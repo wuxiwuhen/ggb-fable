@@ -156,6 +156,7 @@ button { font-family: inherit; cursor: pointer; }
 .ocr-status { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; color: #8a8f98; }
 .spinner { width: 13px; height: 13px; border: 2px solid #e0e3e9; border-top-color: #4f46e5; border-radius: 50%; animation: composer-spin 0.7s linear infinite; }
 @keyframes composer-spin { to { transform: rotate(360deg); } }
+@keyframes spin { to { transform: rotate(360deg); } }
 
 .input-box textarea {
   display: block; width: 100%; border: none; outline: none; resize: none; background: transparent;

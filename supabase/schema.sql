@@ -170,6 +170,10 @@ $$;
 alter table public.sessions add column if not exists canvas_xml text;
 alter table public.sessions add column if not exists pinned boolean default false;
 alter table public.sessions add column if not exists perspective text;
+alter table public.sessions add column if not exists share_id uuid unique default null;
+alter table public.sessions add column if not exists share_enabled boolean not null default false;
+
+create index if not exists idx_sessions_share_id on public.sessions(share_id) where share_id is not null;
 
 -- ── 5. feedback: 用户反馈收集(仅登录用户) ──
 create table if not exists public.feedback (

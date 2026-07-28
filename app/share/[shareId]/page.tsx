@@ -1,0 +1,236 @@
+'use client';
+
+// 公开分享页: 通过 /share/<shareId> 查看只读画布 + 对话历史, 无需登录
+
+import { useEffect, useRef, useState, useCallback } from 'react';
+import { useParams } from 'next/navigation';
+import { GGB } from '@/lib/ggb';
+import { rebuildChatMessages, type ChatMsg } from '@/lib/conversation';
+import MessageContent from '@/components/MessageContent';
+
+const DEPLOY_SRC = 'https://www.geogebra.org/apps/deployggb.js';
+
+let scriptPromise: Promise<void> | null = null;
+function loadDeployScript(): Promise<void> {
+  if (typeof window === 'undefined') return Promise.reject(new Error('SSR'));
+  if ((window as any).GGBApplet) return Promise.resolve();
+  if (scriptPromise) return scriptPromise;
+  scriptPromise = new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = DEPLOY_SRC;
+    s.async = true;
+    s.onload = () => resolve();
+    s.onerror = () => reject(new Error('deployggb.js 加载失败'));
+    document.head.appendChild(s);
+  });
+  return scriptPromise;
+}
+
+type LoadState = 'loading' | 'ok' | 'not-found' | 'error';
+
+export default function SharePage() {
+  const { shareId } = useParams<{ shareId: string }>();
+  const [state, setState] = useState<LoadState>('loading');
+  const [errorMsg, setErrorMsg] = useState('');
+  const [title, setTitle] = useState('');
+  const [messages, setMessages] = useState<ChatMsg[]>([]);
+  const [mobile, setMobile] = useState(false);
+
+  const containerRef = useRef<HTMLDivElement>(null);
+  const ggbRef = useRef<GGB | null>(null);
+  const initDone = useRef(false);
+
+  // 移动端检测
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 640px)');
+    setMobile(mq.matches);
+    const on = (e: MediaQueryListEvent) => setMobile(e.matches);
+    mq.addEventListener('change', on);
+    return () => mq.removeEventListener('change', on);
+  }, []);
+
+  // GGB canvas 尺寸适配
+  const applySize = useCallback(() => {
+    const api = ggbRef.current?.getAPI() as any;
+    const el = containerRef.current;
+    if (api?.setSize && el) {
+      const w = el.clientWidth;
+      const h = el.clientHeight;
+      if (w > 0 && h > 0) { try { api.setSize(w, h); } catch {} }
+    }
+  }, []);
+
+  // 初始化 GGB + 加载数据
+  useEffect(() => {
+    if (initDone.current) return;
+    initDone.current = true;
+
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const [res] = await Promise.all([
+          fetch(`/api/share?shareId=${encodeURIComponent(shareId)}`, { cache: 'no-store' }),
+          loadDeployScript().catch(() => {}),
+        ]);
+
+        if (!res.ok) {
+          if (res.status === 404) { if (!cancelled) setState('not-found'); }
+          else { if (!cancelled) { setState('error'); setErrorMsg(`服务器错误 (${res.status})`); } }
+          return;
+        }
+        const data = await res.json();
+        const { session, messages: apiMsgs } = data;
+
+        if (cancelled) return;
+        setTitle(session.title || '未命名会话');
+
+        const chatMsgs = rebuildChatMessages(apiMsgs || []);
+        setMessages(chatMsgs);
+
+        if (!containerRef.current) return;
+        await loadDeployScript();
+        if (cancelled || !containerRef.current) return;
+
+        const ggb = new GGB();
+        ggbRef.current = ggb;
+
+        await ggb.init('ggb-share-container', {
+          showToolBar: false,
+          showMenuBar: false,
+          showAlgebraInput: false,
+          enableRightClick: true,
+          enableShiftDragZoom: true,
+          showAnimationButton: true,
+          errorDialogsActive: false,
+          useBrowserForJS: true,
+          language: 'zh',
+        });
+
+        if (cancelled) return;
+
+        if (session.canvas_xml) {
+          try { ggb.setXML(session.canvas_xml); } catch { /* ignore */ }
+        }
+        if (session.perspective) {
+          try { ggb.getAPI()?.setPerspective?.(session.perspective); } catch {}
+        }
+
+        // 等 applet 完全就绪后 setSize
+        setTimeout(applySize, 200);
+        setTimeout(applySize, 600);
+
+        setState('ok');
+      } catch (e: any) {
+        if (!cancelled) {
+          setState('error');
+          setErrorMsg(e.message || '未知错误');
+        }
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [shareId, applySize]);
+
+  // 窗口 resize 时更新 GGB 尺寸
+  useEffect(() => {
+    if (state !== 'ok') return;
+    const el = containerRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(applySize);
+    ro.observe(el);
+    window.addEventListener('resize', applySize);
+    return () => { ro.disconnect(); window.removeEventListener('resize', applySize); };
+  }, [state, applySize]);
+
+  // ------ 渲染 ------
+
+  if (state === 'loading') {
+    return (
+      <div style={S.center}>
+        <div style={S.spinner} />
+        <p style={S.hint}>正在加载分享…</p>
+      </div>
+    );
+  }
+
+  if (state === 'not-found') {
+    return (
+      <div style={S.center}>
+        <p style={S.iconLarge}>🔗</p>
+        <h2 style={S.heading}>分享不存在或已关闭</h2>
+        <p style={S.hint}>该链接可能已被分享者关闭，或者链接地址有误</p>
+      </div>
+    );
+  }
+
+  if (state === 'error') {
+    return (
+      <div style={S.center}>
+        <p style={S.iconLarge}>⚠️</p>
+        <h2 style={S.heading}>加载失败</h2>
+        <p style={S.hint}>{errorMsg}</p>
+        <button style={S.retryBtn} onClick={() => window.location.reload()}>重试</button>
+      </div>
+    );
+  }
+
+  return (
+    <div style={S.wrapper}>
+      <header style={S.header}>
+        <span style={S.headerTitle}>{title}</span>
+        <span style={S.headerBadge}>只读 · 分享链接</span>
+      </header>
+
+      <div style={{ ...S.content, flexDirection: mobile ? 'column' : 'row' }}>
+        {/* 画布 */}
+        <div style={S.canvasWrap(mobile)}>
+          <div id="ggb-share-container" ref={containerRef} style={S.canvas} />
+        </div>
+
+        {/* 对话 */}
+        <div style={S.chat(mobile)}>
+          <div style={S.chatHeader}>对话记录</div>
+          <div style={S.chatList}>
+            {messages.length === 0 ? (
+              <p style={S.emptyHint}>暂无对话记录</p>
+            ) : (
+              messages.map((m, i) => (
+                <div key={i} style={{
+                  ...S.bubble,
+                  alignSelf: m.role === 'user' ? 'flex-end' : 'flex-start',
+                  background: m.role === 'user' ? '#e8f0fe' : '#f5f5f5',
+                }}>
+                  <div style={S.bubbleRole}>{m.role === 'user' ? '👤' : '🤖'}</div>
+                  <MessageContent content={m.content} />
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const S: Record<string, any> = {
+  wrapper: { minHeight: '100vh', display: 'flex', flexDirection: 'column', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif', color: '#333' },
+  center: { minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 40, gap: 12 },
+  spinner: { width: 32, height: 32, border: '3px solid #e0e0e0', borderTopColor: '#4285f4', borderRadius: '50%', animation: 'spin 0.8s linear infinite' },
+  iconLarge: { fontSize: 48, margin: 0 },
+  heading: { fontSize: 20, fontWeight: 600, margin: 0 },
+  hint: { color: '#888', fontSize: 14, margin: 0 },
+  retryBtn: { marginTop: 8, padding: '8px 20px', border: '1px solid #ddd', borderRadius: 6, background: '#fff', cursor: 'pointer', fontSize: 14 },
+  header: { display: 'flex', alignItems: 'center', gap: 12, padding: '10px 20px', borderBottom: '1px solid #eee', background: '#fafafa' },
+  headerTitle: { fontWeight: 600, fontSize: 15 },
+  headerBadge: { fontSize: 12, color: '#888', background: '#f0f0f0', padding: '2px 8px', borderRadius: 4 },
+  content: { flex: 1, display: 'flex', overflow: 'hidden' },
+  canvasWrap: (mobile: boolean) => ({ flex: 1, minWidth: 0, minHeight: mobile ? '55vh' : 0, position: 'relative' as const }),
+  canvas: { width: '100%', height: '100%', position: 'absolute' as const, inset: 0 },
+  chat: (mobile: boolean) => ({ width: mobile ? '100%' : 360, maxHeight: mobile ? '45vh' : 'none', display: 'flex', flexDirection: 'column', borderLeft: mobile ? 'none' : '1px solid #eee', borderTop: mobile ? '1px solid #eee' : 'none', background: '#fff' }),
+  chatHeader: { padding: '10px 16px', borderBottom: '1px solid #eee', fontWeight: 600, fontSize: 14, color: '#666' },
+  chatList: { flex: 1, overflowY: 'auto', padding: 12, display: 'flex', flexDirection: 'column', gap: 10 },
+  bubble: { maxWidth: '90%', padding: '8px 12px', borderRadius: 8, fontSize: 14, lineHeight: 1.55, wordBreak: 'break-word' as const },
+  bubbleRole: { fontSize: 12, marginBottom: 2 },
+  emptyHint: { color: '#999', fontSize: 13, textAlign: 'center', marginTop: 24 },
+};

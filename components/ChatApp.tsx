@@ -200,6 +200,12 @@ export default function ChatApp() {
   const [recording, setRecording] = useState(false);
   const exportMenuRef = useRef<HTMLDivElement>(null);
 
+  // ── 分享状态 ──
+  const [shareEnabled, setShareEnabled] = useState(false);
+  const [shareId, setShareId] = useState<string | null>(null);
+  const [shareOpen, setShareOpen] = useState(false);
+  const [shareToggling, setShareToggling] = useState(false);
+
 
   // 仅首次调用生效(用于新手引导第2步预填示例, 上一步返回时不重填)
   const prefillDemo = useCallback((text: string) => {
@@ -342,6 +348,31 @@ export default function ChatApp() {
       setExportOpen(false);
     }
   }, [recording]);
+
+  // ── 分享开关 ──
+  const toggleShare = useCallback(async () => {
+    const sid = useSessionStore.getState().currentSessionId;
+    if (!sid) return;
+    setShareToggling(true);
+    try {
+      const next = !shareEnabled;
+      const res = await fetch('/api/sessions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'share', id: sid, share_enabled: next }),
+        cache: 'no-store',
+      });
+      if (!res.ok) throw new Error(`请求失败 (${res.status})`);
+      const data = await res.json();
+      setShareEnabled(data.share_enabled);
+      if (data.share_id) setShareId(data.share_id);
+      if (next) setShareOpen(true);  // 开启时弹出分享链接
+    } catch (e: any) {
+      setError(e.message || '分享操作失败');
+    } finally {
+      setShareToggling(false);
+    }
+  }, [shareEnabled]);
 
   // ── 会话管理(云端) ──
 
@@ -492,6 +523,9 @@ export default function ChatApp() {
     }
     setSidebarOpen(false);
   }, [setCurrent, persistCanvasXml, cancelPersist, chatCollapsed]);
+
+  // 切会话后重置分享状态(新会话默认未分享)
+  useEffect(() => { setShareEnabled(false); setShareId(null); setShareOpen(false); }, [currentSessionId]);
 
   // 首次进入: 加载会话列表供侧边栏展示, 不自动恢复会话(刷新后直接空白画布)
   useEffect(() => {
@@ -885,10 +919,20 @@ export default function ChatApp() {
               <span className="rec-dot" /> 停止录制
             </button>
           ) : (
-            <div className="export-wrap" ref={exportMenuRef}>
-              <button className="btn ghost" data-tour="export" onClick={() => setExportOpen((v) => !v)}>
-                导出 <span className="caret">▾</span>
+            <>
+              {/* 分享按钮 */}
+              <button
+                className={`btn ghost ${shareEnabled ? 'active' : ''}`}
+                title={shareEnabled ? '关闭分享' : '分享会话'}
+                onClick={toggleShare}
+                disabled={shareToggling || !currentSessionId}
+              >
+                {shareToggling ? '⏳' : shareEnabled ? '🔗' : '🔗'} {shareEnabled ? '已分享' : '分享'}
               </button>
+              <div className="export-wrap" ref={exportMenuRef}>
+                <button className="btn ghost" data-tour="export" onClick={() => setExportOpen((v) => !v)}>
+                  导出 <span className="caret">▾</span>
+                </button>
               {exportOpen && (
                 <div className="export-menu">
                   <button className="export-item" onClick={() => { exportPng(ggbRef.current); setExportOpen(false); }}>
@@ -908,6 +952,7 @@ export default function ChatApp() {
                 </div>
               )}
             </div>
+            </>
           )}
           <button className="btn ghost" onClick={() => signOut()}>退出</button>
         </div>
@@ -1084,6 +1129,40 @@ export default function ChatApp() {
                 </div>
               </>
             )}
+          </div>
+        </>
+      )}
+
+      {/* 分享链接弹窗 */}
+      {shareOpen && shareId && (
+        <>
+          <div className="sidebar-overlay" onClick={() => setShareOpen(false)} />
+          <div className="modal-confirm" style={{ maxWidth: 420 }} onClick={(e) => e.stopPropagation()}>
+            <h3 style={{ margin: '0 0 4px', fontSize: 17 }}>🔗 分享链接</h3>
+            <p style={{ margin: '0 0 14px', fontSize: 13, color: '#888' }}>
+              打开此链接即可查看画布和对话记录（只读，无需登录）。
+            </p>
+            <div style={{
+              display: 'flex', gap: 8, alignItems: 'center',
+              background: '#f5f5f7', borderRadius: 10, padding: '6px 6px 6px 14px',
+              fontFamily: 'SF Mono, Menlo, monospace', fontSize: 13, wordBreak: 'break-all',
+            }}>
+              <span style={{ flex: 1, color: '#333' }}>{`${typeof window !== 'undefined' ? window.location.origin : ''}/share/${shareId}`}</span>
+              <button
+                className="btn primary sm"
+                onClick={async () => {
+                  const url = `${window.location.origin}/share/${shareId}`;
+                  try { await navigator.clipboard.writeText(url); } catch { /* ignore */ }
+                }}
+                style={{ flexShrink: 0 }}
+              >
+                复制
+              </button>
+            </div>
+            <div className="modal-actions" style={{ marginTop: 14 }}>
+              <button className="btn ghost" onClick={toggleShare}>关闭分享</button>
+              <button className="btn primary" onClick={() => setShareOpen(false)}>完成</button>
+            </div>
           </div>
         </>
       )}
