@@ -370,9 +370,11 @@ export default function ChatApp() {
     // 乐观更新 UI
     if (next) {
       setShareEnabled(true);
-      setShareOpen(true);  // 立即弹窗
+      setShareId(null);  // 清空旧链接, 等 API 返回新链接再填充(避免闪现旧值)
+      setShareOpen(true);
     } else {
       setShareEnabled(false);
+      setShareId(null);
       setShareOpen(false);
     }
 
@@ -1165,7 +1167,7 @@ export default function ChatApp() {
       )}
 
       {/* 分享链接弹窗 */}
-      {shareOpen && shareId && (
+      {shareOpen && (
         <>
           <div className="sidebar-overlay" onClick={() => setShareOpen(false)} />
           <div className="modal-confirm" style={{ maxWidth: 420 }} onClick={(e) => e.stopPropagation()}>
@@ -1178,22 +1180,27 @@ export default function ChatApp() {
               background: '#f5f5f7', borderRadius: 10, padding: '6px 6px 6px 14px',
               fontFamily: 'SF Mono, Menlo, monospace', fontSize: 13, wordBreak: 'break-all',
             }}>
-              <span style={{ flex: 1, color: '#333' }}>{`${typeof window !== 'undefined' ? window.location.origin : ''}/share/${shareId}`}</span>
-              <button
-                className="btn primary sm"
-                onClick={() => {
-                  const url = `${window.location.origin}/share/${shareId}`;
-                  // Clipboard API 在 HTTP / 部分 WebView 上不可用，用 execCommand 兜底
-                  if (navigator.clipboard?.writeText) {
-                    navigator.clipboard.writeText(url).catch(() => fallbackCopy(url));
-                  } else {
-                    fallbackCopy(url);
-                  }
-                }}
-                style={{ flexShrink: 0 }}
-              >
-                复制
-              </button>
+              {shareId ? (
+                <>
+                  <span style={{ flex: 1, color: '#333' }}>{`${typeof window !== 'undefined' ? window.location.origin : ''}/share/${shareId}`}</span>
+                  <button
+                    className="btn primary sm"
+                    onClick={() => {
+                      const url = `${window.location.origin}/share/${shareId}`;
+                      if (navigator.clipboard?.writeText) {
+                        navigator.clipboard.writeText(url).catch(() => fallbackCopy(url));
+                      } else {
+                        fallbackCopy(url);
+                      }
+                    }}
+                    style={{ flexShrink: 0 }}
+                  >
+                    复制
+                  </button>
+                </>
+              ) : (
+                <span style={{ flex: 1, color: '#aaa', fontSize: 12 }}>正在生成链接…</span>
+              )}
             </div>
             <div className="modal-actions" style={{ marginTop: 14 }}>
               <button className="btn ghost" onClick={async () => { await toggleShare(); setShareOpen(false); }}>关闭分享</button>
