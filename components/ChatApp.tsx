@@ -108,6 +108,19 @@ function AssistantProgress({ msg, trace }: { msg: Msg; trace: TraceItem[] }) {
   );
 }
 
+function fallbackCopy(text: string) {
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.position = 'fixed';
+  ta.style.left = '-9999px';
+  ta.style.top = '-9999px';
+  document.body.appendChild(ta);
+  ta.focus();
+  ta.select();
+  try { document.execCommand('copy'); } catch { /* ignore */ }
+  document.body.removeChild(ta);
+}
+
 export default function ChatApp() {
   const { user, isAdmin, adminLoading, signOut } = useAuth();
   const config = useConfigStore();
@@ -1168,9 +1181,14 @@ export default function ChatApp() {
               <span style={{ flex: 1, color: '#333' }}>{`${typeof window !== 'undefined' ? window.location.origin : ''}/share/${shareId}`}</span>
               <button
                 className="btn primary sm"
-                onClick={async () => {
+                onClick={() => {
                   const url = `${window.location.origin}/share/${shareId}`;
-                  try { await navigator.clipboard.writeText(url); } catch { /* ignore */ }
+                  // Clipboard API 在 HTTP / 部分 WebView 上不可用，用 execCommand 兜底
+                  if (navigator.clipboard?.writeText) {
+                    navigator.clipboard.writeText(url).catch(() => fallbackCopy(url));
+                  } else {
+                    fallbackCopy(url);
+                  }
                 }}
                 style={{ flexShrink: 0 }}
               >
