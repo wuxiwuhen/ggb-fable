@@ -36,7 +36,8 @@ export default function SharePage() {
   const [messages, setMessages] = useState<ChatMsg[]>([]);
   const [mobile, setMobile] = useState(false);
   const [ggbReady, setGgbReady] = useState(false);
-  const [chatVisible, setChatVisible] = useState(true);  // 分享时是否显示对话
+  const [chatVisible, setChatVisible] = useState(true);      // 分享者设置: 是否显示对话
+  const [chatCollapsed, setChatCollapsed] = useState(false);  // 观看者临时收起对话
 
   const canvasPaneRef = useRef<HTMLDivElement>(null);
   const ggbRef = useRef<GGB | null>(null);
@@ -201,14 +202,19 @@ export default function SharePage() {
         <span style={S.headerTitle} title={title}>{state === 'ok' ? (title.length > 4 ? title.slice(0, 4) + '...' : title) : '分享'}</span>
         <span style={S.headerBadge}>只读 · 分享链接</span>
         <div style={{ flex: 1 }} />
+        {state === 'ok' && chatVisible && (
+          <button style={S.resetBtn} onClick={() => setChatCollapsed((v) => !v)} title={chatCollapsed ? '展开对话记录' : '收起对话记录'}>
+            {chatCollapsed ? '◀' : '▶'} {chatCollapsed ? '展开对话' : '收起对话'}
+          </button>
+        )}
         {state === 'ok' && origXmlRef.current && (
           <button style={S.resetBtn} onClick={resetCanvas} title="重置画布到分享时的状态">↺ 重置画布</button>
         )}
       </header>
 
       <div style={{ ...S.layout, flexDirection: isMobile ? 'column' : 'row' }}>
-        {/* 左侧: 对话(仅 chatVisible 为 true 时显示) */}
-        {chatVisible && (
+        {/* 左侧: 对话(chatVisible 且未被观看者收起时显示) */}
+        {chatVisible && !chatCollapsed && (
           <div style={S.chatPane(isMobile)}>
             <div style={S.chatHeader}>对话记录</div>
             <div style={S.messages}>
