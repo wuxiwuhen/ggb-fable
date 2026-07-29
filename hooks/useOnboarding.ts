@@ -1,9 +1,9 @@
 'use client';
 
-// 新手引导触发与持久化: localStorage 记忆是否看过; 提供 active 布尔状态与启动/标记接口。
+// 新手引导触发与持久化：localStorage 记忆是否看过；提供 active 布尔状态与启动/标记接口。
 import { useCallback, useState } from 'react';
 
-const STORAGE_KEY = 'ggb-fable-onboarding-v2';
+const STORAGE_KEY = 'ggb-fable-onboarding-v3';
 
 interface OnboardingState {
   v: number;
@@ -11,22 +11,14 @@ interface OnboardingState {
 }
 
 function readState(): OnboardingState {
-  if (typeof window === 'undefined') return { v: 2, seen: false };
+  if (typeof window === 'undefined') return { v: 3, seen: false };
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    // 向后兼容旧 key(ggb-fable-onboarding, v=1): basicSeen=true → seen=true
-    if (!raw) {
-      const oldRaw = localStorage.getItem('ggb-fable-onboarding');
-      if (oldRaw) {
-        const old = JSON.parse(oldRaw);
-        if (old?.basicSeen === true) return { v: 2, seen: true };
-      }
-      return { v: 2, seen: false };
-    }
+    if (!raw) return { v: 3, seen: false };
     const parsed = JSON.parse(raw);
-    return { v: 2, seen: !!parsed.seen };
+    return { v: 3, seen: !!parsed.seen };
   } catch {
-    return { v: 2, seen: false };
+    return { v: 3, seen: false };
   }
 }
 
@@ -37,14 +29,14 @@ function writeState(s: OnboardingState): void {
 export function useOnboarding() {
   const [active, setActive] = useState(false);
 
-  // 首次自动: 未看过教程则启动。由 ChatApp 在 ggbReady 后调用。
+  // 首次自动：未看过教程则启动。由 ChatApp 在 ggbReady 后调用。
   const autoStartIfDue = useCallback(() => {
     if (!readState().seen) setActive(true);
   }, []);
 
   const start = useCallback(() => setActive(true), []);
 
-  // 标记已看过(完成或中途退出都标记, 尊重用户不再自动弹)
+  // 标记已看过（完成或中途退出都标记，尊重用户不再自动弹）
   const markSeen = useCallback(() => {
     writeState({ v: readState().v, seen: true });
   }, []);

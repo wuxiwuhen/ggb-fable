@@ -232,6 +232,8 @@ export default function ChatApp() {
   const tourCtx: TourCtx = {
     setSidebarOpen,
     setExportOpen,
+    setCommandPanelOpen,
+    setChatCollapsed,
     setInput,
     getInput: () => inputRef.current,
     prefillDemo,
@@ -955,6 +957,7 @@ export default function ChatApp() {
           <button
             className={`btn ghost topbar-icon-btn${commandPanelOpen ? ' active' : ''}`}
             title={commandPanelOpen ? '返回对话模式' : 'GeoGebra 命令面板'}
+            data-tour="command-panel"
             onClick={() => setCommandPanelOpen((v) => !v)}
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -980,7 +983,7 @@ export default function ChatApp() {
           {!adminLoading && isAdmin && <Link className="btn ghost" href="/admin">🛠 管理</Link>}
           <button className="btn ghost" title="反馈建议" data-tour="feedback-btn" onClick={() => { setFeedbackOpen(true); setFeedbackSent(false); setFeedbackText(''); }}>💬 反馈</button>
           <button className="btn ghost" data-tour="tutorial" onClick={() => start()}>📖 教程</button>
-          <Link className="btn ghost" href="/settings">⚙ 设置</Link>
+          <Link className="btn ghost" href="/settings" data-tour="settings-link">⚙ 设置</Link>
           {recording ? (
             <button className="btn rec-stop" onClick={toggleRecord} title="停止录制并下载视频">
               <span className="rec-dot" /> 停止录制
@@ -991,6 +994,7 @@ export default function ChatApp() {
               <button
                 className={`btn ghost ${shareEnabled ? 'active' : ''}`}
                 title={shareEnabled ? '查看分享链接' : '分享会话'}
+                data-tour="share-btn"
                 onClick={() => { if (shareEnabled) { setShareOpen(true); } else { toggleShare(); } }}
                 disabled={!currentSessionId}
               >

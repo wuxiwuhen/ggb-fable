@@ -44,7 +44,7 @@ export default function OnboardingTour({ steps, onFinish }: Props) {
   const [ready, setReady] = useState(false);
   const [side, setSide] = useState<TourSide>('bottom');
   const bubbleRef = useRef<HTMLDivElement>(null);
-  const [bubbleSize, setBubbleSize] = useState({ w: 320, h: 150 });
+  const [bubbleSize, setBubbleSize] = useState({ w: 320, h: 220 }); // 初始估算偏大，避免首帧气泡侵入锚点区；useLayoutEffect 实测后修正
 
   const step = steps[index];
   const isLast = index === steps.length - 1;
