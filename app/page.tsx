@@ -111,6 +111,7 @@ export default function LandingPage() {
   const ctaLabel = user ? '进入工作台' : '立即体验';
   const [xhsOpen, setXhsOpen] = useState(false);
   const [demoOpen, setDemoOpen] = useState(false);
+  const [donateOpen, setDonateOpen] = useState(false);
 
   return (
     <div className="landing">
@@ -140,6 +141,7 @@ export default function LandingPage() {
           <span className="title" style={{ fontSize: 22 }}>GGB Fable</span>
         </div>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+          <button className="btn ghost" onClick={() => setDonateOpen(true)} style={{ fontSize: 14 }}>💝 赞助</button>
           <button className="btn xhs-btn" onClick={() => setXhsOpen(true)}>🎁 获取额度</button>
           {adminReady && isAdmin && <Link className="btn ghost" href="/admin" style={{ fontSize: 15, padding: '8px 16px' }}>管理后台</Link>}
           {authReady ? (
@@ -206,6 +208,25 @@ export default function LandingPage() {
               </div>
             </div>
             <button className="btn primary xhs-modal-btn" onClick={() => setXhsOpen(false)}>知道了</button>
+          </div>
+        </div>
+      )}
+
+      {/* 赞助弹窗 */}
+      {donateOpen && (
+        <div className="modal-mask" onClick={() => setDonateOpen(false)}>
+          <div className="xhs-modal" style={{ maxWidth: 360 }} onClick={(e) => e.stopPropagation()}>
+            <button className="xhs-modal-close" onClick={() => setDonateOpen(false)}>✕</button>
+            <div className="xhs-modal-icon">💝</div>
+            <h2 className="xhs-modal-title">赞助支持</h2>
+            <p className="xhs-modal-desc" style={{ textAlign: 'left' }}>
+              扫码任意金额，我们会在 <strong>24 小时内</strong> 更新你的试用额度。<br /><br />
+              <span style={{ color: '#dc2626', fontWeight: 700 }}>⚠️ 转账时请备注登录邮箱</span>，否则无法找到你的账号。转账后无需其他操作，等待额度到账即可。
+            </p>
+            <div style={{ textAlign: 'center', marginBottom: 16 }}>
+              <img src="/pay.jpg" alt="收款码" style={{ width: 200, height: 200, borderRadius: 12, border: '1px solid #eee' }} />
+            </div>
+            <button className="btn primary xhs-modal-btn" onClick={() => setDonateOpen(false)}>知道了</button>
           </div>
         </div>
       )}
