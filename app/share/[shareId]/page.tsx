@@ -200,15 +200,15 @@ export default function SharePage() {
     <div style={S.wrapper}>
       <header style={S.header}>
         <span style={S.headerTitle} title={title}>{state === 'ok' ? (title.length > 4 ? title.slice(0, 4) + '...' : title) : '分享'}</span>
-        <span style={S.headerBadge}>只读 · 分享链接</span>
+        <span style={S.headerBadge}>只读</span>
         <div style={{ flex: 1 }} />
         {state === 'ok' && chatVisible && (
           <button style={S.resetBtn} onClick={() => setChatCollapsed((v) => !v)} title={chatCollapsed ? '展开对话记录' : '收起对话记录'}>
-            {chatCollapsed ? '◀' : '▶'} {chatCollapsed ? '展开对话' : '收起对话'}
+            {chatCollapsed ? '◀ 展开' : '▶ 收起'}
           </button>
         )}
         {state === 'ok' && origXmlRef.current && (
-          <button style={S.resetBtn} onClick={resetCanvas} title="重置画布到分享时的状态">↺ 重置画布</button>
+          <button style={S.resetBtn} onClick={resetCanvas} title="重置画布到分享时的状态">↺ 重置</button>
         )}
       </header>
 
@@ -216,7 +216,6 @@ export default function SharePage() {
         {/* 左侧: 对话(chatVisible 且未被观看者收起时显示) */}
         {chatVisible && !chatCollapsed && (
           <div style={S.chatPane(isMobile)}>
-            <div style={S.chatHeader}>对话记录</div>
             <div style={S.messages}>
               {messages.length === 0 ? (
                 <p style={S.emptyHint}>暂无对话记录</p>
@@ -294,7 +293,6 @@ const S: Record<string, any> = {
     borderRight: mobile ? undefined : '1px solid #e5e7eb', borderBottom: mobile ? '1px solid #e5e7eb' : undefined,
     background: '#fff', flexShrink: 0,
   }),
-  chatHeader: { padding: '10px 16px', borderBottom: '1px solid #eee', fontWeight: 600, fontSize: 14, color: '#666', flexShrink: 0 },
   messages: { flex: 1, overflowY: 'auto', padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 10 } as React.CSSProperties,
 
   // 对齐主应用: .canvas-wrap(相对定位) > #ggb-container(100%宽高, 非绝对定位)
