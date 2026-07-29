@@ -418,6 +418,9 @@ export default function ChatApp() {
   const regenerateShare = useCallback(async () => {
     const sid = useSessionStore.getState().currentSessionId;
     if (!sid) return;
+    const oldShareId = shareId;      // 暂存旧值, 失败时回退
+    setShareId(null);                // 先清空 → 显示「正在生成链接…」
+    setRegenerateConfirm(false);
     try {
       const res = await fetch('/api/sessions', {
         method: 'POST',
@@ -429,11 +432,11 @@ export default function ChatApp() {
       const data = await res.json();
       setShareId(data.share_id);
       setShareEnabled(true);
-      setRegenerateConfirm(false);
     } catch (e: any) {
+      setShareId(oldShareId);  // 失败回退旧链接
       setError(e.message || '重新生成链接失败');
     }
-  }, []);
+  }, [shareId]);
 
   // ── 会话管理(云端) ──
 
