@@ -109,7 +109,9 @@ export async function POST(req: Request) {
   }
 
   if (body.action === 'share') {
-    // 开关分享: 生成/清除 share_id; 可选 share_chat_visible 控制对话可见性
+    // 开关分享: 关闭时保留 share_id(链接持久化, 方便做二维码);
+    // share_enabled=false 即暂停访问, 再次开启复用原链接;
+    // 可选 share_chat_visible 控制对话可见性
     const { data: existing } = await admin.from('sessions')
       .select('id, user_id, share_id, share_enabled')
       .eq('id', body.id).maybeSingle();
@@ -120,7 +122,6 @@ export async function POST(req: Request) {
       const patch: any = { share_enabled: true, share_id: shareId };
       if (typeof body.share_chat_visible === 'boolean') patch.share_chat_visible = body.share_chat_visible;
       await admin.from('sessions').update(patch).eq('id', body.id);
-      // 读回确认值
       const { data: updated } = await admin.from('sessions')
         .select('share_id, share_enabled, share_chat_visible').eq('id', body.id).single();
       return json(200, { share_id: shareId, share_enabled: true, share_chat_visible: updated?.share_chat_visible ?? true });
@@ -129,12 +130,20 @@ export async function POST(req: Request) {
       await admin.from('sessions').update({ share_chat_visible: body.share_chat_visible }).eq('id', body.id);
       return json(200, { share_id: existing.share_id, share_enabled: true, share_chat_visible: body.share_chat_visible });
     } else {
-      await admin.from('sessions').update({
-        share_enabled: false,
-        share_id: null,
-      }).eq('id', body.id);
+      // 关闭分享: 仅改 enabled，保留 share_id(链接持久化)
+      await admin.from('sessions').update({ share_enabled: false }).eq('id', body.id);
       return json(200, { share_enabled: false });
     }
+  }
+
+  if (body.action === 'regenerate-share') {
+    // 重新生成分享链接(旧链接永久作废), 需确认操作
+    const { data: existing } = await admin.from('sessions')
+      .select('id, user_id, share_enabled').eq('id', body.id).maybeSingle();
+    if (!existing || existing.user_id !== user.id) return json(404, { error: '会话不存在' });
+    const newShareId = crypto.randomUUID();
+    await admin.from('sessions').update({ share_id: newShareId, share_enabled: true }).eq('id', body.id);
+    return json(200, { share_id: newShareId, share_enabled: true });
   }
 
   return json(400, { error: '未知 action' });

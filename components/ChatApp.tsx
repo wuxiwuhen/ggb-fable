@@ -218,6 +218,7 @@ export default function ChatApp() {
   const [shareId, setShareId] = useState<string | null>(null);
   const [shareOpen, setShareOpen] = useState(false);
   const [shareChatVisible, setShareChatVisible] = useState(true);
+  const [regenerateConfirm, setRegenerateConfirm] = useState(false);
 
 
   // 仅首次调用生效(用于新手引导第2步预填示例, 上一步返回时不重填)
@@ -368,16 +369,13 @@ export default function ChatApp() {
     if (!sid) return;
     const next = !shareEnabled;
 
-    // 乐观更新 UI
+    // 乐观更新 UI(链接持久化: 关闭不丢 shareId, 再开启复用)
     if (next) {
       setShareEnabled(true);
-      setShareId(null);
       setShareOpen(true);
-      // 首次开启时默认显示对话
       if (!shareEnabled) setShareChatVisible(true);
     } else {
       setShareEnabled(false);
-      setShareId(null);
       setShareOpen(false);
     }
 
@@ -415,6 +413,27 @@ export default function ChatApp() {
       setShareChatVisible(!visible);  // 回滚
     });
   }, [shareId]);
+
+  // 重新生成分享链接(旧链接永久作废)
+  const regenerateShare = useCallback(async () => {
+    const sid = useSessionStore.getState().currentSessionId;
+    if (!sid) return;
+    try {
+      const res = await fetch('/api/sessions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'regenerate-share', id: sid }),
+        cache: 'no-store',
+      });
+      if (!res.ok) throw new Error(`请求失败 (${res.status})`);
+      const data = await res.json();
+      setShareId(data.share_id);
+      setShareEnabled(true);
+      setRegenerateConfirm(false);
+    } catch (e: any) {
+      setError(e.message || '重新生成链接失败');
+    }
+  }, []);
 
   // ── 会话管理(云端) ──
 
@@ -561,17 +580,11 @@ export default function ChatApp() {
       try { ggbRef.current?.getAPI()?.setPerspective?.(p); } catch {}
       setCanvasPerspective(base);
 
-      // 恢复分享状态(如果该会话已开启分享)
-      if (session?.share_enabled && session?.share_id) {
-        setShareEnabled(true);
-        setShareId(session.share_id);
-        setShareChatVisible(session?.share_chat_visible ?? true);
-        setShareOpen(false);
-      } else {
-        setShareEnabled(false);
-        setShareId(null);
-        setShareOpen(false);
-      }
+      // 恢复分享状态(share_id 持久化, share_enabled 控制开关)
+      setShareEnabled(session?.share_enabled === true);
+      if (session?.share_id) setShareId(session.share_id);
+      setShareChatVisible(session?.share_chat_visible ?? true);
+      setShareOpen(false);
     } catch (e) {
       setError('切换会话失败: ' + (e as any).message);
     }
@@ -1229,6 +1242,25 @@ export default function ChatApp() {
               />
               仅分享画布，不显示对话记录
             </label>
+            {shareId && !regenerateConfirm && (
+              <div style={{ marginTop: 12, textAlign: 'right' }}>
+                <button
+                  style={{ border: 'none', background: 'transparent', color: '#999', cursor: 'pointer', fontSize: 12 }}
+                  onClick={() => setRegenerateConfirm(true)}
+                >
+                  重新生成链接
+                </button>
+              </div>
+            )}
+            {regenerateConfirm && (
+              <div style={{ marginTop: 12, padding: '10px 12px', background: '#fff8e1', borderRadius: 8, fontSize: 13, color: '#b45309' }}>
+                ⚠️ 之前的分享链接将永久作废，确定重新生成？
+                <div style={{ display: 'flex', gap: 8, marginTop: 8, justifyContent: 'flex-end' }}>
+                  <button className="btn ghost sm" onClick={() => setRegenerateConfirm(false)}>取消</button>
+                  <button className="btn primary sm" onClick={regenerateShare}>确认重新生成</button>
+                </div>
+              </div>
+            )}
             <div className="modal-actions" style={{ marginTop: 14 }}>
               <button className="btn ghost" onClick={async () => { await toggleShare(); setShareOpen(false); }}>关闭分享</button>
               <button className="btn primary" onClick={() => setShareOpen(false)}>完成</button>
