@@ -166,6 +166,7 @@ export default function GgbCommandPanel({ ggbRef, execLines, currentSessionId, o
                   placeholder={'输入 GGB 命令，每行一条，如：\nA = (0, 0)\nB = (3, 4)\nCircle(A, B)'}
                   rows={1}
                   spellCheck={false}
+                  wrap="off"
                 />
               </div>
             </div>

@@ -535,7 +535,8 @@ button { font-family: inherit; cursor: pointer; }
 }
 .command-textarea {
   display: block; flex: 1; border: none; outline: none;
-  resize: none; overflow: hidden; background: transparent;
+  resize: none; overflow-x: auto; overflow-y: hidden; background: transparent;
+  white-space: pre; /* 禁用软换行，保持 gutter 行号与内容一一对齐 */
   padding: 12px 14px 4px; font-size: 13px; line-height: 1.7;
   font-family: 'SF Mono', Menlo, monospace;
   color: #1a1a1a;
