@@ -603,8 +603,9 @@ export default function ChatApp() {
     let cancelled = false;
     (async () => {
       try {
-        // 30s 超时兜底: 浏览器 fetch 无默认超时, 网络异常时可能永久挂起 → sessionsLoading 卡死
-        const res = await fetchWithTimeout('/api/sessions', 10000);
+        // 20s 超时兜底: 浏览器 fetch 无默认超时, 网络异常时可能永久挂起 → sessionsLoading 卡死
+        // (国内用户到 us-east-1 跨区延迟 + Edge 冷启动 + auth.getUser 远程验签, 偶发 >10s → 原 10s 会误 abort)
+        const res = await fetchWithTimeout('/api/sessions', 20000);
         const data = await res.json();
         const list: any[] = data.sessions || [];
         if (cancelled) { setSessionsLoading(false); return; }
