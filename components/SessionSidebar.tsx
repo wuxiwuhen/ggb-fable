@@ -8,6 +8,7 @@ interface Props {
   onClose: () => void;
   onNew: () => void;
   onSwitch: (id: string) => void;
+  onRetry: () => void;
 }
 
 function timeAgo(iso: string): string {
@@ -20,8 +21,8 @@ function timeAgo(iso: string): string {
   return `${Math.floor(h / 24)} 天前`;
 }
 
-export default function SessionSidebar({ open, onClose, onNew, onSwitch }: Props) {
-  const { sessions, currentSessionId, renameSession, togglePin, removeSession } = useSessionStore();
+export default function SessionSidebar({ open, onClose, onNew, onSwitch, onRetry }: Props) {
+  const { sessions, currentSessionId, loadState, renameSession, togglePin, removeSession } = useSessionStore();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState('');
   const [menuId, setMenuId] = useState<string | null>(null);
@@ -110,8 +111,17 @@ export default function SessionSidebar({ open, onClose, onNew, onSwitch }: Props
           <button className="btn sm ghost" onClick={() => { onNew(); onClose(); }} title="新对话">+ 新建</button>
         </div>
         <div className="sidebar-list" data-tour="session-list">
-          {sorted.length === 0 && <div className="sidebar-empty">暂无对话</div>}
-          {sorted.map((s: SessionMeta) => {
+          {loadState === 'loading' && (
+            <div className="sidebar-empty"><span className="spinner" /> 加载中…</div>
+          )}
+          {loadState === 'error' && (
+            <div className="sidebar-empty">
+              加载失败
+              <button className="btn sm ghost" onClick={onRetry} style={{ marginLeft: 8 }}>重试</button>
+            </div>
+          )}
+          {loadState === 'ready' && sorted.length === 0 && <div className="sidebar-empty">暂无对话</div>}
+          {loadState === 'ready' && sorted.map((s: SessionMeta) => {
             const isActive = s.id === currentSessionId;
             const isEditing = s.id === editingId;
             return (

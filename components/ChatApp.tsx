@@ -18,6 +18,7 @@ import { getEffectivePrompt, EMERGENCY_PROMPT } from '@/lib/prompt-loader';
 import { makeTrialEmbed, makeByokEmbed } from '@/lib/embed';
 import { chatTrial, visionTrial, visionByok, type TrialContext } from '@/lib/llm';
 import { Vision } from '@/lib/vision';
+import { fetchWithRetry } from '@/lib/retry';
 import { useGeogebra } from '@/hooks/useGeogebra';
 import { exportPng, startRecording, stopRecording, recordingFormat } from '@/lib/export-media';
 import MessageContent from './MessageContent';
@@ -48,17 +49,6 @@ const EXAMPLES = [
 ];
 
 let msgId = 0;
-
-// fetch 超时兜底: 浏览器原生 fetch 无默认超时, 网络异常时可能永久挂起
-async function fetchWithTimeout(url: string, ms: number): Promise<Response> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), ms);
-  try {
-    return await fetch(url, { cache: 'no-store', signal: controller.signal });
-  } finally {
-    clearTimeout(timer);
-  }
-}
 
 // 工具名 → 阶段名词(输出气泡首字文本前, 把工具调用映射成可见的过程阶段)
 const PHASE_LABEL: Record<string, string> = {
@@ -124,7 +114,7 @@ function fallbackCopy(text: string) {
 export default function ChatApp() {
   const { user, isAdmin, adminLoading, signOut } = useAuth();
   const config = useConfigStore();
-  const { sessions, currentSessionId, setSessions, setCurrent, upsert, patchCurrent } = useSessionStore();
+  const { sessions, currentSessionId, loadState, setSessions, setLoadState, setCurrent, upsert, patchCurrent } = useSessionStore();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [chatCollapsed, setChatCollapsed] = useState(false);
   const [commandPanelOpen, setCommandPanelOpen] = useState(false);
@@ -135,7 +125,7 @@ export default function ChatApp() {
   const [feedbackSending, setFeedbackSending] = useState(false);
   const [feedbackSent, setFeedbackSent] = useState(false);
   const { active, setActive, autoStartIfDue, start, markSeen } = useOnboarding();
-  const [sessionsLoading, setSessionsLoading] = useState(true);
+  const sessionsLoadAbortRef = useRef<AbortController | null>(null); // 加载会话的 controller(自动/手动重试 + StrictMode 互斥)
 
   // ── 引擎实例(单例) ──
   const loggerRef = useRef<Logger>(new Logger());
@@ -596,43 +586,44 @@ export default function ChatApp() {
     setSidebarOpen(false);
   }, [setCurrent, persistCanvasXml, cancelPersist, chatCollapsed]);
 
+  // 加载会话列表:递增超时重试 [8s,16s,30s] + 退避 [1.5s,3s],抗慢网络/冷启动。
+  // 自动重试与手动重试(侧栏按钮)共用;StrictMode 复挂载靠首行 abort 互斥。
+  const loadSessions = useCallback(async () => {
+    sessionsLoadAbortRef.current?.abort();            // 覆盖:中断上一次 in-flight
+    const controller = new AbortController();
+    sessionsLoadAbortRef.current = controller;
+    setLoadState('loading');
+    try {
+      const res = await fetchWithRetry('/api/sessions', { signal: controller.signal });
+      if (controller.signal.aborted) return;          // 防:await 后再核
+      if (!res.ok) { setLoadState('error'); return; } // 非 2xx(5xx 末次/4xx)→ 错误态,让用户点重试
+      const data = await res.json();
+      if (controller.signal.aborted) return;
+      setSessions(data.sessions || []);
+      setLoadState('ready');
+    } catch (e) {
+      if (controller.signal.aborted) return;          // 被 abort → 静默,不写 error 污染后到者
+      console.warn('加载会话失败:', e);
+      setLoadState('error');
+    } finally {
+      if (sessionsLoadAbortRef.current === controller) sessionsLoadAbortRef.current = null;
+    }
+  }, [setSessions, setLoadState]);
+
   // 首次进入: 加载会话列表供侧边栏展示, 不自动恢复会话(刷新后直接空白画布)
   useEffect(() => {
     if (!ggbReady) return;
     autoStartIfDue();
-    let cancelled = false;
-    (async () => {
-      try {
-        // 20s 超时兜底: 浏览器 fetch 无默认超时, 网络异常时可能永久挂起 → sessionsLoading 卡死
-        // (国内用户到 us-east-1 跨区延迟 + Edge 冷启动 + auth.getUser 远程验签, 偶发 >10s → 原 10s 会误 abort)
-        const res = await fetchWithTimeout('/api/sessions', 20000);
-        const data = await res.json();
-        const list: any[] = data.sessions || [];
-        if (cancelled) { setSessionsLoading(false); return; }
-        setSessions(list);
-        setSessionsLoading(false);
-      } catch (e) {
-        console.warn('加载会话失败:', e);
-      } finally {
-        if (!cancelled) {
-          setSessionsLoading(false);
-          initialLoadDoneRef.current = true;
-        }
-      }
-    })();
-    return () => { cancelled = true; };
+    loadSessions();
+    return () => { sessionsLoadAbortRef.current?.abort(); };  // 真正中断 fetch+退避(旧代码只置 cancelled,白跑一次跨区请求)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ggbReady]);
 
   // 当前会话被删除(如在侧边栏删除) → 清空画布与消息, 恢复到初始空白态
-  // sessionsLoading 守卫: 避免初始加载期(currentSessionId 尚未赋值)误清空
-  const initialLoadDoneRef = useRef(false);
-  // 当前会话被删除(如在侧边栏删除) → 清空画布与消息, 恢复到初始空白态
-  // sessionsLoading + initialLoadDoneRef 双重守卫: 避免初始加载期误清空
+  // loadState !== 'loading' 守卫: 避免初始加载期(currentSessionId 尚未赋值)误清空
   // 外加内容检查: 初始空白态(无消息无命令)无需清空, 避免无意义的 clearAll 闪烁
   useEffect(() => {
-    if (!initialLoadDoneRef.current) return;
-    if (currentSessionId === null && ggbReady && !sessionsLoading) {
+    if (currentSessionId === null && ggbReady && loadState !== 'loading') {
       const cmdLen = (ggbRef.current?.getCommandLog() || []).length;
       if (cmdLen === 0 && messages.length === 0) return; // 初始空白态, 无需清空
       cancelPersist();
@@ -643,7 +634,7 @@ export default function ChatApp() {
       setHistory([]);
       ggbRef.current?.clearAll();
     }
-  }, [currentSessionId, ggbReady, sessionsLoading]);
+  }, [currentSessionId, ggbReady, loadState]);
 
   // ── 额度(仅 trial 模式) ──
   const fetchUsage = useCallback(async () => {
@@ -1030,7 +1021,7 @@ export default function ChatApp() {
         </div>
       </header>
 
-      <SessionSidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} onNew={clearWorkspace} onSwitch={switchSession} />
+      <SessionSidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} onNew={clearWorkspace} onSwitch={switchSession} onRetry={loadSessions} />
       <main className="layout">
         {!chatCollapsed && (
         <section className="pane chat-pane">

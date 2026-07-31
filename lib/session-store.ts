@@ -20,10 +20,14 @@ export interface SessionMeta {
   updated_at: string;
 }
 
+export type SessionLoadState = 'loading' | 'ready' | 'error';
+
 interface SessionState {
   sessions: SessionMeta[];
   currentSessionId: string | null;     // 始终从 null 开始(避免与 switchSession 的 id===current 早退冲突)
+  loadState: SessionLoadState;         // 列表加载状态:加载中/就绪/失败(sidebar 四态 + 清空守卫共用,单一数据源)
   setSessions: (s: SessionMeta[]) => void;
+  setLoadState: (s: SessionLoadState) => void;
   setCurrent: (id: string | null) => void;
   upsert: (s: SessionMeta) => void;                          // 新建或更新一条元数据
   patchCurrent: (patch: Partial<SessionMeta>) => void;       // 改当前会话元数据(如 title)
@@ -35,7 +39,9 @@ interface SessionState {
 export const useSessionStore = create<SessionState>()((set) => ({
   sessions: [],
   currentSessionId: null,
+  loadState: 'loading',                    // 初始即 loading:首帧 sidebar 显示加载态,清空守卫阻塞
   setSessions: (sessions) => set({ sessions }),
+  setLoadState: (loadState) => set({ loadState }),
   setCurrent: (currentSessionId) => {
     if (typeof window !== 'undefined') {
       if (currentSessionId) window.localStorage.setItem(LAST_KEY, currentSessionId);
