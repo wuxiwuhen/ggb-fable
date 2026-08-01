@@ -1,6 +1,7 @@
 // 公开分享查询: 无需登录, 通过 share_id 获取 session + messages
 // 用 service_role 绕过 RLS —— 只返回 share_enabled=true 的会话
-export const runtime = 'edge';
+// nodejs runtime: 同区 Supabase us-east-1, 消除 function→DB 跨区(分享页拉 messages 同样受益)
+export const runtime = 'nodejs';
 
 import { getSupabaseAdmin } from '@/lib/supabase';
 

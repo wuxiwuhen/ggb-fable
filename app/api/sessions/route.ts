@@ -15,7 +15,9 @@
 
 import { getUserFromCookie, getSupabaseAdmin } from '@/lib/supabase';
 
-export const runtime = 'edge';
+// nodejs runtime: function 部署在 iad1(us-east-1, Vercel Hobby 默认), 与 Supabase us-east-1 同区,
+// 消除 function→Supabase 跨区往返(原 edge 全球边缘→Supabase 跨大洋, 是切会话 504 的主因之一)
+export const runtime = 'nodejs';
 
 export async function GET(req: Request) {
   const user = await getUserFromCookie(req);
