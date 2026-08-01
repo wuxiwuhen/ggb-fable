@@ -126,6 +126,8 @@ export default function ChatApp() {
   const [feedbackSent, setFeedbackSent] = useState(false);
   const { active, setActive, autoStartIfDue, start, markSeen } = useOnboarding();
   const sessionsLoadAbortRef = useRef<AbortController | null>(null); // 加载会话的 controller(自动/手动重试 + StrictMode 互斥)
+  const [switching, setSwitching] = useState(false); // 切换会话中(聊天区显示 loading)
+  const switchingCountRef = useRef(0); // 活跃切换计数(快速连点时 loading 不被先完成的那个误关)
 
   // ── 引擎实例(单例) ──
   const loggerRef = useRef<Logger>(new Logger());
@@ -540,6 +542,8 @@ export default function ChatApp() {
     cancelPersist();
     abortRef.current?.abort();
     setError('');
+    switchingCountRef.current++;             // 进入一次切换
+    setSwitching(true);                      // 切换中:聊天区显示 loading
     try {
       await persistCanvasXml();
       const res = await fetch(`/api/sessions?id=${id}`, { cache: 'no-store' });
@@ -582,6 +586,9 @@ export default function ChatApp() {
       setShareOpen(false);
     } catch (e) {
       setError('切换会话失败: ' + (e as any).message);
+    } finally {
+      switchingCountRef.current = Math.max(0, switchingCountRef.current - 1);
+      if (switchingCountRef.current === 0) setSwitching(false);  // 所有活跃切换都结束才关 loading
     }
     setSidebarOpen(false);
   }, [setCurrent, persistCanvasXml, cancelPersist, chatCollapsed]);
@@ -1041,7 +1048,12 @@ export default function ChatApp() {
           ) : (
           <>
           <div className="messages">
-            {messages.length === 0 && (
+            {switching && (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, height: '100%', minHeight: 160, color: '#888' }}>
+                <span className="spinner" /> 加载会话中…
+              </div>
+            )}
+            {!switching && messages.length === 0 && (
               <div className="welcome">
                 <h2>用自然语言画数学图形</h2>
                 <p>{user?.email ? `${user.email}，` : ''}描述你想画的图形，AI 会构造可拖动、可探究的动态画布。</p>
@@ -1052,7 +1064,7 @@ export default function ChatApp() {
                 </div>
               </div>
             )}
-            {messages.map((m) => {
+            {!switching && messages.map((m) => {
               let body: React.ReactNode;
               if (m.role === 'system') {
                 body = <div className="msg-content">{m.content}</div>;
