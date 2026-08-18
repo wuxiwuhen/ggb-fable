@@ -696,11 +696,15 @@ describe('画布断言', () => {
     expect(edge.passed).toBe(true);   // x >= min: 端点 3 包含在内
   });
 
-  it('numeric=NaN 归为 eval_error 而非 measure_mismatch', async () => {
+  it('numeric=NaN/Infinity 归为 eval_error 而非 measure_mismatch', async () => {
     const nanCtx = { ...ctx, appletEval: async () => ({ ok: true, value: 'NaN', numeric: NaN }) };
     const r = await evaluateAssertion(
       { kind: 'measure_eq', select: { c: { type: 'conic' } }, expr: 'Radius(%c%)', expect: 3 }, nanCtx);
     expect(r).toMatchObject({ passed: false, failureClass: 'eval_error' });
+    const infCtx = { ...ctx, appletEval: async () => ({ ok: true, value: 'Infinity', numeric: Infinity }) };
+    const r2 = await evaluateAssertion(
+      { kind: 'measure_eq', select: { c: { type: 'conic' } }, expr: 'Radius(%c%)', expect: 3 }, infCtx);
+    expect(r2).toMatchObject({ passed: false, failureClass: 'eval_error' });
   });
 
   it('relation_bool 解析 true/false', async () => {
@@ -809,8 +813,9 @@ function result(a, passed, failureClass, detail) {
 }
 
 function num(v) {
-  if (typeof v === 'number') return Number.isNaN(v) ? undefined : v;   // NaN 是 number 类型——漏检会把它当有效度量, 失败被错归因到 measure_mismatch
-  if (typeof v === 'string' && v.trim() !== '' && !Number.isNaN(Number(v))) return Number(v);
+  // NaN 与 ±Infinity 都不是有效度量(NaN 本身是 number 类型; 1/0、垂直斜率等产生 Infinity)——一律 undefined → eval_error
+  if (typeof v === 'number') return Number.isFinite(v) ? v : undefined;
+  if (typeof v === 'string' && v.trim() !== '') { const n = Number(v); return Number.isFinite(n) ? n : undefined; }
   return undefined;
 }
 
@@ -1305,6 +1310,10 @@ export async function openPage(browser, { baseUrl, promptVersion, promptText, va
 export async function feedAndWait(page, prompt, { timeoutMs = 180000 } = {}) {
   await page.fill('textarea', prompt);
   await page.click('button.send-btn:not(.stop)');
+  // 先等回合真正开始(停止键挂载)再轮询结束——首条消息的 setSending(true) 在 await newSession() 之后,
+  // 不等的话 t≈0 首轮轮询会把"未开始"误判为"已结束"而瞬间返回 done(空轨迹)。
+  // 静默早退的 send 等不到停止键: catch 后落回原失败模式(空事件), 不掩盖问题。
+  await page.waitForSelector('button.send-btn.stop', { timeout: 15000 }).catch(() => {});
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
     const done = await page.evaluate(() => !document.querySelector('button.send-btn.stop'));
