@@ -1,0 +1,19 @@
+<?xml version="1.0"?>
+<geogebra format="5.0">
+<construction title="" author="">
+  <element type="point" label="A">
+    <coords x="1" y="2" z="1"/>
+    <isIndependent bool="true"/>
+  </element>
+  <element type="numeric" label="r">
+    <slider min="1" max="5" inc="0.1"/>
+    <value val="2"/>
+  </element>
+  <element type="conic" label="c"/>
+  <element type="point" label="P">
+    <showObject bool="false"/>
+  </element>
+  <expression label="c" exp="c = Circle((0, 0), r)"/>
+  <command name="Circle"><input a0="(0, 0)" a1="r"/><output a0="c"/></command>
+</construction>
+</geogebra>
