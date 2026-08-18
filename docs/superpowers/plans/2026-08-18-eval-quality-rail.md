@@ -817,8 +817,8 @@ export async function evaluateAssertion(a, ctx) {
       const binding = bindSelectors(canvas.elements, a.select);
       if (!binding) return result(a, false, 'selector_unmatched', `select 无候选: ${JSON.stringify(a.select)}`);
       const expr = interpolate(a.expr, binding);
-      let v;
-      try { v = await appletEval(expr); } catch (e) { return result(a, false, 'eval_error', `${expr} 抛错: ${e?.message || e}`); }
+      // appletEval 返回 {ok:false} = 几何求值失败(eval_error); 抛异常 = 基础设施故障, 上抛给 evaluateAll 兜底为 run_error
+      const v = await appletEval(expr);
       if (!v?.ok) return result(a, false, 'eval_error', `${expr} → ${v?.value ?? '?'}`);
 
       if (a.kind === 'relation_bool') {
