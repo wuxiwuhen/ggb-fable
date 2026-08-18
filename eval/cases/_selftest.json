@@ -1,0 +1,10 @@
+{
+  "id": "_selftest",
+  "prompt": "画二次函数 y = x^2 - 4x + 3 的图像",
+  "category": "functions",
+  "notes": "管线自检用, 非真实评测数据",
+  "assertions": [
+    { "kind": "object_exists", "type": "function" },
+    { "kind": "measure_eq", "select": { "f": { "type": "function" } }, "expr": "%f%(2)", "expect": -1, "tol": 0.001 }
+  ]
+}
