@@ -162,6 +162,8 @@ GET  /runs?session_id=         会话的 run 列表（切回任务时判断状�
    sessionStorage 旧配置 → 一键迁移提示
 5. **模型选择器**：发送框旁；平台模式列 LiteLLM /v1/models；BYOK 模式列已配厂商模型
 6. **轨迹面板**：改读 run_steps（服务端轨迹，解决轨迹只在内存的问题）
+7. **多标签页/多设备**：同一 run 仅一个标签页担任执行器（§8.1 C1 认领制），其余自动降
+   级为观看端（订阅不带执行器标记）
 
 ---
 
@@ -209,6 +211,22 @@ litellm_settings:
 | 落库失败 | 内存队列重试；持续失败 → run 标 error 并经 SSE 告知 |
 | 用户取消 | POST /cancel → 检查点终止 + 落库 + 前端可接管输入 |
 | BYOK key 泄露面 | 解密仅限 runner 内存；logger 全链路脱敏；run_steps payload 与执行器回传禁止明文 key（写入时校验） |
+
+### 8.1 并发与一致性（专项）
+
+单实例单进程（Node 单线程）消除了大部分竞态温床，但以下边界必须显式处理。
+设计原则：**宁重复投递（客户端按 seq/callId 幂等消化），不漏投递（漏 = 上下文损坏）**。
+
+| # | 竞态场景 | 机制 |
+|---|---|---|
+| C1 | 同一 run 挂两个执行器（双标签页/双设备打开同一会话）——**高频真实场景**。GGB 命令不幂等（Circle(A,B) 执行两次产生 c1、c2），双执行 = 画布污染 | 执行器认领制：attach 带 executorId，每 run 仅一个执行者；后来者踢掉前者（下发 executor_evicted，被踢方降级纯观看端）；tool-results 拒收非持有者 |
+| C2 | SSE 重放与直播接缝：?since=seq 重放完瞬间新事件已在广播——漏事件或重复投递。**INCIDENTS.md 预填第一条** | 三步拼接：先进内存广播缓冲 → 读库重放 → 按序号冲刷缓冲；客户端按 seq 去重 |
+| C3 | 未决 tool_call 重投递重复执行（执行器活着但回传丢失，60s 超时重发） | 执行器端 callId 去重缓存（最近 N 个 callId→结果），重复 callId 直接重发缓存结果，不重执行 |
+| C4 | 并发 POST /runs 绕过并发≤2 / 配额校验（TOCTOU） | 创建路径按 user 串行化（进程内 per-user promise 队列）+ DB 原子计数兜底 |
+| C5 | Render 滚动部署窗口新旧实例并存，双 loop 同 run | 恢复前条件更新 run 行认领（CAS fence），认领失败不恢复；Starter 单实例为前提 |
+| C6 | cancel 与在途调用赛跑：已下发 tool_call 在取消后仍被执行 | cancel 时下发 tool_call_cancelled 通知执行器丢弃；非 active run 的 tool-results 一律拒收 |
+| C7 | seq 分配竞速（loop 追加与 canvas_snapshot 上传并发写 run_steps） | 单写者原则：全部 seq 由 runner 进程统一分配；恢复时从 MAX(seq) 初始化计数器 |
+| C8 | 事件落库与广播顺序 | 先落库再广播（§5.4）+ 落库失败暂停 loop：保证重放流永远是直播流的前缀 |
 
 ---
 
