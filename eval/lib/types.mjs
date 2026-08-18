@@ -52,7 +52,14 @@ const DEFAULT_DIR = new URL('../cases/', import.meta.url).pathname;
 
 export function loadCases({ casesDir = DEFAULT_DIR, id } = {}) {
   let files = [];
-  try { files = readdirSync(casesDir).filter((f) => f.endsWith('.json')).sort(); } catch { return []; }
+  try {
+    // 文件名级过滤在前: 默认跳过 _ 前缀(冒烟/草稿用例, 如 _selftest)——官方跑只含裁决过的用例;
+    // 显式指定 id 时不做文件名排除, 加载后按 id 过滤(顺序照旧), 保证 --case _selftest 仍可用。
+    files = readdirSync(casesDir)
+      .filter((f) => f.endsWith('.json'))
+      .filter((f) => id || !f.startsWith('_'))
+      .sort();
+  } catch { return []; }
   let cases = files.map((f) => JSON.parse(readFileSync(`${casesDir}/${f}`, 'utf8')));
   if (id) cases = cases.filter((c) => c.id === id);
   return cases;

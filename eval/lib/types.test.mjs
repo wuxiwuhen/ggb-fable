@@ -37,12 +37,26 @@ describe('validateCase', () => {
 
 describe('loadCases', () => {
   it('读 json 按文件名排序 + id 筛选', () => {
+    rmSync(dir, { recursive: true, force: true }); // 清残留(断言失败时尾部 rmSync 不执行)
     mkdirSync(dir, { recursive: true });
     writeFileSync(new URL('b.json', dir), JSON.stringify({ ...base2('b'), id: 'b' }));
     writeFileSync(new URL('a.json', dir), JSON.stringify({ ...base2('a'), id: 'a' }));
     const all = loadCases({ casesDir: dir.pathname });
     expect(all.map((c) => c.id)).toEqual(['a', 'b']);
     expect(loadCases({ casesDir: dir.pathname, id: 'b' }).map((c) => c.id)).toEqual(['b']);
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('默认跳过 _ 前缀文件(冒烟/草稿不进官方跑); 显式指定其 id 时仍可选中', () => {
+    rmSync(dir, { recursive: true, force: true }); // 清残留(断言失败时尾部 rmSync 不执行)
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(new URL('z.json', dir), JSON.stringify(base2('z')));
+    writeFileSync(new URL('_smoke.json', dir), JSON.stringify(base2('_smoke')));
+    // 无 id: 文件名级过滤, _smoke 不加载
+    expect(loadCases({ casesDir: dir.pathname }).map((c) => c.id)).toEqual(['z']);
+    // 有 id: 加载后按 id 过滤(顺序照旧), --case _smoke 仍可用
+    expect(loadCases({ casesDir: dir.pathname, id: '_smoke' }).map((c) => c.id)).toEqual(['_smoke']);
+    expect(loadCases({ casesDir: dir.pathname, id: 'z' }).map((c) => c.id)).toEqual(['z']);
     rmSync(dir, { recursive: true, force: true });
   });
 });
