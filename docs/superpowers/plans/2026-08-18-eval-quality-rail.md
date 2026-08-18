@@ -1987,7 +1987,7 @@ git commit -m "docs(eval): 基线报告 v1 落盘(10条×3次多数决/分桶/�
 ## Done Definition（对应规格任务 1 的 10 条阶段）
 
 - [ ] `pnpm eval:unit` 全绿（types/parse-canvas/selector/templates/aggregate/report 六模块 TDD）。
-- [ ] `pnpm build` / `pnpm test` 通过，app 侧仅 `lib/ggb.ts` 改 1 行。
+- [ ] `pnpm build` / `pnpm test` 通过，app 侧仅 `lib/ggb.ts` 改 1 行 + `lib/auth.tsx` env 门控登录旁路（Step 8，默认关闭）。
 - [ ] `pnpm eval -- --case _selftest --runs 1` 端到端跑通（Playwright → 真 LLM → 真画布 → 断言 → 报告）。
 - [ ] 10 条用例入库且经用户审核（规格 §3.1③）。
 - [ ] `docs/eval-report-v1.md` 落盘：总成功率 + 5 桶分桶 + 断言级统计 + 失败分类分布 + 边界信号 + 覆盖边界声明 + 结论与归因段。

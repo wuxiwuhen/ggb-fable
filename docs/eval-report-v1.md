@@ -59,11 +59,11 @@
 
 ## 结论与归因
 
-最弱桶 traps（0%），余四桶 100%。失败集中于 process_error（3 次，皆 budget 用例：多步构造中途 error 即中止，垂线段仅成 0–1/3）与 object_missing（4 次，3 次在 traps：垂线段缺×2、幻觉命令未回退建 polygon×1）。攻击点：① 错误恢复：重试或降级勿中止；② 幻觉命令回退重画；③ s0 超时属时序，查 settleReady。
+最弱桶 traps（0%），余四桶 100%。失败集中于 process_error（3 次，皆 budget 用例：多步构造中途 error 即中止，垂线段仅成 0–1/3）与 object_missing（4 次，3 次在 traps：垂线段缺×2、幻觉命令未回退×1）。攻击点：① 错误恢复：重试或降级勿中止；② 幻觉命令回退重画；③ s0 超时属时序，查 settleReady。
 
 ## 已知度量口径说明
 
-failureDist 里 `selector_unmatched` 是 `object_missing` 的影子失败：一个对象缺失会连带 N 条依赖该对象的选择器断言失败（本次 basics-circle-tangent s1 缺 1 条切线 → 连带 2 条 Distance 断言 selector_unmatched，见失败明细）。读数时以 case 级 majorityPassed 与 `object_missing` 为主，不要把 `selector_unmatched` 计为独立失败原因。
+failureDist 里 `selector_unmatched` 是 `object_missing` 的影子失败：一个对象缺失会连带 N 条依赖该对象的选择器断言失败（本次 basics-circle-tangent s1 缺 1 条切线 → 连带 2 条 Distance 断言 selector_unmatched；该用例 2/3 多数通过，s1 的失败明细按多数决规则不单列）。读数时以 case 级 majorityPassed 与 `object_missing` 为主，不要把 `selector_unmatched` 计为独立失败原因。
 
 ## 已知限制
 
