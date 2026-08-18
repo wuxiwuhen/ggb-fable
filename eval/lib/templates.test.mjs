@@ -75,11 +75,15 @@ describe('画布断言', () => {
     expect(edge.passed).toBe(true);   // x >= min: 端点 3 包含在内
   });
 
-  it('numeric=NaN 归为 eval_error 而非 measure_mismatch', async () => {
+  it('numeric=NaN/Infinity 归为 eval_error 而非 measure_mismatch', async () => {
     const nanCtx = { ...ctx, appletEval: async () => ({ ok: true, value: 'NaN', numeric: NaN }) };
     const r = await evaluateAssertion(
       { kind: 'measure_eq', select: { c: { type: 'conic' } }, expr: 'Radius(%c%)', expect: 3 }, nanCtx);
     expect(r).toMatchObject({ passed: false, failureClass: 'eval_error' });
+    const infCtx = { ...ctx, appletEval: async () => ({ ok: true, value: 'Infinity', numeric: Infinity }) };
+    const r2 = await evaluateAssertion(
+      { kind: 'measure_eq', select: { c: { type: 'conic' } }, expr: 'Radius(%c%)', expect: 3 }, infCtx);
+    expect(r2).toMatchObject({ passed: false, failureClass: 'eval_error' });
   });
 
   it('relation_bool 解析 true/false', async () => {

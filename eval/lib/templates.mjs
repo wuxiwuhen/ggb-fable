@@ -7,8 +7,9 @@ function result(a, passed, failureClass, detail) {
 }
 
 function num(v) {
-  if (typeof v === 'number') return Number.isNaN(v) ? undefined : v;   // NaN 是 number 类型——漏检会把它当有效度量, 失败被错归因到 measure_mismatch
-  if (typeof v === 'string' && v.trim() !== '' && !Number.isNaN(Number(v))) return Number(v);
+  // NaN 与 ±Infinity 都不是有效度量(NaN 本身是 number 类型; 1/0、垂直斜率等产生 Infinity)——一律 undefined → eval_error
+  if (typeof v === 'number') return Number.isFinite(v) ? v : undefined;
+  if (typeof v === 'string' && v.trim() !== '') { const n = Number(v); return Number.isFinite(n) ? n : undefined; }
   return undefined;
 }
 
