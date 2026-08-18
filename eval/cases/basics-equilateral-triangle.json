@@ -1,0 +1,11 @@
+{
+  "id": "basics-equilateral-triangle",
+  "prompt": "画一个边长为 4 的等边三角形 ABC",
+  "category": "basics",
+  "notes": "等边 ⇔ 周长 12 且面积 4√3≈6.9282(两度量共同钉死形状)",
+  "assertions": [
+    { "kind": "object_exists", "type": "polygon" },
+    { "kind": "measure_eq", "select": { "p": { "type": "polygon" } }, "expr": "Perimeter(%p%)", "expect": 12, "tol": 0.01 },
+    { "kind": "measure_eq", "select": { "p": { "type": "polygon" } }, "expr": "Area(%p%)", "expect": 6.9282, "tol": 0.01 }
+  ]
+}

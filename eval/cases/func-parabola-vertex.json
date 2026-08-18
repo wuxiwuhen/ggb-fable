@@ -1,0 +1,13 @@
+{
+  "id": "func-parabola-vertex",
+  "prompt": "画出二次函数 y = x^2 - 4x + 3 的图像，标出顶点，并标出与 x 轴的交点",
+  "category": "functions",
+  "notes": "三点采样钉死抛物线: f(0)=3, f(2)=-1(顶点), f(5)=8",
+  "assertions": [
+    { "kind": "object_exists", "type": "function" },
+    { "kind": "measure_eq", "select": { "f": { "type": "function" } }, "expr": "%f%(0)", "expect": 3, "tol": 0.001 },
+    { "kind": "measure_eq", "select": { "f": { "type": "function" } }, "expr": "%f%(2)", "expect": -1, "tol": 0.001 },
+    { "kind": "measure_eq", "select": { "f": { "type": "function" } }, "expr": "%f%(5)", "expect": 8, "tol": 0.001 },
+    { "kind": "visual_inspect_ok" }
+  ]
+}

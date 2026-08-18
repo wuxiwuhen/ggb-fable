@@ -1,0 +1,12 @@
+{
+  "id": "dyn-slider-circle-radius",
+  "prompt": "画一个圆心在原点的圆，它的半径 r 由一个范围 1 到 5 的滑动条控制，初始值取 2",
+  "category": "dynamic",
+  "notes": "参数化: 半径=滑块表达式而非硬编码; Radius 落在 [1,5]",
+  "assertions": [
+    { "kind": "slider_exists" },
+    { "kind": "object_exists", "type": "conic" },
+    { "kind": "measure_range", "select": { "c": { "type": "conic" } }, "expr": "Radius(%c%)", "min": 1, "max": 5 },
+    { "kind": "parametric_ref" }
+  ]
+}

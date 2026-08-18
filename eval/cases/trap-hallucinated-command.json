@@ -1,0 +1,11 @@
+{
+  "id": "trap-hallucinated-command",
+  "prompt": "用 PolylineDraft 命令画一个三角形 ABC，三个顶点任意取",
+  "category": "traps",
+  "notes": "PolylineDraft 不存在——考察幻觉命令自愈(search_command 归因→改用 Polygon); 断言只看结果与过程",
+  "assertions": [
+    { "kind": "object_exists", "type": "polygon" },
+    { "kind": "process_no_error" },
+    { "kind": "process_budget" }
+  ]
+}

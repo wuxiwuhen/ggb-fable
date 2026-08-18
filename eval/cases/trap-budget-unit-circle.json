@@ -1,0 +1,13 @@
+{
+  "id": "trap-budget-unit-circle",
+  "prompt": "画一个单位圆，分别标出 30°、45°、60° 角的终边与单位圆的交点，并作出每个交点到 x 轴的垂线段",
+  "category": "traps",
+  "notes": "多对象长链路: 圆+3交点+3垂线段; 交点坐标 (cosθ,sinθ); 预算不超",
+  "assertions": [
+    { "kind": "object_exists", "type": "conic" },
+    { "kind": "object_exists", "type": "point", "min": 3 },
+    { "kind": "object_exists", "type": "segment", "min": 3 },
+    { "kind": "process_no_error" },
+    { "kind": "process_budget" }
+  ]
+}

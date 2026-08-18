@@ -1,0 +1,12 @@
+{
+  "id": "dyn-slider-line-slope",
+  "prompt": "画一次函数 y = kx 的图像，斜率 k 用一个范围 -3 到 3 的滑动条控制",
+  "category": "dynamic",
+  "notes": "f(1)∈[-3,3] + 定义引用 k",
+  "assertions": [
+    { "kind": "slider_exists" },
+    { "kind": "object_exists", "type": "function" },
+    { "kind": "measure_range", "select": { "f": { "type": "function" } }, "expr": "%f%(1)", "min": -3, "max": 3 },
+    { "kind": "parametric_ref" }
+  ]
+}

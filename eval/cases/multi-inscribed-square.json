@@ -1,0 +1,13 @@
+{
+  "id": "multi-inscribed-square",
+  "prompt": "画一个半径为 2 的圆，并作出这个圆的内接正方形，标注正方形的边长",
+  "category": "multi",
+  "notes": "内接正方形: 边长 2√2≈2.8284, 面积 8, 周长 11.3137",
+  "assertions": [
+    { "kind": "object_exists", "type": "conic" },
+    { "kind": "object_exists", "type": "polygon" },
+    { "kind": "measure_eq", "select": { "c": { "type": "conic" } }, "expr": "Radius(%c%)", "expect": 2, "tol": 0.001 },
+    { "kind": "measure_eq", "select": { "p": { "type": "polygon" } }, "expr": "Area(%p%)", "expect": 8, "tol": 0.01 },
+    { "kind": "measure_eq", "select": { "p": { "type": "polygon" } }, "expr": "Perimeter(%p%)", "expect": 11.3137, "tol": 0.01 }
+  ]
+}

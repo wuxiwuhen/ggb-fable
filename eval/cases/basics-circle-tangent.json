@@ -1,0 +1,13 @@
+{
+  "id": "basics-circle-tangent",
+  "prompt": "画一个圆心在原点、半径为 3 的圆，并过点 A(6, 0) 作该圆的一条切线",
+  "category": "basics",
+  "notes": "切线判定: 圆心到线距离=半径=3, 且线过 A(6,0)——两条度量合起来即相切",
+  "assertions": [
+    { "kind": "object_exists", "type": "conic" },
+    { "kind": "object_exists", "type": "line" },
+    { "kind": "measure_eq", "select": { "c": { "type": "conic" } }, "expr": "Radius(%c%)", "expect": 3, "tol": 0.001 },
+    { "kind": "measure_eq", "select": { "l": { "type": "line" } }, "expr": "Distance((0, 0), %l%)", "expect": 3, "tol": 0.001 },
+    { "kind": "measure_eq", "select": { "l": { "type": "line" } }, "expr": "Distance((6, 0), %l%)", "expect": 0, "tol": 0.001 }
+  ]
+}

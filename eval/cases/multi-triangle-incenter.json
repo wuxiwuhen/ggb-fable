@@ -1,0 +1,13 @@
+{
+  "id": "multi-triangle-incenter",
+  "prompt": "画三角形 ABC，三个顶点分别为 A(0,0)、B(6,0)、C(2,5)，作出它的内心，并画出内切圆",
+  "category": "multi",
+  "notes": "面积=15 钉死三角形; 内切圆半径 r=2·面积/周长=30/(6+√41+√29)≈1.6865",
+  "assertions": [
+    { "kind": "object_exists", "type": "polygon" },
+    { "kind": "object_exists", "type": "conic" },
+    { "kind": "object_exists", "type": "point" },
+    { "kind": "measure_eq", "select": { "p": { "type": "polygon" } }, "expr": "Area(%p%)", "expect": 15, "tol": 0.01 },
+    { "kind": "measure_eq", "select": { "c": { "type": "conic" } }, "expr": "Radius(%c%)", "expect": 1.6865, "tol": 0.01 }
+  ]
+}
