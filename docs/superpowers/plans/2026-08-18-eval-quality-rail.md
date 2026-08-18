@@ -451,7 +451,9 @@ export function parseCanvasXml(xml) {
   if (typeof xml !== 'string' || !xml) return { elements, freeVars, corpus: '' };
 
   let m;
-  const elemRe = /<element\s+([^>]*?)>([\s\S]*?)<\/element>/g;
+  // body 用 tempered 模式(不得跨越下一个 <element 开标签): 否则自闭合标签的 '/' 落进 head,
+  // 惰性 body 会一直吃到后面某个成对元素的 </element>, 把那个元素整个吞掉
+  const elemRe = /<element\s+([^>]*?)>((?:(?!<element\b)[\s\S])*?)<\/element>/g;
   while ((m = elemRe.exec(xml)) !== null) {
     const head = m[1], body = m[2];
     const type = attr(head, 'type');
@@ -468,7 +470,7 @@ export function parseCanvasXml(xml) {
     }
   }
 
-  // 自闭合 <element .../>(无子节点的派生对象, 如被命令创建的圆)——成对正则不吃这种
+  // 自闭合 <element .../>(无子节点的派生对象, 如被命令创建的圆)——tempered 成对正则不吃这种
   const elemSelfRe = /<element\s+([^>]*?)\/>/g;
   while ((m = elemSelfRe.exec(xml)) !== null) {
     const type = attr(m[1], 'type'), label = attr(m[1], 'label');
