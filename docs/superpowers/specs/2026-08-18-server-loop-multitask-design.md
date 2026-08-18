@@ -115,7 +115,9 @@ interface ToolExecutor {
 ### 5.3 执行器协议
 - 下行（run 的 SSE 流内）：`{type:'tool_call', callId, name, args}`
 - 上行：`POST /runs/:id/tool-results` `{callId, result}`
-- 心跳：SSE comment ping 每 15s；连续 2 次无执行器 ACK → run 转 awaiting_executor
+- 执行器存活检测（双信号）：① SSE 连接关闭事件（快速路径）；② 未决 tool_call 60s 未回
+  结果 → run 转 awaiting_executor（兜底路径，兼作慢工具的超时上限）。SSE 侧每 15s 发
+  comment ping 维持中间层不断连
 - 执行器 attach：`GET /runs/:id/stream?since=seq`（带执行器标记）；未决 tool_call 重发
 - 画布快照：executor 每次 execute_command 批次成功后上传 canvas_xml（增量覆盖 runs 行）
 
@@ -140,15 +142,17 @@ GET  /runs?session_id=         会话的 run 列表（切回任务时判断状�
 ### 5.6 鉴权与安全
 - Supabase JWT 验签（jose + SUPABASE_JWT_SECRET），service-role 写库
 - CORS 白名单：Vercel 域名 + localhost（开发）
-- 配额服务端化：trial_token 按调用计数机制**退役**，改为按 run 计数（每用户每日上限，
-  管理员可覆盖——沿用现有 TRIAL_DEFAULT_LIMIT 语义）
+- 配额服务端化：trial_token 按调用计数机制**退役**，改为按 run 计数——语义沿用现有
+  TRIAL_DEFAULT_LIMIT（每用户**总额度**，默认 5，管理员可针对单用户覆盖），仅计数单位
+  从"次发送"变为"个 run"
 
 ---
 
 ## 6. 前端改造
 
 1. **画布生命周期**：画布按 sessionId 键控。运行中任务的画布常驻 offscreen 容器（绝对定
-   位移出视口）；空闲/完成任务的画布卸载，切回时从 runs.canvas_xml 恢复 + 重放 run_steps
+   位移出视口）；空闲/完成任务的画布卸载，切回时聊天/轨迹从 run_steps 重建，画布仅从
+   runs.canvas_xml 恢复（不向画布重放命令）
 2. **发送流程**：`POST /runs` → 订阅 SSE → 渲染事件。可见任务与后台任务**无两套逻辑**：
    前端画布就是执行器，tool_call 来了执行 lib/ggb.ts 现有工具、结果 POST 回 runner；可见
    时顺便把过程展示出来
@@ -245,9 +249,9 @@ litellm_settings:
 | 7 | BYOK 加密存储 + 厂商注册表 + settings UI + 模型选择器 | P1 | 1.5d | 新增（agentist 式） |
 | 8 | Render 部署（runner $7 + LiteLLM free）+ 保活决策 + 验收 | P2 | 0.5–1d | 原任务 5 溶解至此 |
 
-合计 8–10 天（原 6–8 天）。**砍序规则**：时间不够砍 8 保 6（多任务是本次核心诉求）。
-Day-1 spike：offscreen 画布渲染验证（截图 + 3D）；失败则任务 6 采「后台任务暂缓
-inspect_render、切回前台补验」兜底。
+合计约 9–11 天（原计划 6–8 天）。**砍序规则**：时间不够砍 8 保 6（多任务是本次核心诉求）。
+**任务 6 开工前 spike（半天内）**：offscreen 画布渲染验证（截图 + 3D 视图）；失败则任务 6
+采「后台任务暂缓 inspect_render、切回前台补验」兜底。
 
 INCIDENTS.md 纪律沿用（改进计划 §8）：新架构必然翻车（SSE 重连边界、休眠恢复、fallback
 触发路径），当场记录，就是面试答案库。
