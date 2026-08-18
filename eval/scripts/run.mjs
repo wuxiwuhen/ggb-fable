@@ -61,6 +61,11 @@ const runs = resolved.runs_per_case;
 console.log(`eval: variant=${resolved.name} model=${resolved.model} prompt=${v.prompt_version} temp=${v.temperature} runs=${runs} cases=${cases.length}`);
 console.log('（请确保 pnpm dev 已在跑且 .env.local 齐全）');
 
+if (cases.length === 0) {
+  console.error(`[eval] 未匹配到用例(${args.case ? `--case ${args.case}` : 'cases/ 目录为空'})——检查 id 拼写; 拒绝产出空报告`);
+  process.exit(1);
+}
+
 const browser = await chromium.launch({ headless: true, args: ['--enable-unsafe-swiftshader', '--use-gl=swiftshader'] });
 const caseResults = [];
 for (const c of cases) {
