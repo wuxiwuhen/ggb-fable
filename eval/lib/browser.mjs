@@ -57,6 +57,10 @@ export async function openPage(browser, { baseUrl, promptVersion, promptText, va
 export async function feedAndWait(page, prompt, { timeoutMs = 180000 } = {}) {
   await page.fill('textarea', prompt);
   await page.click('button.send-btn:not(.stop)');
+  // 先等回合真正开始(停止键挂载)再轮询结束——首条消息的 setSending(true) 在 await newSession() 之后,
+  // 不等的话 t≈0 首轮轮询会把"未开始"误判为"已结束"而瞬间返回 done(空轨迹)。
+  // 静默早退的 send 等不到停止键: catch 后落回原失败模式(空事件), 不掩盖问题。
+  await page.waitForSelector('button.send-btn.stop', { timeout: 15000 }).catch(() => {});
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
     const done = await page.evaluate(() => !document.querySelector('button.send-btn.stop'));
