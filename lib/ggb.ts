@@ -151,6 +151,7 @@ export class GGB {
         ...params,
         appletOnLoad: (api: GgbApi) => {
           this.applet = api || (window as any).ggbApplet;
+          if (this.applet) (window as any).ggbApplet = this.applet; // eval 抓画布用; GeoGebra 惯例全局句柄, 生产无害
           if (this.applet) {
             try {
               this.applet.registerClientListener?.(this.clientListener);
