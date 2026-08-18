@@ -11,6 +11,23 @@
 // 邮箱注册策略: Magic Link(点链接登录, 无密码, 体验轻)。
 // Supabase 默认邮箱确认开启时, 注册会发确认邮件; 关闭则直接登录。
 
+// 仅本地 eval 运行器: NEXT_PUBLIC_EVAL_BYPASS_AUTH=1 时种入合成 user, 跳过 Supabase 会话解析
+// (eval 的 dev server 由 runner 带 env 启动, 日常 dev/线上不受影响)。
+// 安全边界: 绕过的只是前端显示门控——全部服务端路由仍走真实 JWT 验签, 合成会话无任何服务端权限。
+const EVAL_BYPASS = process.env.NEXT_PUBLIC_EVAL_BYPASS_AUTH === '1';
+const EVAL_USER: User = {
+  id: '00000000-0000-4000-8000-0000000000e0',
+  email: 'eval@local.test',
+  aud: 'authenticated',
+  role: 'authenticated',
+  email_confirmed_at: '2026-01-01T00:00:00Z',
+  phone: '',
+  app_metadata: { provider: 'email', providers: ['email'] },
+  user_metadata: {},
+  identities: [],
+  created_at: '2026-01-01T00:00:00Z',
+} as unknown as User;
+
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { User } from '@supabase/supabase-js';
 import { getSupabaseBrowser } from './supabase';
@@ -36,6 +53,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [adminLoading, setAdminLoading] = useState(true);
 
   useEffect(() => {
+    if (EVAL_BYPASS) { setUser(EVAL_USER); setLoading(false); return; }
     const supabase = getSupabaseBrowser();
     // 首次: 取当前 session
     supabase.auth.getSession().then(({ data }) => {
@@ -54,6 +72,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // adminLoading 语义: user 为 null 且 session 仍在解析 → true(还没资格判定); user 已知 → 查询期间 true, 查完 false。
   // 这样管理页可以等到 is_admin 真正查完再决定显示"管理后台"还是"非管理员", 不会闪"不是管理员"。
   useEffect(() => {
+    if (EVAL_BYPASS) { setIsAdmin(false); setAdminLoading(false); return; }
     if (!user) { setIsAdmin(false); setAdminLoading(loading); return; }
     let cancelled = false;
     setAdminLoading(true);

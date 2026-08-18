@@ -55,7 +55,7 @@ const resolved = {
 };
 
 const promptText = readFileSync(`${ROOT}prompts/${v.prompt_version}.md`, 'utf8');
-const baseUrl = args['base-url'] || 'http://localhost:3000';
+const baseUrl = args['base-url'] || 'http://localhost:3000/app';
 const runs = resolved.runs_per_case;
 
 console.log(`eval: variant=${resolved.name} model=${resolved.model} prompt=${v.prompt_version} temp=${v.temperature} runs=${runs} cases=${cases.length}`);
