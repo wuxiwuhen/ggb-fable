@@ -66,6 +66,22 @@ describe('画布断言', () => {
     expect(r.passed).toBe(true);
   });
 
+  it('measure_range 区间外失败; 端点包含', async () => {
+    const out = await evaluateAssertion(
+      { kind: 'measure_range', select: { c: { type: 'conic' } }, expr: 'Radius(%c%)', min: 5, max: 9 }, ctx);
+    expect(out).toMatchObject({ passed: false, failureClass: 'measure_mismatch' });
+    const edge = await evaluateAssertion(
+      { kind: 'measure_range', select: { c: { type: 'conic' } }, expr: 'Radius(%c%)', min: 3, max: 9 }, ctx);
+    expect(edge.passed).toBe(true);   // x >= min: 端点 3 包含在内
+  });
+
+  it('numeric=NaN 归为 eval_error 而非 measure_mismatch', async () => {
+    const nanCtx = { ...ctx, appletEval: async () => ({ ok: true, value: 'NaN', numeric: NaN }) };
+    const r = await evaluateAssertion(
+      { kind: 'measure_eq', select: { c: { type: 'conic' } }, expr: 'Radius(%c%)', expect: 3 }, nanCtx);
+    expect(r).toMatchObject({ passed: false, failureClass: 'eval_error' });
+  });
+
   it('relation_bool 解析 true/false', async () => {
     const t = await evaluateAssertion(
       { kind: 'relation_bool', select: { a: { type: 'conic' }, b: { type: 'line' } }, expr: 'ArePerpendicular(%a%, %b%)' }, ctx);
@@ -90,6 +106,20 @@ describe('画布断言', () => {
     // 2 个 point 里 1 个 visible=false → 可见数 1 ≥ 默认 min_visible=1 → 通过; 抬到 2 → 失败
     expect((await evaluateAssertion({ kind: 'label_visible', type: 'point' }, ctx)).passed).toBe(true);
     expect((await evaluateAssertion({ kind: 'label_visible', type: 'point', min_visible: 2 }, ctx)).passed).toBe(false);
+  });
+
+  it('slider_exists / parametric_ref 的失败路径', async () => {
+    const noSlider = { canvas: { elements: [], freeVars: [], corpus: '' }, events: [], appletEval: ctx.appletEval };
+    expect(await evaluateAssertion({ kind: 'slider_exists' }, noSlider))
+      .toMatchObject({ passed: false, failureClass: 'slider_missing' });
+    // 有自由变量但 corpus 不引用 → 非参数化
+    const unref = {
+      canvas: { elements: [{ label: 'r', type: 'numeric', visible: true, definition: '' }],
+                freeVars: [{ name: 'r', type: 'slider' }], corpus: 'x + 1' },
+      events: [], appletEval: ctx.appletEval,
+    };
+    expect(await evaluateAssertion({ kind: 'parametric_ref' }, unref))
+      .toMatchObject({ passed: false, failureClass: 'parametric_fail' });
   });
 });
 
@@ -121,6 +151,15 @@ describe('过程断言', () => {
       { type: 'turn_end', stopped: false },
     ] };
     const r = await evaluateAssertion({ kind: 'process_budget' }, over);
+    expect(r).toMatchObject({ passed: false, failureClass: 'budget_exceeded' });
+  });
+
+  it('process_budget: render 溢出(3 > 2)也判败', async () => {
+    const overRender = { ...ctx, events: [
+      ...[1, 2, 3].map((round) => ({ type: 'tool_call', name: 'inspect_render', round, result: { ok: true, passed: true, issues: [] } })),
+      { type: 'turn_end', stopped: false },
+    ] };
+    const r = await evaluateAssertion({ kind: 'process_budget' }, overRender);
     expect(r).toMatchObject({ passed: false, failureClass: 'budget_exceeded' });
   });
 

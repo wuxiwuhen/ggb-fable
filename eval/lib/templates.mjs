@@ -7,7 +7,7 @@ function result(a, passed, failureClass, detail) {
 }
 
 function num(v) {
-  if (typeof v === 'number') return v;
+  if (typeof v === 'number') return Number.isNaN(v) ? undefined : v;   // NaN 是 number 类型——漏检会把它当有效度量, 失败被错归因到 measure_mismatch
   if (typeof v === 'string' && v.trim() !== '' && !Number.isNaN(Number(v))) return Number(v);
   return undefined;
 }
