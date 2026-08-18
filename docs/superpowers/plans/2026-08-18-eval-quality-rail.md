@@ -1618,6 +1618,65 @@ git add eval/lib/runner.mjs eval/scripts/run.mjs eval/variants/ eval/cases/_self
 git commit -m "feat(eval): runner 单case编排 + variant配置(env间接) + CLI + 自检case端到端跑通"
 ```
 
+- [ ] **Step 8: 冒烟阻断修复（2026-08-18 增补——首跑实证：`/app` 被 Supabase 真实会话门控，BYOK 注入≠已登录）**
+
+首跑证据：openPage 在 `waitForSelector('#ggb-container')` 60s 超时；零 LLM 花费。根因：`#ggb-container` 只在 ChatApp，ChatApp 只挂 `/app`，`app/app/page.tsx` 用 `useAuth().user` 门控未登录跳 `/login`；浏览器端是 `@supabase/ssr` `createBrowserClient`（会话在 cookie，非 localStorage）。
+裁决方案（B-lite，env 门控前端旁路）：合成 user 只骗过**前端显示门控**；全部服务端路由仍走真实 JWT 验签（`getUserFromRequest`/`getUserFromCookie`），合成会话不授予任何服务端权限。日常 dev / 线上不设此 env，零行为变化。
+
+**8a. `lib/auth.tsx` 加 eval 旁路**（`'use client'` 注释块之后、`import` 之前插入常量；两个 useEffect 各加一行守卫）：
+
+```tsx
+// 仅本地 eval 运行器: NEXT_PUBLIC_EVAL_BYPASS_AUTH=1 时种入合成 user, 跳过 Supabase 会话解析
+// (eval 的 dev server 由 runner 带 env 启动, 日常 dev/线上不受影响)。
+// 安全边界: 绕过的只是前端显示门控——全部服务端路由仍走真实 JWT 验签, 合成会话无任何服务端权限。
+const EVAL_BYPASS = process.env.NEXT_PUBLIC_EVAL_BYPASS_AUTH === '1';
+const EVAL_USER: User = {
+  id: '00000000-0000-4000-8000-0000000000e0',
+  email: 'eval@local.test',
+  aud: 'authenticated',
+  role: 'authenticated',
+  email_confirmed_at: '2026-01-01T00:00:00Z',
+  phone: '',
+  app_metadata: { provider: 'email', providers: ['email'] },
+  user_metadata: {},
+  identities: [],
+  created_at: '2026-01-01T00:00:00Z',
+} as unknown as User;
+```
+
+第一个 useEffect（getSession/onAuthStateChange）开头加：
+
+```tsx
+    if (EVAL_BYPASS) { setUser(EVAL_USER); setLoading(false); return; }
+```
+
+第二个 useEffect（profiles is_admin 查询）开头加：
+
+```tsx
+    if (EVAL_BYPASS) { setIsAdmin(false); setAdminLoading(false); return; }
+```
+
+**8b. `eval/scripts/run.mjs` baseUrl 默认值**改为工作台页：
+
+```js
+const baseUrl = args['base-url'] || 'http://localhost:3000/app';
+```
+
+**8c. 冒烟的 dev server 起法改带 env**（不写入 `.env.local`，避免污染日常 dev）：
+
+```bash
+NEXT_PUBLIC_EVAL_BYPASS_AUTH=1 pnpm dev
+```
+
+**8d. 验证**：`pnpm build` 全绿（旁路不改类型面）；重跑 Step 6 冒烟——期望不再是 openPage 60s 超时，而是走完 feed→drain→capture→断言链路（`1/1` 或带失败类的 `0/1` 均算管线通）。ChatApp 对 user 仅问候语与反馈 payload 两处软依赖（`user?.email`），合成 user 无碍。
+
+**8e. Commit**：
+
+```bash
+git add lib/auth.tsx eval/scripts/run.mjs
+git commit -m "feat(eval): /app 门控旁路(env门控合成user)+baseUrl默认/app——冒烟阻断修复"
+```
+
 ---
 
 ### Task 10: 10 条用例集（AI 起草断言 → 用户审核）
