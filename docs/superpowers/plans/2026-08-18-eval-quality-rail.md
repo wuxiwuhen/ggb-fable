@@ -1677,6 +1677,65 @@ git add lib/auth.tsx eval/scripts/run.mjs
 git commit -m "feat(eval): /app 门控旁路(env门控合成user)+baseUrl默认/app——冒烟阻断修复"
 ```
 
+- [ ] **Step 9: 评审增补（2026-08-18 二轮——settleReady 时序死等 ×2 + 归因守卫 + 0 案例拒跑）**
+
+评审实测口径：整轮战役（11 case × 3 runs）约 11 分钟纯死等。三处修复：
+
+**9a. `eval/lib/runner.mjs` 的 `settleReady` 整体替换为**（seen 标记在共享 context 跨页持久，第 2..N 采样引导不挂载，不能每个白等 20s；ESC 成功后 `.tour-skip` 已卸载，click 默认 30s actionability 纯空等——改为先点（限时 2s）后 ESC 兜底）：
+
+```js
+async function settleReady(page) {
+  // 已看过引导(键名/形状与 hooks/useOnboarding.ts 一致)则引导不挂载——直接跳过等待,
+  // 否则共享 context 的第 2..N 个采样每个都会白等满 20s 超时。
+  const seen = await page.evaluate(() => {
+    try { return !!JSON.parse(localStorage.getItem('ggb-fable-onboarding-v3') || 'null')?.seen; } catch { return false; }
+  });
+  if (!seen) {
+    const tour = await page.waitForSelector('.tour-root', { timeout: 20000 }).catch(() => null);
+    if (tour) {
+      // 先点跳过(限时 2s); 点不到再 ESC(window keydown → onFinish(false) 卸载引导)。
+      // 顺序不能反: ESC 成功后 .tour-skip 已卸载, click 默认 30s actionability 等待纯白等。
+      await page.click('.tour-skip', { timeout: 2000 }).catch(async () => {
+        await page.keyboard.press('Escape').catch(() => {});
+      });
+      await page.evaluate(() => { try { localStorage.setItem('ggb-fable-onboarding-v3', JSON.stringify({ v: 3, seen: true })); } catch {} });
+      await page.waitForSelector('.tour-root', { state: 'detached', timeout: 5000 }).catch(() => {});
+    }
+  }
+  await sleep(1500);
+}
+```
+
+**9b. `runSample` 里组装返回前加归因守卫**（`const stats = statsFromEvents(events)` 提到 return 前；0 轮且无 finalText = 引擎未就绪/静默早退——编排层故障归 run_error，不让断言空跑记成模型失败，污染 failureDist 归因。真模型回合即使 0 工具也有 turn_end.finalText）：
+
+```js
+    const stats = statsFromEvents(events);
+    // feedAndWait 瞬回 done 或超时卡死且 0 轮无 finalText = 引擎未就绪(send 静默早退的已知签名)——
+    // 编排层故障归 run_error, 不进断言评分(否则记成模型失败, 污染失败归因分布)。
+    if (stats.rounds === 0 && !stats.finalText) {
+      return { ok: false, error: 'engine_not_ready: 0 tool rounds and no finalText', assertions: [], stats };
+    }
+    return { ok: true, timedOut: feed === 'timeout', assertions, stats };
+```
+
+**9c. `eval/scripts/run.mjs` 在 `chromium.launch` 之前加 0 案例守卫**（打错 case id 会静默产出"0%（0/0）"空报告且退出 0——Task 11 批量跑的误导陷阱）：
+
+```js
+if (cases.length === 0) {
+  console.error(`[eval] 未匹配到用例(${args.case ? `--case ${args.case}` : 'cases/ 目录为空'})——检查 id 拼写; 拒绝产出空报告`);
+  process.exit(1);
+}
+```
+
+**9d. 验证**：`pnpm eval:unit` 35 不回归；`node --check eval/lib/runner.mjs`；`pnpm eval -- --list` 正常；重跑冒烟 `pnpm eval -- --case _selftest --runs 1`（dev 带 `NEXT_PUBLIC_EVAL_BYPASS_AUTH=1`）应仍 1/1，且总耗时应明显短于上轮（无 30s click 空等）；`pnpm eval -- --case 不存在 --runs 1` 应打印拒绝信息并退出 1。
+
+**9e. Commit**：
+
+```bash
+git add eval/lib/runner.mjs eval/scripts/run.mjs
+git commit -m "fix(eval): settleReady 时序死等(先点后ESC+seen跳过)+0轮无finalText归run_error+0案例拒跑"
+```
+
 ---
 
 ### Task 10: 10 条用例集（AI 起草断言 → 用户审核）
