@@ -1802,7 +1802,7 @@ Create `eval/cases/func-two-lines-intersection.json`：
 ```json
 {
   "id": "func-two-lines-intersection",
-  "prompt": "在同一坐标系中画出 y = 2x + 1 与 y = -x + 4 的图像，并标出两条直线的交点",
+  "prompt": "在同一坐标系中用 f(x) = 2x + 1 和 g(x) = -x + 4 的形式定义两条直线，只标注它们的交点 P，不要创建其他点",
   "category": "functions",
   "notes": "交点 (1,3); P 绑定第一个 point, 若 agent 先画轴上辅助点会误绑——用户审核重点",
   "assertions": [
