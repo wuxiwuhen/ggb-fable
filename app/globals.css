@@ -171,6 +171,16 @@ button { font-family: inherit; cursor: pointer; }
 .toolbar { display: flex; align-items: center; gap: 4px; padding: 4px 8px 8px 10px; }
 .toolbar-spacer { flex: 1; }
 
+/* 思考模式快切(输入框工具栏): 与 icon-btn 同高度的低调下拉 */
+.think-select {
+  height: 34px; padding: 0 6px; margin-left: 2px;
+  border: none; border-radius: 9px; background: transparent;
+  color: #6b7280; font-size: 12px; cursor: pointer; outline: none;
+  transition: background 0.15s, color 0.15s;
+}
+.think-select:hover { background: #f3f4f6; color: #4f46e5; }
+.think-select:focus-visible { background: #f3f4f6; color: #4f46e5; }
+
 .icon-btn {
   display: inline-flex; align-items: center; justify-content: center;
   width: 34px; height: 34px; padding: 0; border: none; border-radius: 9px; background: transparent;

@@ -17,6 +17,7 @@ import { makeTrialBackend, makeByokBackend } from '@/lib/agent-backend';
 import { getEffectivePrompt, EMERGENCY_PROMPT } from '@/lib/prompt-loader';
 import { makeTrialEmbed, makeByokEmbed } from '@/lib/embed';
 import { chatTrial, visionTrial, visionByok, type TrialContext } from '@/lib/llm';
+import type { ThinkingMode } from '@/lib/thinking';
 import { Vision } from '@/lib/vision';
 import { fetchWithRetry } from '@/lib/retry';
 import { useGeogebra } from '@/hooks/useGeogebra';
@@ -1190,6 +1191,18 @@ export default function ChatApp() {
                     <path d="M21 15l-5-5L5 21" />
                   </svg>
                 </button>
+                <select
+                  className="think-select"
+                  title="思考模式：简单题可切「关」提速（首次规划仍会思考）；复杂题切「轻」或「全」更稳。与设置页「高级」为同一设置"
+                  aria-label="思考模式"
+                  value={config.thinkingMode ?? ''}
+                  onChange={(e) => config.setThinkingMode((e.target.value || undefined) as ThinkingMode | undefined)}
+                >
+                  <option value="">思考·自动</option>
+                  <option value="autolow">思考·轻</option>
+                  <option value="always">思考·全</option>
+                  <option value="never">思考·关</option>
+                </select>
                 <div className="toolbar-spacer" />
                 {!sending ? (
                   <button className="send-btn" onClick={send} disabled={!canSend || (!input.trim() && !imgPreview)} title="发送" aria-label="发送">
