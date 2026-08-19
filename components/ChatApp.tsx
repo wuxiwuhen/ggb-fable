@@ -625,6 +625,14 @@ export default function ChatApp() {
     setSidebarOpen(false);
   }, [setCurrent, persistCanvasXml, cancelPersist, chatCollapsed]);
 
+  // Logger 会话回绑: store 的 currentSessionId 是权威。组件重挂载(Fast Refresh/错误边界恢复)会
+  // 生成新 Logger(sessionId=''),而模块级 store 的 currentSessionId 存活; 此时 send() 跳过 newSession
+  // 也就跳过 switchTo 绑定 → 运行正常执行但所有事件被 groupBySession 按 sid='' 静默丢弃,零落库——
+  // 表现为"会话切换后 AI 回复消失"。clearWorkspace 置 null 时本 effect 不动作,保持无会话态。
+  useEffect(() => {
+    if (currentSessionId && !loggerRef.current.getSessionId()) loggerRef.current.setSession(currentSessionId);
+  }, [currentSessionId]);
+
   // 加载会话列表:递增超时重试 [8s,16s,30s] + 退避 [1.5s,3s],抗慢网络/冷启动。
   // 自动重试与手动重试(侧栏按钮)共用;StrictMode 复挂载靠首行 abort 互斥。
   const loadSessions = useCallback(async () => {

@@ -7,13 +7,22 @@
 
 // 把一批事件按 ev.sessionId 分组。跳过无 sessionId 的(如 setSession('') 后的 ggb_exec——无会话态不入库)。
 // 事件在 push 时已 stamp sessionId, flush/flushNow 据此分组各自 append, 保证归属正确。
+// 把一批事件按 ev.sessionId 分组。跳过无 sessionId 的(如 setSession('') 后的 ggb_exec——无会话态不入库)。
+// 事件在 push 时已 stamp sessionId, flush/flushNow 据此分组各自 append, 保证归属正确。
+// 静默丢弃曾是"会话切换后 AI 回复消失"的帮凶: sid='' 事件无任何痕迹地消失, 故告警一次留排查线索。
+let warnedDropped = false;
 function groupBySession(batch: any[]): Map<string, any[]> {
   const groups = new Map<string, any[]>();
+  let dropped = 0;
   for (const ev of batch) {
-    if (!ev.sessionId) continue;
+    if (!ev.sessionId) { dropped++; continue; }
     const arr = groups.get(ev.sessionId);
     if (arr) arr.push(ev);
     else groups.set(ev.sessionId, [ev]);
+  }
+  if (dropped > 0 && !warnedDropped) {
+    warnedDropped = true;
+    console.warn(`[logger] 丢弃 ${dropped} 条无会话事件(重挂载后 Logger 未回绑? 运行态将不入库)`);
   }
   return groups;
 }
@@ -58,6 +67,9 @@ export class Logger {
   }
 
   setEnabled(v: boolean) { this.enabled = v; }
+
+  // 当前绑定的会话 id('' = 未绑定)。重挂载回绑判断用: 仅未绑定时才回绑, 不干扰 switchTo 的 straggler 归属。
+  getSessionId(): string { return this.sessionId; }
 
   private mask(key: string): string {
     if (!key || typeof key !== 'string') return '';
