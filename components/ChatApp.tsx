@@ -787,8 +787,8 @@ export default function ChatApp() {
         history,
         config: {
           max_tool_rounds: config.maxToolRounds,
-          // 三段式只认 byok profile 的 thinking_mode; trial 走引擎默认 auto
-          thinking_mode: config.mode === 'byok' ? config.getActiveByok()?.thinking_mode : undefined,
+          // 全局思考模式(设置页「高级」)优先, 试用/BYOK 均生效; 未选则 byok profile(eval 注入)兜底, 再缺省引擎 auto
+          thinking_mode: config.thinkingMode ?? (config.mode === 'byok' ? config.getActiveByok()?.thinking_mode : undefined),
         },
         backend,
         signal: controller.signal,

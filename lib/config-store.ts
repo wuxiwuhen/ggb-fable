@@ -14,7 +14,8 @@ export type AppMode = 'trial' | 'byok';
 
 export interface ByokProfile extends LLMConfig {
   name: string;
-  // 缺省 auto(三段式); autolow=三段式但 EXECUTE 轻思考(reasoning_effort:low); eval 注入与高级用户手改 localStorage 用, 无 UI 开关
+  // 缺省 auto(三段式); autolow=三段式但 EXECUTE 轻思考(reasoning_effort:low); eval 注入用
+  // UI 全局开关在设置页「高级」(thinkingMode), 全局开关优先于 profile 字段
   thinking_mode?: ThinkingMode;
 }
 
@@ -25,6 +26,8 @@ interface ConfigState {
   vision: Partial<LLMConfig>;          // BYOK 视觉模型(可选)
   embedding: Partial<LLMConfig>;       // BYOK 嵌入模型(可选)
   maxToolRounds: number;
+  // 全局思考模式覆盖(设置页「高级」, 试用/BYOK 均生效); 未选(undefined)=跟随 profile/引擎默认 auto
+  thinkingMode?: ThinkingMode;
 
   setMode: (m: AppMode) => void;
   addOrUpdateProfile: (p: ByokProfile) => void;
@@ -33,6 +36,7 @@ interface ConfigState {
   setVision: (v: Partial<LLMConfig>) => void;
   setEmbedding: (v: Partial<LLMConfig>) => void;
   setMaxToolRounds: (n: number) => void;
+  setThinkingMode: (m: ThinkingMode | undefined) => void;
 
   // 当前激活的 BYOK 配置
   getActiveByok: () => ByokProfile | null;
@@ -61,6 +65,7 @@ export const useConfigStore = create<ConfigState>()(
       vision: {},
       embedding: {},
       maxToolRounds: 50,
+      thinkingMode: undefined,
 
       setMode: (m) => set({ mode: m }),
       addOrUpdateProfile: (p) => set((s) => {
@@ -78,6 +83,7 @@ export const useConfigStore = create<ConfigState>()(
       setVision: (v) => set((s) => ({ vision: { ...s.vision, ...v } })),
       setEmbedding: (v) => set((s) => ({ embedding: { ...s.embedding, ...v } })),
       setMaxToolRounds: (n) => set({ maxToolRounds: n }),
+      setThinkingMode: (m) => set({ thinkingMode: m }),
 
       getActiveByok: () => {
         const { byokProfiles, activeProfileName } = get();

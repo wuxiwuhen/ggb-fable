@@ -8,9 +8,18 @@ import Link from 'next/link';
 import { useConfigStore, PRESETS } from '@/lib/config-store';
 import { useAuth } from '@/lib/auth';
 import { getSupabaseBrowser } from '@/lib/supabase';
+import type { ThinkingMode } from '@/lib/thinking';
 
 const TABS = ['基础模型', '视觉模型', '嵌入模型', '修改密码', '高级'] as const;
 type Tab = (typeof TABS)[number];
+
+// 思考模式选项(undefined=跟随 profile/引擎默认 auto)
+const THINKING_OPTIONS: Array<{ value: ThinkingMode | undefined; label: string }> = [
+  { value: undefined, label: '自动（默认）' },
+  { value: 'autolow', label: '自动·轻思考' },
+  { value: 'always', label: '全程思考' },
+  { value: 'never', label: '关闭思考' },
+];
 
 export default function SettingsPage() {
   const { user } = useAuth();
@@ -176,6 +185,19 @@ export default function SettingsPage() {
                   <input style={S.input} type="number" min={1} max={100} value={config.maxToolRounds} onChange={(e) => config.setMaxToolRounds(+e.target.value)} />
                 </label>
                 <p style={S.note}>一次发送中 Agent 最多执行多少轮工具调用。改完即生效。</p>
+
+                <div style={{ marginTop: 28 }}>
+                  <label style={S.label}>思考模式</label>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    {THINKING_OPTIONS.map((o) => (
+                      <button key={o.label} style={config.thinkingMode === o.value ? S.modeActive : S.modeBtn}
+                        onClick={() => config.setThinkingMode(o.value)}>
+                        {o.label}
+                      </button>
+                    ))}
+                  </div>
+                  <p style={S.note}>执行轮是否思考及强度：自动=仅规划与纠错轮思考（默认）；自动·轻思考=执行轮加低强度思考，复杂作图更稳；全程思考=每轮全强度思考；关闭=最快，复杂题易错。试用与自带 Key 模式均生效，改完即生效。</p>
+                </div>
               </>
             )}
           </div>
