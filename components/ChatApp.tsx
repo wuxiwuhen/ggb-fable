@@ -1193,7 +1193,7 @@ export default function ChatApp() {
                 </button>
                 <select
                   className="think-select"
-                  title="思考模式：简单题可切「关」提速（首次规划仍会思考）；复杂题切「轻」或「全」更稳。与设置页「高级」为同一设置"
+                  title="思考模式：自动=仅规划与纠错轮思考（默认）；轻=执行轮加轻思考，复杂作图更稳；全=每轮思考；关=全程不思考，最快但复杂题易错。与设置页「高级」为同一设置"
                   aria-label="思考模式"
                   value={config.thinkingMode ?? ''}
                   onChange={(e) => config.setThinkingMode((e.target.value || undefined) as ThinkingMode | undefined)}
