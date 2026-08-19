@@ -143,6 +143,41 @@ describe('chatTrial — thinking 透传到代理请求体', () => {
   });
 });
 
+describe('withRcPlaceholders — 零思考轮占位回传(trial 400 根因修复)', () => {
+  // 复现: 低 effort 轮偶发零思考 → parseSSE 不落 rc → 下一轮 enabled 请求被 deepseek 400
+  const trialResp = () => new Response('data: [DONE]\n\n', { status: 200, headers: { 'x-trial-token': 't1' } });
+  const tcMsg = (rc?: string) => ({
+    role: 'assistant', content: '', ...(rc ? { reasoning_content: rc } : {}),
+    tool_calls: [{ id: 'c1', type: 'function', function: { name: 'execute_command', arguments: '{}' } }],
+  });
+
+  it('tool_calls 无 rc → 请求体合成占位符(byok/trial 同逻辑); 已有 rc 不覆盖; 纯文本无 tool_calls 不动', async () => {
+    const msgs = [
+      { role: 'user', content: 'hi' },
+      tcMsg(),                       // 零思考轮
+      tcMsg('真思考内容'),             // 正常轮
+      { role: 'tool', tool_call_id: 'c1', content: '{"ok":true}' },
+      { role: 'assistant', content: '上一轮最终文本' },  // 纯文本(探针: 无 rc 亦 200)
+    ];
+    fetchMock.mockResolvedValue(sseResp([{ content: 'ok' }]));
+    await chatByok({ messages: msgs, config: cfg, thinking: 'enabled' });
+    expect(bodyOf(0).messages[1].reasoning_content).toBe('(no reasoning)');
+    expect(bodyOf(0).messages[2].reasoning_content).toBe('真思考内容');
+    expect(bodyOf(0).messages[4].reasoning_content).toBeUndefined();
+
+    fetchMock.mockReset();
+    fetchMock.mockResolvedValue(trialResp());
+    await chatTrial({ messages: msgs, trialCtx: { token: null, setToken: () => {} }, thinking: 'enabled', reasoningEffort: 'low' });
+    expect(bodyOf(0).messages[1].reasoning_content).toBe('(no reasoning)');
+  });
+
+  it('thinking disabled 请求同样带占位符(恒回传策略, 端点均接受)', async () => {
+    fetchMock.mockResolvedValue(sseResp([{ content: 'ok' }]));
+    await chatByok({ messages: [{ role: 'user', content: 'hi' }, tcMsg()], config: cfg, thinking: 'disabled' });
+    expect(bodyOf(0).messages[1].reasoning_content).toBe('(no reasoning)');
+  });
+});
+
 describe('thinkingFromBody — 路由侧白名单', () => {
   it('仅 enabled/disabled 放行, 其余丢弃', () => {
     expect(thinkingFromBody({ thinking: { type: 'enabled' } })).toEqual({ type: 'enabled' });

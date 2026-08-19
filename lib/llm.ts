@@ -62,6 +62,17 @@ function normalizeTool(t: ToolDef) {
   return { type: 'function', function: t };
 }
 
+// deepseek 思考模式硬约束(探针: enabled 请求 + 历史带 tool_calls 的 assistant 缺 reasoning_content → 400):
+// 低 effort 轮偶发零思考输出, parseSSE 不落 rc 字段 → 下一轮思考请求被拒。
+// 请求级合成占位符(不写入本地历史/存储); 纯文本 assistant 无 rc 不触发(探针: 200)。
+function withRcPlaceholders(messages: any[]): any[] {
+  return messages.map((m) =>
+    m?.role === 'assistant' && m.tool_calls?.length && !m.reasoning_content
+      ? { ...m, reasoning_content: '(no reasoning)' }
+      : m,
+  );
+}
+
 async function safeText(resp: Response): Promise<string> {
   try { return await resp.text(); } catch { return ''; }
 }
@@ -173,10 +184,11 @@ export async function chatByok({ messages, tools, config, onToken, onThinking, t
   }
 
   const url = joinUrl(config.base_url, '/chat/completions');
-  // messages 原样透传: 历史 assistant.reasoning_content 恒回传(见 AssistantMessage 注释, Task 8 探针)
+  // messages 原样透传: 历史 assistant.reasoning_content 恒回传(见 AssistantMessage 注释, Task 8 探针);
+  // 零思考轮(tool_calls 无 rc)请求级补占位符, 防 deepseek enabled 请求 400
   const body: any = {
     model: config.model_name,
-    messages,
+    messages: withRcPlaceholders(messages),
     temperature: config.temperature ?? 0.2,
     stream: true,
   };
@@ -235,7 +247,7 @@ export async function chatTrial({
 }: TrialChatParams): Promise<AssistantMessage> {
   const body: any = {
     model: model || 'deepseek',
-    messages,
+    messages: withRcPlaceholders(messages),
     temperature: 0.2,
     stream: true,
     trial_token: trialCtx.token || null,
