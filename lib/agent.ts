@@ -16,7 +16,7 @@ import { ThinkingController, EMPTY_SIGNAL, type RoundSignal, type ThinkingMode }
 export type { AssistantMessage };
 
 export interface AgentBackend {
-  chat(p: { messages: any[]; tools?: ToolDef[]; onToken?: (d: string) => void; onThinking?: (d: string) => void; thinking?: 'enabled' | 'disabled'; signal?: AbortSignal }): Promise<AssistantMessage>;
+  chat(p: { messages: any[]; tools?: ToolDef[]; onToken?: (d: string) => void; onThinking?: (d: string) => void; thinking?: 'enabled' | 'disabled'; reasoningEffort?: 'low' | 'medium' | 'high'; signal?: AbortSignal }): Promise<AssistantMessage>;
   vision(image: string, prompt: string, signal?: AbortSignal): Promise<string>;
   visionReady(): boolean;
 }
@@ -343,10 +343,13 @@ ${focusStep}
         : messages;
       this.safeHook(hooks, 'onStage', tc.currentStage, round + 1);
 
+      const plan = tc.planFor(tc.currentStage);
       const assistant = await backend.chat({
         messages: chatMessages, tools: TOOLS, onToken: hooks.onToken,
-        onThinking: hooks.onThinking, thinking: tc.thinkingFor(), signal,
+        onThinking: hooks.onThinking, thinking: plan.thinking,
+        reasoningEffort: plan.reasoningEffort, signal,
       });
+      // assistant 原样入历史(含 reasoning_content): enabled 轮的思考随历史回传, 避免端点 400-strip 静默降级
       messages.push(assistant);
 
       if (!assistant.tool_calls || !assistant.tool_calls.length) {

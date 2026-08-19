@@ -27,12 +27,18 @@ export interface ToolDef {
 export interface AssistantMessage {
   role: 'assistant';
   content: string | null;
+  // 思考内容(deepseek reasoning_content): 保留在消息上随历史回传——
+  // thinking enabled 请求若历史中带 tool_calls 的 assistant 不回传该字段会被端点 400(Task 8 探针证实),
+  // 且 disabled 请求带该字段也被接受(2026-08-19 探针) → 恒回传, 组装侧不过滤。
+  reasoning_content?: string;
   tool_calls?: Array<{
     id: string;
     type: 'function';
     function: { name: string; arguments: string };
   }>;
 }
+
+export type ReasoningEffort = 'low' | 'medium' | 'high';
 
 interface ChatParams {
   messages: any[];
@@ -41,6 +47,7 @@ interface ChatParams {
   onToken?: (delta: string) => void;
   onThinking?: (delta: string) => void;              // 思考流(reasoning_content)增量, 仅展示
   thinking?: 'enabled' | 'disabled';                 // deepseek 思考模式开关; 缺省不携带=厂商默认
+  reasoningEffort?: ReasoningEffort;                 // 思考力度(deepseek reasoning_effort, 与 thinking 组合); 缺省不携带
   signal?: AbortSignal;
 }
 
@@ -89,6 +96,7 @@ async function parseSSE(
   const decoder = new TextDecoder('utf-8');
   let buffer = '';
   let content = '';
+  let reasoning = '';
   const toolCalls: Record<number, { id: string; type: 'function'; function: { name: string; arguments: string } }> = {};
   let finishByStream = false;
 
@@ -112,8 +120,11 @@ async function parseSSE(
       const delta = json.choices?.[0]?.delta;
       if (!delta) continue;
 
-      // 思考增量: 只透出展示, 不累积进 content(不写入 messages 历史、不回传 API)
-      if (delta.reasoning_content) onThinking?.(delta.reasoning_content);
+      // 思考增量: 流给 onThinking 展示, 同时累积进返回消息的 reasoning_content(随历史回传, 不进 content)
+      if (delta.reasoning_content) {
+        reasoning += delta.reasoning_content;
+        onThinking?.(delta.reasoning_content);
+      }
       if (delta.content) {
         content += delta.content;
         onToken?.(delta.content);
@@ -147,6 +158,7 @@ async function parseSSE(
   return {
     role: 'assistant',
     content: content || null,
+    reasoning_content: reasoning || undefined,
     tool_calls: tcList.length ? tcList : undefined,
   };
 }
@@ -155,12 +167,13 @@ async function parseSSE(
 // BYOK: 前端直连用户配置的厂商
 // key 只在浏览器, 永不发送到我方后端
 // ──────────────────────────────────────────────────────────────
-export async function chatByok({ messages, tools, config, onToken, onThinking, thinking, signal }: ChatParams): Promise<AssistantMessage> {
+export async function chatByok({ messages, tools, config, onToken, onThinking, thinking, reasoningEffort, signal }: ChatParams): Promise<AssistantMessage> {
   if (!config.api_key || !config.base_url || !config.model_name) {
     throw new Error('LLM 配置不完整: 请填写 api_key / base_url / model_name');
   }
 
   const url = joinUrl(config.base_url, '/chat/completions');
+  // messages 原样透传: 历史 assistant.reasoning_content 恒回传(见 AssistantMessage 注释, Task 8 探针)
   const body: any = {
     model: config.model_name,
     messages,
@@ -172,6 +185,7 @@ export async function chatByok({ messages, tools, config, onToken, onThinking, t
     body.tool_choice = 'auto';
   }
   if (thinking) body.thinking = { type: thinking };   // 仅显式传入时携带; 缺省=厂商默认(兼容非 deepseek)
+  if (reasoningEffort) body.reasoning_effort = reasoningEffort;   // 同模式: 仅显式传入时携带
 
   const doFetch = (b: any) => fetch(url, {
     method: 'POST',
@@ -184,10 +198,11 @@ export async function chatByok({ messages, tools, config, onToken, onThinking, t
   });
 
   let resp = await doFetch(body);
-  // 端点不认 thinking 字段(部分 OpenAI 兼容端点 400) → 去掉该字段原样重试一次, 降级为厂商默认行为
-  if (resp.status === 400 && body.thinking) {
+  // 端点不认 thinking/reasoning_effort 字段(部分 OpenAI 兼容端点 400) → 去掉这两个字段原样重试一次, 降级为厂商默认行为
+  if (resp.status === 400 && (body.thinking || body.reasoning_effort)) {
     const fallback = { ...body };
     delete fallback.thinking;
+    delete fallback.reasoning_effort;
     resp = await doFetch(fallback);
   }
 
@@ -216,7 +231,7 @@ interface TrialChatParams extends Omit<ChatParams, 'config'> {
 }
 
 export async function chatTrial({
-  messages, tools, trialCtx, model, onToken, onThinking, thinking, signal,
+  messages, tools, trialCtx, model, onToken, onThinking, thinking, reasoningEffort, signal,
 }: TrialChatParams): Promise<AssistantMessage> {
   const body: any = {
     model: model || 'deepseek',
@@ -226,6 +241,7 @@ export async function chatTrial({
     trial_token: trialCtx.token || null,
   };
   if (thinking) body.thinking = { type: thinking };
+  if (reasoningEffort) body.reasoning_effort = reasoningEffort;
   if (tools && tools.length) {
     body.tools = tools.map(normalizeTool);
     body.tool_choice = 'auto';
@@ -341,4 +357,10 @@ export async function visionTrial({ image, prompt, signal, trialCtx, model }: Vi
 export function thinkingFromBody(body: any): { type: 'enabled' | 'disabled' } | null {
   const t = body?.thinking?.type;
   return t === 'enabled' || t === 'disabled' ? { type: t } : null;
+}
+
+// trial 路由用: 从客户端请求体提取白名单 reasoning_effort(非法值一律丢弃, 不透传到上游)
+export function reasoningEffortFromBody(body: any): 'low' | 'medium' | 'high' | null {
+  const e = body?.reasoning_effort;
+  return e === 'low' || e === 'medium' || e === 'high' ? e : null;
 }

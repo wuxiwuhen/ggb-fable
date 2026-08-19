@@ -93,3 +93,49 @@ describe('ThinkingController — always / never 覆盖', () => {
     expect(new ThinkingController().thinkingFor()).toBe('enabled');
   });
 });
+
+describe('ThinkingController — autolow 轻思考档(PLAN 全思考/EXECUTE 轻思考/RECOVER 全思考)', () => {
+  it('planFor: PLAN 与 RECOVER 全思考(无 effort); EXECUTE enabled+low', () => {
+    const c = new ThinkingController('autolow');
+    expect(c.planFor('PLAN')).toEqual({ thinking: 'enabled' });
+    expect(c.planFor('EXECUTE')).toEqual({ thinking: 'enabled', reasoningEffort: 'low' });
+    expect(c.planFor('RECOVER')).toEqual({ thinking: 'enabled' });
+  });
+
+  it('状态机照常推进: PLAN 观察后落 EXECUTE(轻思考), 触发②后 RECOVER(全思考), 恢复一轮回 EXECUTE', () => {
+    const c = new ThinkingController('autolow');
+    expect(c.planFor(c.currentStage)).toEqual({ thinking: 'enabled' });           // PLAN
+    c.observeRound(sig());
+    expect(c.currentStage).toBe('EXECUTE');
+    expect(c.planFor(c.currentStage)).toEqual({ thinking: 'enabled', reasoningEffort: 'low' });
+    c.observeRound(sig({ verifyFailed: true }));
+    expect(c.currentStage).toBe('RECOVER');
+    expect(c.planFor(c.currentStage)).toEqual({ thinking: 'enabled' });           // RECOVER 无 effort
+    c.observeRound(sig());
+    expect(c.currentStage).toBe('EXECUTE');
+    expect(c.planFor(c.currentStage)).toEqual({ thinking: 'enabled', reasoningEffort: 'low' });
+  });
+
+  it('阶段后缀与 auto 同: EXECUTE 注入执行指令, PLAN 不注入', () => {
+    const c = new ThinkingController('autolow');
+    expect(c.systemSuffix()).toBeNull();
+    c.observeRound(sig());
+    expect(c.systemSuffix()).toMatch(/执行阶段/);
+    expect(c.systemSuffix()).toMatch(/恢复阶段|批量提交/);
+  });
+});
+
+describe('planFor — 各档位对照', () => {
+  it('auto: EXECUTE 关思考且无 effort; always/never 任意阶段恒定', () => {
+    expect(new ThinkingController('auto').planFor('EXECUTE')).toEqual({ thinking: 'disabled' });
+    expect(new ThinkingController('auto').planFor('RECOVER')).toEqual({ thinking: 'enabled' });
+    const always = new ThinkingController('always');
+    for (const s of ['PLAN', 'EXECUTE', 'RECOVER'] as const) {
+      expect(always.planFor(s)).toEqual({ thinking: 'enabled' });
+    }
+    const never = new ThinkingController('never');
+    for (const s of ['PLAN', 'EXECUTE', 'RECOVER'] as const) {
+      expect(never.planFor(s)).toEqual({ thinking: 'disabled' });
+    }
+  });
+});

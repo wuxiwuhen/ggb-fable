@@ -27,7 +27,7 @@ const makeDeps = (over: { execOk?: boolean; labels?: string } = {}) => {
 
 // 脚本化 backend: 依次吐出预设 assistant 消息, 记录每次 chat 的入参
 class ScriptBackend implements AgentBackend {
-  calls: Array<{ messages: any[]; thinking?: string }> = [];
+  calls: Array<{ messages: any[]; thinking?: string; reasoningEffort?: string }> = [];
   constructor(private script: AssistantMessage[]) {}
   async chat(p: any) {
     this.calls.push(p);
@@ -118,5 +118,52 @@ describe('AgentEngine — 三段式思考策略', () => {
     const toolMsg = r.messages.find((m) => m.role === 'tool');
     expect(typeof toolMsg.content).toBe('string');
     expect(JSON.parse(toolMsg.content).ok).toBe(true);
+  });
+});
+
+describe('AgentEngine — autolow 轻思考接线', () => {
+  it('autolow: EXECUTE 轮收到 {thinking:"enabled", reasoningEffort:"low"}; auto: {thinking:"disabled"} 且无 effort', async () => {
+    const bAuto = new ScriptBackend([execTurn(), execTurn(), finalTurn]);
+    await new AgentEngine(makeDeps()).run({
+      userInput: 'x', history: [], config: { max_tool_rounds: 6, thinking_mode: 'auto' }, backend: bAuto as any,
+    });
+    expect(bAuto.calls[0].thinking).toBe('enabled');           // PLAN
+    expect(bAuto.calls[0].reasoningEffort).toBeUndefined();
+    expect(bAuto.calls[1].thinking).toBe('disabled');          // EXECUTE(auto): 关思考
+    expect(bAuto.calls[1].reasoningEffort).toBeUndefined();
+
+    const bLow = new ScriptBackend([execTurn(), execTurn(), finalTurn]);
+    await new AgentEngine(makeDeps()).run({
+      userInput: 'x', history: [], config: { max_tool_rounds: 6, thinking_mode: 'autolow' }, backend: bLow as any,
+    });
+    expect(bLow.calls[0].thinking).toBe('enabled');            // PLAN 全思考
+    expect(bLow.calls[0].reasoningEffort).toBeUndefined();
+    expect(bLow.calls[1].thinking).toBe('enabled');            // EXECUTE(autolow): 轻思考
+    expect(bLow.calls[1].reasoningEffort).toBe('low');
+  });
+
+  it('autolow: RECOVER 轮回到全思考(无 effort)', async () => {
+    const deps = makeDeps({ execOk: false });                  // 连续批失败 → 触发①
+    const backend = new ScriptBackend([execTurn('B1'), execTurn('B2'), finalTurn]);
+    await new AgentEngine(deps).run({
+      userInput: 'x', history: [], config: { max_tool_rounds: 6, thinking_mode: 'autolow' }, backend: backend as any,
+    });
+    expect(backend.calls[2].thinking).toBe('enabled');
+    expect(backend.calls[2].reasoningEffort).toBeUndefined();
+    expect(backend.calls[2].messages[0].content).toContain('恢复阶段');
+  });
+
+  it('assistant.reasoning_content 随历史 push 回传(下一轮 chat 的 messages 可见)', async () => {
+    const rcTurn = { role: 'assistant' as const, content: '', reasoning_content: '我在想内切圆画法', tool_calls: [toolCall('execute_command', { command: 'A=(1,1)' })] };
+    const backend = new ScriptBackend([rcTurn, finalTurn]);
+    const engine = new AgentEngine(makeDeps());
+    const r = await engine.run({
+      userInput: 'x', history: [], config: { max_tool_rounds: 5, thinking_mode: 'autolow' }, backend: backend as any,
+    });
+    // 第 2 轮 chat 收到的历史里, assistant 消息仍带 reasoning_content
+    const histAssistant = backend.calls[1].messages.find((m) => m.role === 'assistant');
+    expect(histAssistant.reasoning_content).toBe('我在想内切圆画法');
+    // 最终 messages 同样保留
+    expect(r.messages.find((m) => m.role === 'assistant')?.reasoning_content).toBe('我在想内切圆画法');
   });
 });

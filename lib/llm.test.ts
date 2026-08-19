@@ -1,6 +1,6 @@
 // llm thinking 透传 + SSE reasoning_content 捕获(不发真实请求, fetch 全部打桩)
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { chatByok, chatTrial, thinkingFromBody } from './llm';
+import { chatByok, chatTrial, thinkingFromBody, reasoningEffortFromBody } from './llm';
 
 const fetchMock = vi.fn();
 beforeEach(() => { fetchMock.mockReset(); vi.stubGlobal('fetch', fetchMock); });
@@ -39,7 +39,7 @@ describe('chatByok — thinking 字段', () => {
 });
 
 describe('parseSSE — reasoning_content 捕获(经 chatByok 驱动)', () => {
-  it('思考增量走 onThinking, 不混入 content', async () => {
+  it('思考增量既流给 onThinking 又累积到返回值.reasoning_content, 不混入 content', async () => {
     fetchMock.mockResolvedValue(sseResp([
       { reasoning_content: '先想' }, { reasoning_content: '清楚' }, { content: '答案' },
     ]));
@@ -49,13 +49,62 @@ describe('parseSSE — reasoning_content 捕获(经 chatByok 驱动)', () => {
       onThinking: (d) => thoughts.push(d),
     });
     expect(thoughts.join('')).toBe('先想清楚');
-    expect(r.content).toBe('答案');          // reasoning 不进 content/历史
+    expect(r.content).toBe('答案');          // reasoning 不进 content
+    expect(r.reasoning_content).toBe('先想清楚');   // 但保留在返回消息上(供历史回传)
   });
 
-  it('无 onThinking 回调时 reasoning_content 被安全丢弃', async () => {
-    fetchMock.mockResolvedValue(sseResp([{ reasoning_content: 'x' }, { content: 'y' }]));
+  it('无思考增量时返回值不带 reasoning_content 键', async () => {
+    fetchMock.mockResolvedValue(sseResp([{ content: 'y' }]));
     const r = await chatByok({ messages: [{ role: 'user', content: 'hi' }], config: cfg });
     expect(r.content).toBe('y');
+    expect(r.reasoning_content).toBeUndefined();
+  });
+
+  it('历史 assistant.reasoning_content 恒回传(Step 0 探针: disabled/enabled 均接受, 不过滤)', async () => {
+    fetchMock.mockResolvedValue(sseResp([{ content: 'ok' }]));
+    const histMsgs = [
+      { role: 'user', content: 'hi' },
+      { role: 'assistant', content: '', reasoning_content: '上一轮思考', tool_calls: [{ id: 'c1', type: 'function', function: { name: 'execute_command', arguments: '{}' } }] },
+      { role: 'tool', tool_call_id: 'c1', content: '{"ok":true}' },
+    ];
+    await chatByok({ messages: histMsgs, config: cfg, thinking: 'disabled' });
+    expect(bodyOf(0).messages[1].reasoning_content).toBe('上一轮思考');
+    // 兜底重试(400-strip)后的请求体: 历史消息照旧(仍含 reasoning_content)
+    fetchMock.mockReset();
+    fetchMock
+      .mockResolvedValueOnce(new Response('unknown field: thinking', { status: 400 }))
+      .mockResolvedValueOnce(sseResp([{ content: 'ok' }]));
+    await chatByok({ messages: histMsgs, config: cfg, thinking: 'disabled' });
+    expect(bodyOf(1).messages[1].reasoning_content).toBe('上一轮思考');
+  });
+});
+
+describe('chatByok — reasoningEffort 透传', () => {
+  it('显式传 → 请求体携带 reasoning_effort; 未传 → 不携带', async () => {
+    fetchMock.mockResolvedValue(sseResp([{ content: 'ok' }]));
+    await chatByok({ messages: [{ role: 'user', content: 'hi' }], config: cfg, thinking: 'enabled', reasoningEffort: 'low' });
+    expect(bodyOf(0).reasoning_effort).toBe('low');
+
+    fetchMock.mockReset();
+    fetchMock.mockResolvedValue(sseResp([{ content: 'ok' }]));
+    await chatByok({ messages: [{ role: 'user', content: 'hi' }], config: cfg, thinking: 'enabled' });
+    expect(bodyOf(0).reasoning_effort).toBeUndefined();
+  });
+
+  it('端点 400 → 兜底重试一并剥离 thinking 与 reasoning_effort', async () => {
+    fetchMock
+      .mockResolvedValueOnce(new Response('unknown field', { status: 400 }))
+      .mockResolvedValueOnce(sseResp([{ content: 'ok' }]));
+    const r = await chatByok({
+      messages: [{ role: 'user', content: 'hi' }], config: cfg,
+      thinking: 'enabled', reasoningEffort: 'low',
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(bodyOf(0).thinking).toEqual({ type: 'enabled' });
+    expect(bodyOf(0).reasoning_effort).toBe('low');
+    expect(bodyOf(1).thinking).toBeUndefined();
+    expect(bodyOf(1).reasoning_effort).toBeUndefined();
+    expect(r.content).toBe('ok');
   });
 });
 
@@ -77,6 +126,21 @@ describe('chatTrial — thinking 透传到代理请求体', () => {
     await chatTrial({ messages: [{ role: 'user', content: 'hi' }], trialCtx: { token: 't0', setToken: () => {} } });
     expect(bodyOf(0).thinking).toBeUndefined();
   });
+
+  it('reasoningEffort 同模式透传; 未传不携带', async () => {
+    fetchMock.mockResolvedValue(trialResp());
+    await chatTrial({
+      messages: [{ role: 'user', content: 'hi' }],
+      trialCtx: { token: null, setToken: () => {} },
+      thinking: 'enabled', reasoningEffort: 'low',
+    });
+    expect(bodyOf(0).reasoning_effort).toBe('low');
+
+    fetchMock.mockReset();
+    fetchMock.mockResolvedValue(trialResp());
+    await chatTrial({ messages: [{ role: 'user', content: 'hi' }], trialCtx: { token: null, setToken: () => {} } });
+    expect(bodyOf(0).reasoning_effort).toBeUndefined();
+  });
 });
 
 describe('thinkingFromBody — 路由侧白名单', () => {
@@ -86,5 +150,16 @@ describe('thinkingFromBody — 路由侧白名单', () => {
     expect(thinkingFromBody({ thinking: { type: 'fast' } })).toBeNull();
     expect(thinkingFromBody({})).toBeNull();
     expect(thinkingFromBody(null)).toBeNull();
+  });
+});
+
+describe('reasoningEffortFromBody — 路由侧白名单', () => {
+  it('仅 low/medium/high 放行, 其余丢弃', () => {
+    expect(reasoningEffortFromBody({ reasoning_effort: 'low' })).toBe('low');
+    expect(reasoningEffortFromBody({ reasoning_effort: 'medium' })).toBe('medium');
+    expect(reasoningEffortFromBody({ reasoning_effort: 'high' })).toBe('high');
+    expect(reasoningEffortFromBody({ reasoning_effort: 'minimal' })).toBeNull();
+    expect(reasoningEffortFromBody({})).toBeNull();
+    expect(reasoningEffortFromBody(null)).toBeNull();
   });
 });

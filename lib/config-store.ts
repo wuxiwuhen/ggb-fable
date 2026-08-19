@@ -14,7 +14,8 @@ export type AppMode = 'trial' | 'byok';
 
 export interface ByokProfile extends LLMConfig {
   name: string;
-  thinking_mode?: ThinkingMode;   // 缺省 auto(三段式); eval 注入与高级用户手改 localStorage 用, 无 UI 开关
+  // 缺省 auto(三段式); autolow=三段式但 EXECUTE 轻思考(reasoning_effort:low); eval 注入与高级用户手改 localStorage 用, 无 UI 开关
+  thinking_mode?: ThinkingMode;
 }
 
 interface ConfigState {

@@ -1,11 +1,19 @@
 // 三段式思考策略状态机(spec: docs/superpowers/specs/2026-08-19-speed-optimization-design.md §3.1)
-// 纯逻辑无 IO: 引擎每轮 chat 前调 thinkingFor()/systemSuffix(), 工具跑完后调 observeRound() 回报信号。
+// 纯逻辑无 IO: 引擎每轮 chat 前调 planFor(stage)/systemSuffix(), 工具跑完后调 observeRound() 回报信号。
 //   PLAN(第 1 轮, 思考开) → EXECUTE(思考关) --触发--> RECOVER(思考开, 上限 2) --一轮--> EXECUTE
-// thinking_mode: auto=三段式(默认) / always=全程思考(v1 基线语义) / never=全程关(fast 臂)。
+// thinking_mode: auto=三段式(默认) / autolow=三段式但 EXECUTE 轻思考(enabled+reasoning_effort:low)
+//                / always=全程思考(v1 基线语义) / never=全程关(fast 臂)。
 
-export type ThinkingMode = 'auto' | 'always' | 'never';
+export type ThinkingMode = 'auto' | 'autolow' | 'always' | 'never';
 export type ThinkingDecision = 'enabled' | 'disabled';
+export type ReasoningEffort = 'low' | 'medium' | 'high';
 export type Stage = 'PLAN' | 'EXECUTE' | 'RECOVER';
+
+// 某阶段的思考配置(每轮 backend.chat 之前由 planFor(当前阶段) 取)
+export interface StagePlan {
+  thinking: ThinkingDecision;
+  reasoningEffort?: ReasoningEffort;   // 仅轻思考档的 EXECUTE 携带
+}
 
 // 一轮工具执行后的信号(由引擎从工具结果汇总, 全部来自现有结果字段)
 export interface RoundSignal {
@@ -36,16 +44,28 @@ export class ThinkingController {
   get currentStage(): Stage { return this.stage; }
   get recoveryCount(): number { return this.recoveries; }
 
-  // 本轮 chat 的 thinking 参数(每轮 backend.chat 之前调用)
+  // 指定阶段的思考配置(每轮 backend.chat 之前调 planFor(currentStage))
+  planFor(stage: Stage): StagePlan {
+    if (this.mode === 'always') return { thinking: 'enabled' };
+    if (this.mode === 'never') return { thinking: 'disabled' };
+    if (stage === 'EXECUTE') {
+      // auto: EXECUTE 关思考; autolow: EXECUTE 轻思考(保留思考但压低力度)
+      return this.mode === 'autolow'
+        ? { thinking: 'enabled', reasoningEffort: 'low' }
+        : { thinking: 'disabled' };
+    }
+    return { thinking: 'enabled' };                          // PLAN / RECOVER 全思考
+  }
+
+  // 本轮 chat 的 thinking 参数(向后兼容; 等价 planFor(当前阶段).thinking)
   thinkingFor(): ThinkingDecision {
-    if (this.mode === 'always') return 'enabled';
-    if (this.mode === 'never') return 'disabled';
-    return this.stage === 'PLAN' || this.stage === 'RECOVER' ? 'enabled' : 'disabled';
+    return this.planFor(this.stage).thinking;
   }
 
   // 阶段指令(注入本轮 system 后缀; PLAN 轮与 v2 prompt 规划要求重复, 不注入)
+  // auto 与 autolow 同为三段式, 后缀一致; always/never 无阶段概念
   systemSuffix(): string | null {
-    if (this.mode !== 'auto') return null;
+    if (this.mode !== 'auto' && this.mode !== 'autolow') return null;
     if (this.stage === 'EXECUTE') return EXECUTE_SUFFIX;
     if (this.stage === 'RECOVER') return RECOVER_SUFFIX;
     return null;
@@ -54,7 +74,7 @@ export class ThinkingController {
   // 工具跑完后回报本轮信号, 推进状态机(每轮 dispatchTool 全部结束后调用)
   observeRound(s: RoundSignal): void {
     if (s.inspectFailed) this.inspectFails++;
-    if (this.mode !== 'auto') return;                        // always/never: 状态机不推进
+    if (this.mode !== 'auto' && this.mode !== 'autolow') return;   // always/never: 状态机不推进
     const prev = this.lastSignal;                            // 上一轮信号(s = 刚结束的这轮)
     this.lastSignal = s;
     if (this.stage === 'RECOVER') { this.stage = 'EXECUTE'; return; }  // 恢复一轮即回执行
