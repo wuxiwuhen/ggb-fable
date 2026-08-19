@@ -8,11 +8,13 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { LLMConfig } from './llm';
+import type { ThinkingMode } from './thinking';
 
 export type AppMode = 'trial' | 'byok';
 
 export interface ByokProfile extends LLMConfig {
   name: string;
+  thinking_mode?: ThinkingMode;   // 缺省 auto(三段式); eval 注入与高级用户手改 localStorage 用, 无 UI 开关
 }
 
 interface ConfigState {

@@ -60,8 +60,15 @@ const PHASE_LABEL: Record<string, string> = {
   reset_canvas: '清空画布',
 };
 
+const STAGE_LABEL: Record<'PLAN' | 'EXECUTE' | 'RECOVER', string> = {
+  PLAN: '规划中', EXECUTE: '执行中', RECOVER: '恢复中',
+};
+
 // 输出气泡"首字文本前"的过程面板: 单行动态切换(只显示当前阶段, 不堆叠)
-function AssistantProgress({ msg, trace }: { msg: Msg; trace: TraceItem[] }) {
+function AssistantProgress({ msg, trace, stage }: {
+  msg: Msg; trace: TraceItem[];
+  stage: { stage: 'PLAN' | 'EXECUTE' | 'RECOVER'; round: number } | null;
+}) {
   const phases = trace.filter((t) => PHASE_LABEL[t.name]);
   const ocrLoading = msg.ocr?.state === 'loading';
 
@@ -78,6 +85,10 @@ function AssistantProgress({ msg, trace }: { msg: Msg; trace: TraceItem[] }) {
   } else if (activeIdx >= 0) {
     // 有阶段正在执行
     label = PHASE_LABEL[phases[activeIdx].name] || phases[activeIdx].name;
+    showSpinner = true;
+  } else if (stage) {
+    // 阶段状态行(工具间隙的 LLM 调用期): 规划中 / 执行第 N 步 / 恢复中
+    label = stage.stage === 'EXECUTE' ? `执行第 ${Math.max(1, stage.round - 1)} 步` : STAGE_LABEL[stage.stage];
     showSpinner = true;
   } else if (allDone) {
     // 工具阶段全部完成, 等待 LLM 输出最终回复文字
@@ -199,6 +210,25 @@ export default function ChatApp() {
   const [error, setError] = useState('');
   const [imgPreview, setImgPreview] = useState<string | null>(null);
   const [lightbox, setLightbox] = useState<string | null>(null);   // 点气泡图片放大查看(null=关闭)
+
+  // ── 三段式思考策略的 UI 态(spec §3.3): 阶段状态行 + 思考流折叠块 ──
+  const [stage, setStage] = useState<{ stage: 'PLAN' | 'EXECUTE' | 'RECOVER'; round: number } | null>(null);
+  const [thinkingText, setThinkingText] = useState('');
+  const [thinkMsgId, setThinkMsgId] = useState<number | null>(null);   // 思考块挂在哪个 assistant 气泡
+  const [thinkOpen, setThinkOpen] = useState(false);
+  const [thinkSecs, setThinkSecs] = useState<number | null>(null);     // 回合结束后的"已思考 Ns"
+  const thinkBufRef = useRef('');
+  const thinkRafRef = useRef<number | null>(null);
+  const thinkStartRef = useRef<number | null>(null);
+
+  // 思考流 rAF 批量 flush(与正文 streamBuf 同模式, 避免每个增量一次 setState)
+  const flushThink = useCallback(() => {
+    thinkRafRef.current = null;
+    setThinkingText(thinkBufRef.current);
+  }, []);
+  const scheduleThinkFlush = useCallback(() => {
+    if (thinkRafRef.current == null) thinkRafRef.current = requestAnimationFrame(flushThink);
+  }, [flushThink]);
 
   // ── 导出菜单状态 ──
   const [exportOpen, setExportOpen] = useState(false);
@@ -685,6 +715,12 @@ export default function ChatApp() {
     setError('');
     setTrace([]);
     setExecLines([]);
+    setStage(null);
+    thinkBufRef.current = '';
+    thinkStartRef.current = null;
+    setThinkingText('');
+    setThinkSecs(null);
+    setThinkOpen(false);
     trialTokenRef.current = null;   // 新意图, 首次扣 1 次
 
     // 整个 send(含 OCR 阶段)共用一个 abort controller, 点"停止"可中断 OCR
@@ -702,6 +738,7 @@ export default function ChatApp() {
     };
     const newUserMsgs = [imageMsg, textMsg].filter(Boolean) as Msg[];
     setMessages((prev) => [...prev, ...newUserMsgs, assistantMsg]);
+    setThinkMsgId(assistantMsg.id);
     setInput('');
     setImgPreview(null);
     const sid = useSessionStore.getState().currentSessionId;
@@ -748,13 +785,23 @@ export default function ChatApp() {
       const result = await agentRef.current.run({
         userInput: finalText,
         history,
-        config: { max_tool_rounds: config.maxToolRounds },
+        config: {
+          max_tool_rounds: config.maxToolRounds,
+          // 三段式只认 byok profile 的 thinking_mode; trial 走引擎默认 auto
+          thinking_mode: config.mode === 'byok' ? config.getActiveByok()?.thinking_mode : undefined,
+        },
         backend,
         signal: controller.signal,
         hooks: {
           onToken: (delta) => {
             if (streamBuf.current) { streamBuf.current.text += delta; scheduleFlush(); }
           },
+          onThinking: (delta) => {
+            if (thinkStartRef.current == null) { thinkStartRef.current = Date.now(); setThinkOpen(true); }
+            thinkBufRef.current += delta;
+            scheduleThinkFlush();
+          },
+          onStage: (s, round) => setStage({ stage: s, round }),
           onToolStart: (name, args) => {
             setTrace((prev) => [...prev, { id: ++msgId, name, args, result: null }]);
           },
@@ -830,10 +877,16 @@ export default function ChatApp() {
     } finally {
       // 落库(成功/中止/出错都落): 主动停止的会话也要持久化, 才会出现在历史列表
       await loggerRef.current.flush();
+      // 思考流收尾: 折叠为"已思考 Ns"
+      if (thinkRafRef.current != null) { cancelAnimationFrame(thinkRafRef.current); thinkRafRef.current = null; }
+      flushThink();
+      if (thinkStartRef.current != null) setThinkSecs(Math.max(1, Math.round((Date.now() - thinkStartRef.current) / 1000)));
+      setThinkOpen(false);
+      setStage(null);
       setSending(false);
       streamBuf.current = null;
     }
-  }, [input, sending, imgPreview, config, usage, history, buildBackend, scheduleFlush, flushStream, fetchUsage, ggbRef, trialCtx, schedulePersist]);
+  }, [input, sending, imgPreview, config, usage, history, buildBackend, scheduleFlush, flushStream, fetchUsage, ggbRef, trialCtx, schedulePersist, scheduleThinkFlush, flushThink]);
 
   // 后台生成标题并更新会话(trial 走 /api/trial/title 不扣次数; byok 用用户 key)
   const generateTitle = useCallback(async (text: string, sessionId: string) => {
@@ -855,6 +908,7 @@ export default function ChatApp() {
               { role: 'user', content: text.slice(0, 500) },
             ],
             config: { api_key: prof.api_key, base_url: prof.base_url, model_name: prof.model_name },
+            thinking: 'disabled',
           });
           title = (msg.content || '').trim().slice(0, 15);
         }
@@ -1086,7 +1140,17 @@ export default function ChatApp() {
                         )}
                       </div>
                     )}
-                    {preText ? <AssistantProgress msg={m} trace={trace} /> : <MessageContent content={m.content || ''} />}
+                    {m.id === thinkMsgId && thinkingText && (
+                      <div className="thinking-block">
+                        <button type="button" className="ocr-toggle" onClick={() => setThinkOpen((v) => !v)}>
+                          {m.streaming
+                            ? `思考中…（点击${thinkOpen ? '收起' : '展开'}）`
+                            : `已思考 ${thinkSecs ?? '—'}s ▾`}
+                        </button>
+                        {thinkOpen && <pre className="thinking-text">{thinkingText.slice(-2000)}</pre>}
+                      </div>
+                    )}
+                    {preText ? <AssistantProgress msg={m} trace={trace} stage={stage} /> : <MessageContent content={m.content || ''} />}
                   </>
                 );
               } else {
