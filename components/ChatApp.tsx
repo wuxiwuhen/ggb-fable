@@ -20,6 +20,7 @@ import { chatTrial, visionTrial, visionByok, type TrialContext } from '@/lib/llm
 import type { ThinkingMode } from '@/lib/thinking';
 import { Vision } from '@/lib/vision';
 import { fetchWithRetry } from '@/lib/retry';
+import { logTurnInterrupt } from '@/lib/turn-interrupt';
 import { useGeogebra } from '@/hooks/useGeogebra';
 import { exportPng, startRecording, stopRecording, recordingFormat } from '@/lib/export-media';
 import MessageContent from './MessageContent';
@@ -848,11 +849,12 @@ export default function ChatApp() {
       if (msg === 'TRIAL_EXHAUSTED') {
         setError('试用次数已用完, 可切换到"自带 Key"模式继续使用');
         fetchUsage();
+        // 补记 turn_end: 额度耗尽也是中途退出, 不补则切换会话后只剩用户气泡
+        logTurnInterrupt(loggerRef.current, 'trial_exhausted', e, { finalText: streamBuf.current?.text || '', toolCount: trace.length });
       } else if (aborted) {
-        loggerRef.current.errorEvent('user_stop', e);
         // 补 turn_end(stopped): agent abort 时(throw '已中止')不调 turnEnd, 中止会话会缺 assistant 消息(只剩 user)。
         // 用流式已累积文本 + 工具数生成 assistant 行, 保证中止会话切回后对话气泡完整。
-        loggerRef.current.turnEnd({ finalText: streamBuf.current?.text || '', toolCount: trace.length, stopped: true });
+        logTurnInterrupt(loggerRef.current, 'user_stop', e, { finalText: streamBuf.current?.text || '', toolCount: trace.length });
         // 保留用户意图到 history: 取消后输入"继续"时 LLM 知道刚才在做什么, 而非拿到空上下文
         setHistory((prev) => [...prev, { role: 'user', content: finalText }].slice(-20));
         // 兜底标题: 中止时若标题还没生成, 用占位"新会话"让会话进列表可识别
@@ -864,6 +866,8 @@ export default function ChatApp() {
         }
       } else {
         setError(msg);
+        // 补记 turn_end: 错误轮(上游 4xx/5xx、网络异常)不补则切换会话后只剩用户气泡
+        logTurnInterrupt(loggerRef.current, 'turn_error', e, { finalText: streamBuf.current?.text || '', toolCount: trace.length });
       }
       setMessages((prev) => {
         const cur = prev.find((m) => m.id === assistantMsg.id);
