@@ -49,6 +49,7 @@ const resolved = {
   prompt_version: v.prompt_version,
   temperature: v.temperature,
   max_tool_rounds: v.max_tool_rounds,
+  thinking_mode: v.thinking_mode || 'auto',
   runs_per_case: parseInt(String(args.runs || v.runs_per_case || 3), 10),
   model: process.env[v.llm.model_env],
   llm: resolve(v.llm), vision: resolve(v.vision), embedding: resolve(v.embedding),
@@ -58,7 +59,7 @@ const promptText = readFileSync(`${ROOT}prompts/${v.prompt_version}.md`, 'utf8')
 const baseUrl = args['base-url'] || 'http://localhost:3000/app';
 const runs = resolved.runs_per_case;
 
-console.log(`eval: variant=${resolved.name} model=${resolved.model} prompt=${v.prompt_version} temp=${v.temperature} runs=${runs} cases=${cases.length}`);
+console.log(`eval: variant=${resolved.name} model=${resolved.model} prompt=${v.prompt_version} temp=${v.temperature} thinking=${resolved.thinking_mode} runs=${runs} cases=${cases.length}`);
 console.log('（请确保 pnpm dev 已在跑且 .env.local 齐全）');
 
 if (cases.length === 0) {
@@ -83,7 +84,7 @@ for (const c of cases) {
 await browser.close();
 
 const agg = aggregate(caseResults);
-const results = { variant: { name: resolved.name, prompt_version: v.prompt_version, model: resolved.model, temperature: v.temperature, max_tool_rounds: v.max_tool_rounds, runs_per_case: runs }, date: new Date().toISOString(), cases: caseResults, ...agg };
+const results = { variant: { name: resolved.name, prompt_version: v.prompt_version, model: resolved.model, temperature: v.temperature, max_tool_rounds: v.max_tool_rounds, thinking_mode: resolved.thinking_mode, runs_per_case: runs }, date: new Date().toISOString(), cases: caseResults, ...agg };
 
 const { resultsPath, mdPath } = writeResults(results, REPORTS_DIR);
 console.log(`\n总成功率: ${Math.round(agg.overall.rate * 100)}%（${agg.overall.passed}/${agg.overall.total}）`);

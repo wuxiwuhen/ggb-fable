@@ -12,6 +12,7 @@ export function buildByokPayload({ variant, temperature, maxToolRounds }) {
     byokProfiles: [{
       name: 'eval', api_key: variant.llm.api_key, base_url: variant.llm.base_url,
       model_name: variant.llm.model_name, temperature,
+      thinking_mode: variant.thinking_mode || 'auto',
     }],
     activeProfileName: 'eval',
     vision: { api_key: variant.vision.api_key, base_url: variant.vision.base_url, model_name: variant.vision.model_name },

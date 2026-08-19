@@ -1,7 +1,7 @@
 {
-  "name": "deepseek-v2",
+  "name": "deepseek-v2-fast",
   "prompt_version": "v2",
-  "thinking_mode": "always",
+  "thinking_mode": "never",
   "temperature": 0.2,
   "max_tool_rounds": 30,
   "runs_per_case": 3,
