@@ -22,6 +22,14 @@ export function renderMarkdown(results, { matrix } = {}) {
   }
   L.push('');
 
+  L.push('## 延迟分布（分桶采样 P50）', '');
+  L.push('| 桶 | P50 |');
+  L.push('|---|---|');
+  for (const [cat, b] of Object.entries(buckets)) {
+    L.push(`| ${cat} ${CATEGORY_LABELS[cat] || ''} | ${b.p50Ms == null ? '—' : (Math.round(b.p50Ms / 100) / 10) + 's'} |`);
+  }
+  L.push('');
+
   L.push('## 断言级统计（全部采样全量记录）', '');
   L.push('| 断言原语 | 通过/总数 |');
   L.push('|---|---|');
@@ -41,9 +49,11 @@ export function renderMarkdown(results, { matrix } = {}) {
     L.push('');
   }
 
-  L.push('## 边界信号（3 次中有 1–2 次通过：不稳定而非全坏）', '');
+  // runs=2 时区间退化成 "1 次通过"(不写难看的 "1–1")
+  const edgeRange = v.runs_per_case > 2 ? `1–${v.runs_per_case - 1}` : '1';
+  L.push(`## 边界信号（${v.runs_per_case} 次中有 ${edgeRange} 次通过：不稳定而非全坏）`, '');
   const edge = cases.filter((c) => c.passVotes > 0 && !c.majorityPassed);
-  L.push(edge.length ? edge.map((c) => `- \`${c.id}\`: ${c.passVotes}/3`).join('\n') : '- （无）');
+  L.push(edge.length ? edge.map((c) => `- \`${c.id}\`: ${c.passVotes}/${v.runs_per_case}`).join('\n') : '- （无）');
   L.push('');
 
   L.push('## 失败明细', '');
@@ -59,7 +69,7 @@ export function renderMarkdown(results, { matrix } = {}) {
   }
 
   L.push('## 覆盖边界声明', '');
-  L.push('- 本报告只证明：这 10 条用例（每桶 2 条）在该 variant 配置下的多数决成功率与失败分类。');
+  L.push(`- 本报告只证明：这 ${cases.length} 条用例在该 variant 配置下的多数决成功率与失败分类。`);
   L.push('- 不证明：全体 K12 题型覆盖、视觉美观度（视觉仅采信被评系统自报的 inspect_render 结论）、跨模型一般性。');
   L.push('- 桶级数字只做方向性结论（规格 §3.1⑤），不做显著性声明；扩到 30 条后结论边界同步更新。');
   return L.join('\n');

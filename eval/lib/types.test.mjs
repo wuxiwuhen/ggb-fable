@@ -64,3 +64,13 @@ describe('loadCases', () => {
 function base2(id) {
   return { id, prompt: 'p', category: 'basics', assertions: [{ kind: 'process_no_error' }] };
 }
+
+describe('timeoutMs 校验', () => {
+  const base = { id: 'a', prompt: 'p', category: 'basics', assertions: [{ kind: 'process_no_error' }] };
+  it('可选; 传了必须是正数(毫秒)', () => {
+    expect(validateCase(base).ok).toBe(true);
+    expect(validateCase({ ...base, timeoutMs: 420000 }).ok).toBe(true);
+    expect(validateCase({ ...base, timeoutMs: '420000' }).errors).toContain('timeoutMs 必须是正数(毫秒)');
+    expect(validateCase({ ...base, timeoutMs: 0 }).errors).toContain('timeoutMs 必须是正数(毫秒)');
+  });
+});

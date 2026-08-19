@@ -40,4 +40,17 @@ describe('renderMarkdown', () => {
     expect(withMatrix).toContain('variant × category');
     expect(withMatrix).toContain('+50pp');
   });
+  it('延迟分布段渲染分桶 P50', () => {
+    const withLatency = renderMarkdown({
+      ...results,
+      buckets: { ...results.buckets, basics: { total: 1, passed: 1, rate: 1, p50Ms: 12345 } },
+    });
+    expect(withLatency).toContain('延迟分布');
+    expect(withLatency).toContain('12.3s');
+  });
+  it('边界信号/覆盖声明按 runs 与条数参数化(runs=2)', () => {
+    const md2 = renderMarkdown({ ...results, variant: { ...results.variant, runs_per_case: 2 } });
+    expect(md2).toContain('2 次中有 1 次通过');
+    expect(md2).toContain(`这 ${results.cases.length} 条用例`);
+  });
 });

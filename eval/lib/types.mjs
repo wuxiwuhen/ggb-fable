@@ -45,6 +45,7 @@ export function validateCase(c) {
     if (a.kind === 'measure_eq' && typeof a.expect !== 'number') errors.push(`assertions[${i}] expect 必须是数字`);
     if (a.select) checkSelect(a.select, errors);
   }
+  if (c.timeoutMs !== undefined && (typeof c.timeoutMs !== 'number' || !(c.timeoutMs > 0))) errors.push('timeoutMs 必须是正数(毫秒)');
   return { ok: errors.length === 0, errors };
 }
 

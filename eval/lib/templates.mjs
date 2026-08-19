@@ -85,6 +85,9 @@ export async function evaluateAssertion(a, ctx) {
     }
 
     case 'process_no_error': {
+      // runner 超时强停: 轨迹必然不完整(turn_end 缺失/强停注入 error), 不足以判"过程出错"——
+      // 记 timeout_incomplete 边界信号, 与真实 process_error 分离(spec §3.4)
+      if (ctx.timedOut) return result(a, false, 'timeout_incomplete', 'runner 超时强停, 过程轨迹不完整');
       const turnEnd = (events || []).filter((e) => e.type === 'turn_end').pop();
       const errors = (events || []).filter((e) => e.type === 'error').length;
       const reasons = [];

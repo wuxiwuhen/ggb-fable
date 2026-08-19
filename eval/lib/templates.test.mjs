@@ -173,3 +173,21 @@ describe('过程断言', () => {
     expect(r[0]).toMatchObject({ passed: false, failureClass: 'run_error' });
   });
 });
+
+describe('process_no_error 超时独立分类', () => {
+  const ctx = (timedOut) => ({
+    canvas: { elements: [], freeVars: [] },
+    events: [{ type: 'error' }, { type: 'turn_end', stopped: true }],
+    appletEval: async () => ({ ok: false, value: '?' }),
+    timedOut,
+  });
+  it('timedOut 采样 → timeout_incomplete(不判 process_error)', async () => {
+    const r = await evaluateAssertion({ kind: 'process_no_error' }, ctx(true));
+    expect(r.passed).toBe(false);
+    expect(r.failureClass).toBe('timeout_incomplete');
+  });
+  it('非超时路径不受影响(仍判 process_error)', async () => {
+    const r = await evaluateAssertion({ kind: 'process_no_error' }, ctx(false));
+    expect(r.failureClass).toBe('process_error');
+  });
+});

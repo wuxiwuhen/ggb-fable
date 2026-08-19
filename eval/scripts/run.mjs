@@ -1,4 +1,4 @@
-// pnpm eval CLI: --list | (--variant ... [--case id] [--runs n] [--out path] [--compare results.json] [--base-url url])
+// pnpm eval CLI: --list | (--variant ... [--case id] [--runs n] [--out path] [--compare results.json] [--base-url url] [--serial])
 import { readFileSync, copyFileSync } from 'node:fs';
 import { chromium } from 'playwright';
 import { loadCases, validateCase, ASSERTION_KINDS, CATEGORIES } from '../lib/types.mjs';
@@ -73,7 +73,9 @@ for (const c of cases) {
   const r = await runOneCase(browser, c, {
     baseUrl, promptVersion: v.prompt_version, promptText,
     variant: resolved, temperature: v.temperature, maxToolRounds: v.max_tool_rounds,
-    runs, timeoutMs: 180000,
+    runs,
+    timeoutMs: c.timeoutMs || 180000,   // 每用例可覆盖(spec §3.4; 默认 180s)
+    serial: args.serial === true,       // 429 限流时的降级开关(spec §6)
   });
   caseResults.push(r);
   console.log(`${r.passVotes}/${runs}${r.majorityPassed ? ' ✓' : ' ✗'}`);
