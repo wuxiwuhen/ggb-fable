@@ -9,8 +9,8 @@ import type { ByokProfile } from './config-store';
 // 构建试用模式 backend
 export function makeTrialBackend(trialCtx: TrialContext, model?: string): AgentBackend {
   return {
-    chat: ({ messages, tools, onToken, signal }) =>
-      chatTrial({ messages, tools, trialCtx, model, onToken, signal }),
+    chat: ({ messages, tools, onToken, onThinking, thinking, signal }) =>
+      chatTrial({ messages, tools, trialCtx, model, onToken, onThinking, thinking, signal }),
     vision: (image, prompt, signal) =>
       visionTrial({ image, prompt, trialCtx, model: model === 'deepseek' ? 'glm-4.6v' : 'glm-4.6v', signal }),
     visionReady: () => true,   // 试用模式视觉走后端, 永远就绪
@@ -32,8 +32,8 @@ export function makeByokBackend(profile: ByokProfile, visionCfg: Partial<LLMConf
     model_name: visionCfg.model_name!,
   };
   return {
-    chat: ({ messages, tools, onToken, signal }) =>
-      chatByok({ messages, tools, config, onToken, signal }),
+    chat: ({ messages, tools, onToken, onThinking, thinking, signal }) =>
+      chatByok({ messages, tools, config, onToken, onThinking, thinking, signal }),
     vision: (image, prompt, signal) =>
       visionReady ? visionByok(visionConfig, { image, prompt, signal }) : Promise.reject(new Error('视觉模型未配置')),
     visionReady: () => visionReady,

@@ -11,15 +11,20 @@ import type { GGB } from './ggb';
 import type { CommandSearch } from './command-search';
 import type { Logger } from './logger';
 import type { AssistantMessage, ToolDef, LLMConfig } from './llm';
+import { ThinkingController, EMPTY_SIGNAL, type RoundSignal, type ThinkingMode } from './thinking';
+
+export type { AssistantMessage };
 
 export interface AgentBackend {
-  chat(p: { messages: any[]; tools?: ToolDef[]; onToken?: (d: string) => void; signal?: AbortSignal }): Promise<AssistantMessage>;
+  chat(p: { messages: any[]; tools?: ToolDef[]; onToken?: (d: string) => void; onThinking?: (d: string) => void; thinking?: 'enabled' | 'disabled'; signal?: AbortSignal }): Promise<AssistantMessage>;
   vision(image: string, prompt: string, signal?: AbortSignal): Promise<string>;
   visionReady(): boolean;
 }
 
 export interface AgentHooks {
   onToken?: (t: string) => void;
+  onThinking?: (t: string) => void;                                  // 思考流增量(reasoning_content)
+  onStage?: (stage: 'PLAN' | 'EXECUTE' | 'RECOVER', round: number) => void;  // 阶段状态(UI 状态行)
   onToolStart?: (name: string, args: any) => void;
   onToolEnd?: (name: string, args: any, result: any) => void;
   onExec?: (cmd: string, result: any) => void;
@@ -170,6 +175,7 @@ export class AgentEngine {
   private safeHook(hooks: AgentHooks | undefined, name: 'onToolStart', a: string, b: any): void;
   private safeHook(hooks: AgentHooks | undefined, name: 'onToolEnd', a: string, b: any, c: any): void;
   private safeHook(hooks: AgentHooks | undefined, name: 'onRound', a: number, b?: boolean): void;
+  private safeHook(hooks: AgentHooks | undefined, name: 'onStage', a: 'PLAN' | 'EXECUTE' | 'RECOVER', b: number): void;
   private safeHook(hooks: AgentHooks | undefined, name: keyof AgentHooks, ...rest: any[]): void {
     try {
       const fn = hooks?.[name] as ((...args: any[]) => void) | undefined;
@@ -180,13 +186,13 @@ export class AgentEngine {
   private async dispatchTool(
     call: any, hooks: AgentHooks | undefined, round: number,
     messages: any[], signal: AbortSignal | undefined, backend: AgentBackend,
-  ): Promise<string> {
+  ): Promise<any> {
     const fn = call.function || call;
     const name: string = fn.name;
     const argStr: string = fn.arguments;
     let args: any = {};
     try { args = argStr ? JSON.parse(argStr) : {}; }
-    catch { return JSON.stringify({ error: '参数 JSON 解析失败: ' + argStr }); }
+    catch { return { error: '参数 JSON 解析失败: ' + argStr }; }
 
     this.safeHook(hooks, 'onToolStart', name, args);
     const t0 = Date.now();
@@ -305,7 +311,7 @@ ${focusStep}
     const durationMs = Date.now() - t0;
     this.deps.logger.toolCall({ round, name, args, result, durationMs });
     this.safeHook(hooks, 'onToolEnd', name, args, result);
-    return JSON.stringify(result);
+    return result;
   }
 
   async run({
@@ -313,7 +319,7 @@ ${focusStep}
   }: {
     userInput: string;
     history: any[];
-    config: { max_tool_rounds?: number };
+    config: { max_tool_rounds?: number; thinking_mode?: ThinkingMode };
     backend: AgentBackend;
     hooks?: AgentHooks;
     signal?: AbortSignal;
@@ -324,13 +330,22 @@ ${focusStep}
       { role: 'user', content: userInput },
     ];
     const maxRounds = config.max_tool_rounds || 50;
+    const tc = new ThinkingController(config.thinking_mode || 'auto');
 
     for (let round = 0; round < maxRounds; round++) {
       hooks.onRound?.(round + 1);
       if (signal?.aborted) throw new Error('已中止');
 
+      // 阶段指令以本轮 system 临时后缀注入(浅拷贝, 不写入 messages 历史) —— prompt v2 本体不动
+      const suffix = tc.systemSuffix();
+      const chatMessages = suffix
+        ? [{ ...messages[0], content: `${messages[0].content}\n\n${suffix}` }, ...messages.slice(1)]
+        : messages;
+      this.safeHook(hooks, 'onStage', tc.currentStage, round + 1);
+
       const assistant = await backend.chat({
-        messages, tools: TOOLS, onToken: hooks.onToken, signal,
+        messages: chatMessages, tools: TOOLS, onToken: hooks.onToken,
+        onThinking: hooks.onThinking, thinking: tc.thinkingFor(), signal,
       });
       messages.push(assistant);
 
@@ -345,15 +360,29 @@ ${focusStep}
         return r;
       }
 
+      // 汇总本轮工具信号喂状态机(全部来自现有结果字段, 无新检测机制)
+      const roundSignal: RoundSignal = { ...EMPTY_SIGNAL };
       for (const call of assistant.tool_calls) {
-        const toolResult = await this.dispatchTool(call, hooks, round + 1, messages, signal, backend);
+        const fnName = (call.function || call).name;
+        const result = await this.dispatchTool(call, hooks, round + 1, messages, signal, backend);
         messages.push({
           role: 'tool',
           tool_call_id: call.id,
-          content: toolResult,
-          _toolName: (call.function || call).name,
+          content: JSON.stringify(result),
+          _toolName: fnName,
         });
+        if (fnName === 'execute_command') {
+          roundSignal.execRan = true;
+          if ((result?.failedCount || 0) > 0) roundSignal.execFailed = true;
+          roundSignal.createdLabels += (result?.createdLabels || []).length;
+        } else if (fnName === 'verify_geometry') {
+          // 预算超限的 ok:false 也计入②——模型在无益空转, 升级恢复一轮合理(spec §3.1②"不达预期")
+          if (result?.ok === false) roundSignal.verifyFailed = true;
+        } else if (fnName === 'inspect_render') {
+          if (result?.passed === false) roundSignal.inspectFailed = true;
+        }
       }
+      tc.observeRound(roundSignal);
     }
 
     hooks.onRound?.(maxRounds, true);
