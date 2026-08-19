@@ -6,6 +6,7 @@
 import { getUserFromCookie } from '@/lib/supabase';
 import { getSupabaseAdmin } from '@/lib/supabase';
 import { signToken, verifyToken, newIntentId } from '@/lib/trial-token';
+import { thinkingFromBody } from '@/lib/llm';
 
 export const runtime = 'edge';
 
@@ -115,6 +116,8 @@ export async function POST(req: Request) {
     upstreamBody.tools = body.tools;
     upstreamBody.tool_choice = 'auto';
   }
+  const thinking = thinkingFromBody(body);
+  if (thinking) upstreamBody.thinking = thinking;
 
   const upstream = await fetch(joinUrl(cfg.base_url, '/chat/completions'), {
     method: 'POST',

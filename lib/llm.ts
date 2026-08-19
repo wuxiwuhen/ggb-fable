@@ -39,6 +39,8 @@ interface ChatParams {
   tools?: ToolDef[];
   config: LLMConfig;
   onToken?: (delta: string) => void;
+  onThinking?: (delta: string) => void;              // 思考流(reasoning_content)增量, 仅展示
+  thinking?: 'enabled' | 'disabled';                 // deepseek 思考模式开关; 缺省不携带=厂商默认
   signal?: AbortSignal;
 }
 
@@ -81,6 +83,7 @@ function friendlyUpstreamError(msg: string): string {
 async function parseSSE(
   body: ReadableStream<Uint8Array>,
   onToken?: (delta: string) => void,
+  onThinking?: (delta: string) => void,
 ): Promise<AssistantMessage> {
   const reader = body.getReader();
   const decoder = new TextDecoder('utf-8');
@@ -109,6 +112,8 @@ async function parseSSE(
       const delta = json.choices?.[0]?.delta;
       if (!delta) continue;
 
+      // 思考增量: 只透出展示, 不累积进 content(不写入 messages 历史、不回传 API)
+      if (delta.reasoning_content) onThinking?.(delta.reasoning_content);
       if (delta.content) {
         content += delta.content;
         onToken?.(delta.content);
@@ -150,7 +155,7 @@ async function parseSSE(
 // BYOK: 前端直连用户配置的厂商
 // key 只在浏览器, 永不发送到我方后端
 // ──────────────────────────────────────────────────────────────
-export async function chatByok({ messages, tools, config, onToken, signal }: ChatParams): Promise<AssistantMessage> {
+export async function chatByok({ messages, tools, config, onToken, onThinking, thinking, signal }: ChatParams): Promise<AssistantMessage> {
   if (!config.api_key || !config.base_url || !config.model_name) {
     throw new Error('LLM 配置不完整: 请填写 api_key / base_url / model_name');
   }
@@ -166,16 +171,25 @@ export async function chatByok({ messages, tools, config, onToken, signal }: Cha
     body.tools = tools.map(normalizeTool);
     body.tool_choice = 'auto';
   }
+  if (thinking) body.thinking = { type: thinking };   // 仅显式传入时携带; 缺省=厂商默认(兼容非 deepseek)
 
-  const resp = await fetch(url, {
+  const doFetch = (b: any) => fetch(url, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${config.api_key}`,
     },
-    body: JSON.stringify(body),
+    body: JSON.stringify(b),
     signal,
   });
+
+  let resp = await doFetch(body);
+  // 端点不认 thinking 字段(部分 OpenAI 兼容端点 400) → 去掉该字段原样重试一次, 降级为厂商默认行为
+  if (resp.status === 400 && body.thinking) {
+    const fallback = { ...body };
+    delete fallback.thinking;
+    resp = await doFetch(fallback);
+  }
 
   if (!resp.ok) {
     const txt = await safeText(resp);
@@ -183,7 +197,7 @@ export async function chatByok({ messages, tools, config, onToken, signal }: Cha
   }
   if (!resp.body) throw new Error('当前环境不支持流式读取响应体');
 
-  return parseSSE(resp.body as any, onToken);
+  return parseSSE(resp.body as any, onToken, onThinking);
 }
 
 // ──────────────────────────────────────────────────────────────
@@ -202,7 +216,7 @@ interface TrialChatParams extends Omit<ChatParams, 'config'> {
 }
 
 export async function chatTrial({
-  messages, tools, trialCtx, model, onToken, signal,
+  messages, tools, trialCtx, model, onToken, onThinking, thinking, signal,
 }: TrialChatParams): Promise<AssistantMessage> {
   const body: any = {
     model: model || 'deepseek',
@@ -211,6 +225,7 @@ export async function chatTrial({
     stream: true,
     trial_token: trialCtx.token || null,
   };
+  if (thinking) body.thinking = { type: thinking };
   if (tools && tools.length) {
     body.tools = tools.map(normalizeTool);
     body.tool_choice = 'auto';
@@ -243,7 +258,7 @@ export async function chatTrial({
   if (newToken && newToken !== trialCtx.token) trialCtx.setToken(newToken);
 
   if (!resp.body) throw new Error('试用响应不支持流式读取');
-  return parseSSE(resp.body as any, onToken);
+  return parseSSE(resp.body as any, onToken, onThinking);
 }
 
 // ──────────────────────────────────────────────────────────────
@@ -320,4 +335,10 @@ export async function visionTrial({ image, prompt, signal, trialCtx, model }: Vi
   if (newToken && newToken !== trialCtx.token) trialCtx.setToken(newToken);
   const json = await resp.json();
   return json.content || '';
+}
+
+// trial 路由用: 从客户端请求体提取白名单 thinking(非法值一律丢弃, 不透传到上游)
+export function thinkingFromBody(body: any): { type: 'enabled' | 'disabled' } | null {
+  const t = body?.thinking?.type;
+  return t === 'enabled' || t === 'disabled' ? { type: t } : null;
 }
