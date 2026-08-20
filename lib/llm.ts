@@ -191,6 +191,7 @@ export async function chatByok({ messages, tools, config, onToken, onThinking, t
     messages: withRcPlaceholders(messages),
     temperature: config.temperature ?? 0.2,
     stream: true,
+    max_tokens: 8192,   // 不传走厂商默认(deepseek 4096/GLM 1024), 长推导会被掐断; 8192 主流厂商均支持
   };
   if (tools && tools.length) {
     body.tools = tools.map(normalizeTool);
@@ -251,6 +252,7 @@ export async function chatTrial({
     temperature: 0.2,
     stream: true,
     trial_token: trialCtx.token || null,
+    max_tokens: 8192,   // 不传走厂商默认(deepseek 4096), 长推导会在半截公式处被掐断
   };
   if (thinking) body.thinking = { type: thinking };
   if (reasoningEffort) body.reasoning_effort = reasoningEffort;

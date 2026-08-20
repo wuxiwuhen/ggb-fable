@@ -101,6 +101,7 @@ export async function POST(req: Request) {
     temperature: body.temperature ?? 0.2,
     stream: true,
   };
+  if (Number(body.max_tokens) > 0) upstreamBody.max_tokens = Number(body.max_tokens);
   if (body.tools && body.tools.length) {
     upstreamBody.tools = body.tools;
     upstreamBody.tool_choice = 'auto';

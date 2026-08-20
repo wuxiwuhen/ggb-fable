@@ -64,9 +64,9 @@ describe('ThinkingController — auto 默认三段式', () => {
     expect(c.recoveryCount).toBe(2);
   });
 
-  it('阶段后缀: EXECUTE 注入执行指令, PLAN 不注入', () => {
+  it('阶段后缀: EXECUTE 注入执行指令, PLAN 注入 ⟨deep⟩ 自判指令', () => {
     const c = new ThinkingController('auto');
-    expect(c.systemSuffix()).toBeNull();                       // PLAN 轮: v2 prompt 已含规划要求
+    expect(c.systemSuffix()).toMatch(/⟨deep⟩/);
     c.observeRound(sig());
     expect(c.systemSuffix()).toMatch(/执行阶段/);
     expect(c.systemSuffix()).toMatch(/批量提交/);
@@ -116,9 +116,9 @@ describe('ThinkingController — autolow 轻思考档(PLAN 全思考/EXECUTE 轻
     expect(c.planFor(c.currentStage)).toEqual({ thinking: 'enabled', reasoningEffort: 'low' });
   });
 
-  it('阶段后缀与 auto 同: EXECUTE 注入执行指令, PLAN 不注入', () => {
+  it('阶段后缀与 auto 同: EXECUTE 注入执行指令, PLAN 注入 ⟨deep⟩ 自判', () => {
     const c = new ThinkingController('autolow');
-    expect(c.systemSuffix()).toBeNull();
+    expect(c.systemSuffix()).toMatch(/⟨deep⟩/);
     c.observeRound(sig());
     expect(c.systemSuffix()).toMatch(/执行阶段/);
     expect(c.systemSuffix()).toMatch(/恢复阶段|批量提交/);
@@ -137,5 +137,67 @@ describe('planFor — 各档位对照', () => {
     for (const s of ['PLAN', 'EXECUTE', 'RECOVER'] as const) {
       expect(never.planFor(s)).toEqual({ thinking: 'disabled' });
     }
+  });
+});
+
+describe('ThinkingController — ⟨deep⟩ 复杂度自判', () => {
+  it('PLAN 轮后缀含 ⟨deep⟩ 自判指令; EXECUTE/RECOVER 不含', () => {
+    const c = new ThinkingController('auto');
+    expect(c.systemSuffix()).toMatch(/⟨deep⟩/);
+    c.observeRound(sig());
+    expect(c.systemSuffix()).not.toMatch(/⟨deep⟩/);
+  });
+
+  it('absorbDeepFlag: PLAN 轮命中标记 → 清除标记并置 deep, EXECUTE 升全思考(无 effort)', () => {
+    const c = new ThinkingController('auto');
+    const cleaned = c.absorbDeepFlag('规划如下。\n⟨deep⟩\n');
+    expect(cleaned).toBe('规划如下。');
+    expect(c.isDeep).toBe(true);
+    c.observeRound(sig());
+    expect(c.planFor('EXECUTE')).toEqual({ thinking: 'enabled' });   // 不带 low effort
+  });
+
+  it('absorbDeepFlag: 非 PLAN 阶段只清除标记不置 deep; 无标记原样返回', () => {
+    const c = new ThinkingController('auto');
+    c.observeRound(sig());                                    // → EXECUTE
+    expect(c.absorbDeepFlag('继续 ⟨deep⟩')).toBe('继续');
+    expect(c.isDeep).toBe(false);
+    expect(c.absorbDeepFlag('普通叙述')).toBe('普通叙述');
+  });
+
+  it('deep + autolow: EXECUTE 从轻思考升为全思考(复杂题不省这点力度)', () => {
+    const c = new ThinkingController('autolow');
+    c.absorbDeepFlag('规划\n⟨deep⟩');
+    c.observeRound(sig());
+    expect(c.planFor('EXECUTE')).toEqual({ thinking: 'enabled' });
+  });
+
+  it('always/never: 不注入自判指令, 标记只被清除', () => {
+    const never = new ThinkingController('never');
+    expect(never.systemSuffix()).toBeNull();
+    expect(never.absorbDeepFlag('x\n⟨deep⟩')).toBe('x');
+    expect(never.isDeep).toBe(false);
+    expect(new ThinkingController('always').systemSuffix()).toBeNull();
+  });
+});
+
+describe('ThinkingController — 触发⑤ 空转升级', () => {
+  it('连续 3 轮只感知不执行(idleRounds>=3) → RECOVER 思考开', () => {
+    const c = new ThinkingController('auto');
+    c.observeRound(sig({ idleRounds: 1 }));
+    c.observeRound(sig({ idleRounds: 2 }));
+    expect(c.currentStage).toBe('EXECUTE');
+    c.observeRound(sig({ idleRounds: 3 }));
+    expect(c.currentStage).toBe('RECOVER');
+    expect(c.thinkingFor()).toBe('enabled');
+  });
+
+  it('execute 打断后 idleRounds 重新累计, 不误触发', () => {
+    const c = new ThinkingController('auto');
+    c.observeRound(sig({ idleRounds: 1 }));
+    c.observeRound(sig({ idleRounds: 2 }));
+    c.observeRound(sig({ execRan: true, idleRounds: 0 }));   // 执行打断
+    c.observeRound(sig({ idleRounds: 1 }));
+    expect(c.currentStage).toBe('EXECUTE');
   });
 });

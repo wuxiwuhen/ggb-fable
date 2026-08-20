@@ -141,6 +141,17 @@ describe('chatTrial — thinking 透传到代理请求体', () => {
     await chatTrial({ messages: [{ role: 'user', content: 'hi' }], trialCtx: { token: null, setToken: () => {} } });
     expect(bodyOf(0).reasoning_effort).toBeUndefined();
   });
+
+  it('显式 max_tokens=8192: 长推导不被厂商默认 4096 掐断(trial/byok 同)', async () => {
+    fetchMock.mockResolvedValue(trialResp());
+    await chatTrial({ messages: [{ role: 'user', content: 'hi' }], trialCtx: { token: null, setToken: () => {} } });
+    expect(bodyOf(0).max_tokens).toBe(8192);
+
+    fetchMock.mockReset();
+    fetchMock.mockResolvedValue(sseResp([{ content: 'ok' }]));
+    await chatByok({ messages: [{ role: 'user', content: 'hi' }], config: cfg });
+    expect(bodyOf(0).max_tokens).toBe(8192);
+  });
 });
 
 describe('withRcPlaceholders — 零思考轮占位回传(trial 400 根因修复)', () => {

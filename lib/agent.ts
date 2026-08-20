@@ -365,11 +365,14 @@ ${focusStep}
       this.safeHook(hooks, 'onStage', tc.currentStage, round + 1);
 
       const plan = tc.planFor(tc.currentStage);
-      const assistant = await backend.chat({
+      let assistant = await backend.chat({
         messages: chatMessages, tools, onToken: hooks.onToken,
         onThinking: hooks.onThinking, thinking: plan.thinking,
         reasoningEffort: plan.reasoningEffort, signal,
       });
+      // ⟨deep⟩ 复杂度自判: PLAN 轮命中标记 → 本题执行轮升全思考; 标记本身不进历史
+      const cleanedContent = tc.absorbDeepFlag(assistant.content || '');
+      if (cleanedContent !== assistant.content) assistant = { ...assistant, content: cleanedContent };
       // assistant 原样入历史(含 reasoning_content): enabled 轮的思考随历史回传, 避免端点 400-strip 静默降级
       messages.push(assistant);
 
@@ -406,9 +409,10 @@ ${focusStep}
           if (result?.passed === false) roundSignal.inspectFailed = true;
         }
       }
-      tc.observeRound(roundSignal);
-      // 空转计数: 本轮执行过构造命令即归零, 否则累加(供下一轮的空转提醒判定)
+      // 空转计数: 本轮执行过构造命令即归零, 否则累加(供下一轮空转提醒与触发⑤升级共用)
       idleStreak = roundSignal.execRan ? 0 : idleStreak + 1;
+      roundSignal.idleRounds = idleStreak;
+      tc.observeRound(roundSignal);
       // 循环内压缩: 中间轮工具结果换占位符(头/尾保留), 抑制全量重发的二次膨胀;
       // 不动本轮结果与结构字段, toolHistory/日志不受影响(前者只读 assistant.tool_calls)
       const compacted = compactLoopHistory(messages);

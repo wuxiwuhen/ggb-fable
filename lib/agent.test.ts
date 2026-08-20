@@ -48,7 +48,7 @@ const execTurn = (cmd = 'A=(1,1)') => ({ role: 'assistant' as const, content: ''
 const finalTurn = { role: 'assistant' as const, content: '做好了', tool_calls: undefined };
 
 describe('AgentEngine — 三段式思考策略', () => {
-  it('auto: 第 1 轮 enabled 无后缀; 第 2 轮 disabled 且 system 临时后缀, 历史不被污染', async () => {
+  it('auto: 第 1 轮 enabled + ⟨deep⟩ 自判后缀; 第 2 轮 disabled 且 system 临时后缀, 历史不被污染', async () => {
     const backend = new ScriptBackend([execTurn(), finalTurn]);
     const engine = new AgentEngine(makeDeps());
     const r = await engine.run({
@@ -56,7 +56,8 @@ describe('AgentEngine — 三段式思考策略', () => {
       config: { max_tool_rounds: 5, thinking_mode: 'auto' }, backend: backend as any,
     });
     expect(backend.calls[0].thinking).toBe('enabled');
-    expect(backend.calls[0].messages[0].content).toBe('SYS');            // PLAN 轮无后缀
+    expect(backend.calls[0].messages[0].content).toMatch(/^SYS/);        // PLAN 轮带自判后缀
+    expect(backend.calls[0].messages[0].content).toContain('⟨deep⟩');
     expect(backend.calls[1].thinking).toBe('disabled');
     expect(backend.calls[1].messages[0].content).toContain('执行阶段');   // EXECUTE 轮后缀
     expect(r.messages[0].content).toBe('SYS');                            // 会话历史不残留后缀
@@ -271,6 +272,30 @@ describe('AgentEngine — BYOK 预算放宽', () => {
     });
     expect(backend.calls[2].messages[0].content).not.toContain('上下文预算提示');
     expect(backend.calls[3].messages[0].content).toContain('上下文预算提示');
+  });
+});
+
+describe('AgentEngine — ⟨deep⟩ 复杂度自判接线', () => {
+  it('PLAN 回复带 ⟨deep⟩ → 标记从历史清除, EXECUTE 轮升全思考', async () => {
+    const deepPlan = { role: 'assistant' as const, content: '规划: 分段构造。\n⟨deep⟩', tool_calls: [toolCall('execute_command', { command: 'A=(1,1)' })] };
+    const backend = new ScriptBackend([deepPlan, execTurn(), finalTurn]);
+    const r = await new AgentEngine(makeDeps()).run({
+      userInput: '画复杂立体图', history: [],
+      config: { max_tool_rounds: 5, thinking_mode: 'auto' }, backend: backend as any,
+    });
+    expect(backend.calls[1].thinking).toBe('enabled');                  // EXECUTE 不再关思考
+    // 标记已清除: 历史与最终消息都看不到 ⟨deep⟩
+    expect(backend.calls[1].messages.some((m: any) => (m.content || '').includes('⟨deep⟩'))).toBe(false);
+    expect(r.messages.some((m: any) => (m.content || '').includes('⟨deep⟩'))).toBe(false);
+  });
+
+  it('PLAN 回复无标记 → EXECUTE 维持关思考(简单题快)', async () => {
+    const backend = new ScriptBackend([execTurn(), finalTurn]);
+    await new AgentEngine(makeDeps()).run({
+      userInput: '画个点', history: [],
+      config: { max_tool_rounds: 5, thinking_mode: 'auto' }, backend: backend as any,
+    });
+    expect(backend.calls[1].thinking).toBe('disabled');
   });
 });
 
