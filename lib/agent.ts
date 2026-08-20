@@ -25,7 +25,7 @@ export interface AgentBackend {
 export interface AgentHooks {
   onToken?: (t: string) => void;
   onThinking?: (t: string) => void;                                  // 思考流增量(reasoning_content)
-  onStage?: (stage: 'PLAN' | 'EXECUTE' | 'RECOVER', round: number) => void;  // 阶段状态(UI 状态行)
+  onStage?: (stage: 'PLAN' | 'SOLVE' | 'EXECUTE' | 'RECOVER', round: number) => void;  // 阶段状态(UI 状态行)
   onToolStart?: (name: string, args: any) => void;
   onToolEnd?: (name: string, args: any, result: any) => void;
   onExec?: (cmd: string, result: any) => void;
@@ -48,6 +48,9 @@ export interface AgentRunResult {
 
 const VERIFY_CAP = 3;
 const INSPECT_CAP = 2;
+
+// SOLVE 轮(先解后画)结束后的续作指令(引擎注入的 user 消息): 把已给出的解答翻译成构造, 不重新推导
+const SOLVE_ACK = '【解答已收到】接下来把上述解答翻译成 GeoGebra 构造：按解答里的坐标/方程/结论逐步建对象，不要重新推导数学。先简列构造顺序，然后优先批量提交成组命令；每问完成后用文本标注要凸显的结论。';
 
 const TOOLS: ToolDef[] = [
   {
@@ -176,7 +179,7 @@ export class AgentEngine {
   private safeHook(hooks: AgentHooks | undefined, name: 'onToolStart', a: string, b: any): void;
   private safeHook(hooks: AgentHooks | undefined, name: 'onToolEnd', a: string, b: any, c: any): void;
   private safeHook(hooks: AgentHooks | undefined, name: 'onRound', a: number, b?: boolean): void;
-  private safeHook(hooks: AgentHooks | undefined, name: 'onStage', a: 'PLAN' | 'EXECUTE' | 'RECOVER', b: number): void;
+  private safeHook(hooks: AgentHooks | undefined, name: 'onStage', a: 'PLAN' | 'SOLVE' | 'EXECUTE' | 'RECOVER', b: number): void;
   private safeHook(hooks: AgentHooks | undefined, name: keyof AgentHooks, ...rest: any[]): void {
     try {
       const fn = hooks?.[name] as ((...args: any[]) => void) | undefined;
@@ -370,12 +373,14 @@ ${focusStep}
       this.safeHook(hooks, 'onStage', tc.currentStage, round + 1);
 
       const plan = tc.planFor(tc.currentStage);
+      // SOLVE 轮(先解后画): 不下发工具定义, 物理上逼出纯文本解答——推理集中一轮做完, 不被工具循环摊薄
+      const solveRound = tc.currentStage === 'SOLVE';
       let assistant = await backend.chat({
-        messages: chatMessages, tools, onToken: hooks.onToken,
+        messages: chatMessages, tools: solveRound ? undefined : tools, onToken: hooks.onToken,
         onThinking: hooks.onThinking, thinking: plan.thinking,
         reasoningEffort: plan.reasoningEffort, signal,
       });
-      // ⟨deep⟩ 复杂度自判: PLAN 轮命中标记 → 本题执行轮升全思考; 标记本身不进历史。
+      // ⟨deep⟩ 复杂度自判: PLAN 轮命中标记 → 本题进 SOLVE 先解题、执行轮升全思考; 标记本身不进历史。
       // 正文与思考流都扫: deepseek 思考完常直接发工具调用, 标记可能只出现在 reasoning 里
       const cleanedContent = tc.absorbDeepFlag(assistant.content || '');
       if (cleanedContent !== assistant.content) assistant = { ...assistant, content: cleanedContent };
@@ -383,10 +388,24 @@ ${focusStep}
         const cleanedRc = tc.absorbDeepFromReasoning(assistant.reasoning_content);
         if (cleanedRc !== assistant.reasoning_content) assistant = { ...assistant, reasoning_content: cleanedRc };
       }
+      // SOLVE 轮未提供工具定义时模型仍幻觉出 tool_calls → 丢弃, 只按解答文本处理(防 SOLVE 死循环)
+      if (solveRound && assistant.tool_calls?.length) {
+        assistant = { ...assistant, tool_calls: undefined };
+      }
       // assistant 原样入历史(含 reasoning_content): enabled 轮的思考随历史回传, 避免端点 400-strip 静默降级
       messages.push(assistant);
 
       if (!assistant.tool_calls || !assistant.tool_calls.length) {
+        // SOLVE 轮纯文本 = 预期形态: 解答入历史, 注入"翻译成作图"续作消息, 阶段落 EXECUTE 继续
+        if (solveRound) {
+          const solution = cleanFinalText(assistant.content || '');
+          if (!solution) {
+            throw new Error(`模型返回空回复(解题阶段思考耗尽输出上限被截断, finish_reason=${assistant.finish_reason || '未知'}), 请重试`);
+          }
+          tc.solveDone();
+          messages.push({ role: 'user', content: SOLVE_ACK });
+          continue;
+        }
         const rawFinal = cleanFinalText(assistant.content || '');
         // 空回复护栏: 开思考轮的输出被推理耗尽时 content/tool_calls 双空(deepseek 思考 token
         // 计入 max_tokens, 实测 8192/8192 全是 reasoning)。全程零工具 + 空文本 = 截断, 抛错让
@@ -423,6 +442,7 @@ ${focusStep}
           // 预算超限的 ok:false 也计入②——模型在无益空转, 升级恢复一轮合理(spec §3.1②"不达预期")
           if (result?.ok === false) roundSignal.verifyFailed = true;
         } else if (fnName === 'inspect_render') {
+          roundSignal.inspectRan = true;                    // 无论过没过: 主构造已完成, 进入收尾阶段
           if (result?.passed === false) roundSignal.inspectFailed = true;
         }
       }

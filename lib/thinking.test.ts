@@ -210,3 +210,72 @@ describe('ThinkingController — 触发⑤ 空转升级', () => {
     expect(c.currentStage).toBe('EXECUTE');
   });
 });
+
+describe('ThinkingController — SOLVE 先解后画(deep 触发)', () => {
+  it('deep: PLAN 观察后落 SOLVE(全思考+解题后缀); solveDone 后进 EXECUTE(deep 全思考)', () => {
+    const c = new ThinkingController('auto');
+    c.absorbDeepFlag('要点清单\n⟨deep⟩');
+    c.observeRound(sig());
+    expect(c.currentStage).toBe('SOLVE');
+    expect(c.planFor('SOLVE')).toEqual({ thinking: 'enabled' });
+    expect(c.systemSuffix()).toMatch(/解题阶段/);
+    c.solveDone();
+    expect(c.currentStage).toBe('EXECUTE');
+    expect(c.planFor('EXECUTE')).toEqual({ thinking: 'enabled' });   // deep 执行轮全思考
+  });
+
+  it('非 deep: PLAN 直接落 EXECUTE, 不经过 SOLVE(简单题不加解题轮)', () => {
+    const c = new ThinkingController('auto');
+    c.observeRound(sig());
+    expect(c.currentStage).toBe('EXECUTE');
+    expect(c.systemSuffix()).toMatch(/执行阶段/);
+  });
+
+  it('deep 从思考流置位(autolow)同样进 SOLVE; PLAN 后缀改写后仍含 ⟨deep⟩ 指令', () => {
+    const c = new ThinkingController('autolow');
+    expect(c.systemSuffix()).toMatch(/⟨deep⟩/);
+    expect(c.systemSuffix()).toMatch(/不要展开解题推导/);
+    c.absorbDeepFromReasoning('复杂轨迹题\n⟨deep⟩');
+    c.observeRound(sig());
+    expect(c.currentStage).toBe('SOLVE');
+  });
+});
+
+describe('ThinkingController — 收尾修正轮关思考(inspect 已跑过)', () => {
+  it('inspectRan 信号后: EXECUTE 关思考(即便 deep); RECOVER 仍全思考兜底, 回 EXECUTE 维持关', () => {
+    const c = new ThinkingController('auto');
+    c.absorbDeepFlag('⟨deep⟩');
+    c.observeRound(sig());                                        // PLAN → SOLVE
+    c.solveDone();                                                // → EXECUTE(deep 全思考)
+    expect(c.planFor('EXECUTE')).toEqual({ thinking: 'enabled' });
+    c.observeRound(sig({ execRan: true, createdLabels: 5 }));      // 构造轮
+    expect(c.planFor('EXECUTE')).toEqual({ thinking: 'enabled' }); // deep 仍全思考
+    c.observeRound(sig({ inspectRan: true }));                     // 核验跑过(通过与否都算收尾)
+    expect(c.planFor('EXECUTE')).toEqual({ thinking: 'disabled' });
+    c.observeRound(sig({ execRan: true, execFailed: true }));      // 微调失败第 1 次(不升级)
+    expect(c.currentStage).toBe('EXECUTE');
+    c.observeRound(sig({ execRan: true, execFailed: true }));      // 连续失败 → RECOVER
+    expect(c.currentStage).toBe('RECOVER');
+    expect(c.planFor('RECOVER')).toEqual({ thinking: 'enabled' }); // 安全阀
+    c.observeRound(sig());                                         // 回 EXECUTE
+    expect(c.planFor('EXECUTE')).toEqual({ thinking: 'disabled' }); // 收尾态维持
+  });
+
+  it('inspect 未跑过: deep EXECUTE 保持全思考(原行为不变)', () => {
+    const c = new ThinkingController('auto');
+    c.absorbDeepFlag('⟨deep⟩');
+    c.observeRound(sig());
+    c.solveDone();
+    c.observeRound(sig({ execRan: true, createdLabels: 3 }));
+    expect(c.planFor('EXECUTE')).toEqual({ thinking: 'enabled' });
+  });
+
+  it('inspectFailed 轮同样携带 inspectRan(引擎汇总处保证), 触发③不受影响', () => {
+    const c = new ThinkingController('auto');
+    c.observeRound(sig());
+    c.observeRound(sig({ inspectFailed: true, inspectRan: true }));
+    expect(c.planFor('EXECUTE')).toEqual({ thinking: 'disabled' });
+    c.observeRound(sig({ inspectFailed: true, inspectRan: true })); // 第 2 次未过 → RECOVER
+    expect(c.currentStage).toBe('RECOVER');
+  });
+});

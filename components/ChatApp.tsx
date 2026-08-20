@@ -62,14 +62,14 @@ const PHASE_LABEL: Record<string, string> = {
   reset_canvas: '清空画布',
 };
 
-const STAGE_LABEL: Record<'PLAN' | 'EXECUTE' | 'RECOVER', string> = {
-  PLAN: '规划中', EXECUTE: '执行中', RECOVER: '恢复中',
+const STAGE_LABEL: Record<'PLAN' | 'SOLVE' | 'EXECUTE' | 'RECOVER', string> = {
+  PLAN: '规划中', SOLVE: '解题中', EXECUTE: '执行中', RECOVER: '恢复中',
 };
 
 // 输出气泡"首字文本前"的过程面板: 单行动态切换(只显示当前阶段, 不堆叠)
 function AssistantProgress({ msg, trace, stage }: {
   msg: Msg; trace: TraceItem[];
-  stage: { stage: 'PLAN' | 'EXECUTE' | 'RECOVER'; round: number } | null;
+  stage: { stage: 'PLAN' | 'SOLVE' | 'EXECUTE' | 'RECOVER'; round: number } | null;
 }) {
   const phases = trace.filter((t) => PHASE_LABEL[t.name]);
   const ocrLoading = msg.ocr?.state === 'loading';
@@ -214,7 +214,7 @@ export default function ChatApp() {
   const [lightbox, setLightbox] = useState<string | null>(null);   // 点气泡图片放大查看(null=关闭)
 
   // ── 三段式思考策略的 UI 态(spec §3.3): 阶段状态行 + 思考流折叠块 ──
-  const [stage, setStage] = useState<{ stage: 'PLAN' | 'EXECUTE' | 'RECOVER'; round: number } | null>(null);
+  const [stage, setStage] = useState<{ stage: 'PLAN' | 'SOLVE' | 'EXECUTE' | 'RECOVER'; round: number } | null>(null);
   const [thinkingText, setThinkingText] = useState('');
   const [thinkMsgId, setThinkMsgId] = useState<number | null>(null);   // 思考块挂在哪个 assistant 气泡
   const [thinkOpen, setThinkOpen] = useState(false);

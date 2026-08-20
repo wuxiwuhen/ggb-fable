@@ -292,18 +292,49 @@ describe('AgentEngine — BYOK 预算放宽', () => {
   });
 });
 
-describe('AgentEngine — ⟨deep⟩ 复杂度自判接线', () => {
-  it('PLAN 回复带 ⟨deep⟩ → 标记从历史清除, EXECUTE 轮升全思考', async () => {
-    const deepPlan = { role: 'assistant' as const, content: '规划: 分段构造。\n⟨deep⟩', tool_calls: [toolCall('execute_command', { command: 'A=(1,1)' })] };
-    const backend = new ScriptBackend([deepPlan, execTurn(), finalTurn]);
+describe('AgentEngine — ⟨deep⟩ 复杂度自判接线(先解后画)', () => {
+  it('PLAN 回复带 ⟨deep⟩ → 标记清除; 先进 SOLVE 解题轮(无工具/全思考/解题后缀), 后续 EXECUTE 升全思考', async () => {
+    const deepPlan = { role: 'assistant' as const, content: '构造要点: 分段。\n⟨deep⟩', tool_calls: [toolCall('execute_command', { command: 'A=(1,1)' })] };
+    const solution = { role: 'assistant' as const, content: '完整解答：第一问 A(1,0)；第二问② 最小值 7/2。', tool_calls: undefined };
+    const backend = new ScriptBackend([deepPlan, solution, execTurn(), finalTurn]);
     const r = await new AgentEngine(makeDeps()).run({
       userInput: '画复杂立体图', history: [],
-      config: { max_tool_rounds: 5, thinking_mode: 'auto' }, backend: backend as any,
+      config: { max_tool_rounds: 6, thinking_mode: 'auto' }, backend: backend as any,
     });
-    expect(backend.calls[1].thinking).toBe('enabled');                  // EXECUTE 不再关思考
+    expect(backend.calls[1].thinking).toBe('enabled');                  // SOLVE 全思考
+    expect(backend.calls[1].tools).toBeUndefined();                     // 解题轮不下发工具定义
+    expect(backend.calls[1].messages[0].content).toContain('解题阶段');  // SOLVE 后缀
+    expect(backend.calls[2].thinking).toBe('enabled');                  // deep EXECUTE 不再关思考
+    // 解答入历史, 续作指令注入其后(解答 assistant 与 ack user 相邻有序)
+    const iSol = r.messages.findIndex((m: any) => m.role === 'assistant' && /完整解答/.test(m.content || ''));
+    const iAck = r.messages.findIndex((m: any) => m.role === 'user' && /解答已收到/.test(m.content || ''));
+    expect(iAck).toBeGreaterThan(iSol);
     // 标记已清除: 历史与最终消息都看不到 ⟨deep⟩
     expect(backend.calls[1].messages.some((m: any) => (m.content || '').includes('⟨deep⟩'))).toBe(false);
     expect(r.messages.some((m: any) => (m.content || '').includes('⟨deep⟩'))).toBe(false);
+    expect(r.finalText).toBe('做好了');
+  });
+
+  it('SOLVE 轮模型幻觉出 tool_calls → 被丢弃按解答文本处理, 不执行不卡死', async () => {
+    const deepPlan = { role: 'assistant' as const, content: '要点\n⟨deep⟩', tool_calls: [toolCall('search_command', { query: 'x' })] };
+    const hallucinated = { role: 'assistant' as const, content: '解答全文如下。', tool_calls: [toolCall('execute_command', { command: 'B=(2,2)' })] };
+    const backend = new ScriptBackend([deepPlan, hallucinated, execTurn(), finalTurn]);
+    const r = await new AgentEngine(makeDeps()).run({
+      userInput: 'x', history: [],
+      config: { max_tool_rounds: 6, thinking_mode: 'auto' }, backend: backend as any,
+    });
+    expect(r.toolHistory.filter((t) => t.name === 'execute_command')).toHaveLength(1);  // 幻觉调用未执行
+    expect(r.finalText).toBe('做好了');
+  });
+
+  it('SOLVE 轮空文本 → 抛空回复错误(可重试), 不无声结束', async () => {
+    const deepPlan = { role: 'assistant' as const, content: '要点\n⟨deep⟩', tool_calls: [toolCall('search_command', { query: 'x' })] };
+    const empty = { role: 'assistant' as const, content: '', tool_calls: undefined, finish_reason: 'length' };
+    const backend = new ScriptBackend([deepPlan, empty]);
+    await expect(new AgentEngine(makeDeps()).run({
+      userInput: 'x', history: [],
+      config: { max_tool_rounds: 5, thinking_mode: 'auto' }, backend: backend as any,
+    })).rejects.toThrow(/空回复.*解题阶段/);
   });
 
   it('PLAN 回复无标记 → EXECUTE 维持关思考(简单题快)', async () => {
@@ -360,5 +391,35 @@ describe('AgentEngine — 视觉核验开关', () => {
       backend: backend as any,
     });
     expect(backend.calls[0]!.tools!.map((t: any) => t.name)).toContain('inspect_render');
+  });
+});
+
+describe('AgentEngine — 收尾修正轮关思考(inspect 之后)', () => {
+  const inspectTurn = { role: 'assistant' as const, content: '', tool_calls: [toolCall('inspect_render', { focus: '轨迹' })] };
+  it('inspect_render 跑过后: 后续轮 thinking=disabled(deep 也关); 修正失败升级 RECOVER 时恢复全思考兜底', async () => {
+    // deep + inspect 后微调: R0 PLAN(deep 标记) → R1 SOLVE → R2 构造 → R3 核验 → R4 微调(关思考) → R5 最终(关思考)
+    const deepPlan = { role: 'assistant' as const, content: '要点\n⟨deep⟩', tool_calls: [toolCall('search_command', { query: 'x' })] };
+    const solution = { role: 'assistant' as const, content: '完整解答: 略。', tool_calls: undefined };
+    const backend = new ScriptBackend([deepPlan, solution, execTurn(), inspectTurn, execTurn('SetCaption(A,"P")'), finalTurn]);
+    const r = await new AgentEngine(makeDeps()).run({
+      userInput: 'x', history: [],
+      config: { max_tool_rounds: 10, thinking_mode: 'auto' }, backend: backend as any,
+    });
+    expect(backend.calls[2].thinking).toBe('enabled');   // deep EXECUTE 构造轮: 全思考
+    expect(backend.calls[3].thinking).toBe('enabled');   // 核验轮(构造后): deep 仍全思考
+    expect(backend.calls[4].thinking).toBe('disabled');  // inspect 已跑过 → 收尾微调关思考
+    expect(backend.calls[5].thinking).toBe('disabled');  // 最终回复轮同样收尾态
+    expect(r.finalText).toBe('做好了');
+  });
+
+  it('微调连续失败 → RECOVER 恢复全思考(安全阀), 回 EXECUTE 后仍收尾关思考', async () => {
+    const backend = new ScriptBackend([execTurn(), inspectTurn, execTurn('Bad1'), execTurn('Bad2'), finalTurn]);
+    const engine = new AgentEngine(makeDeps({ execOk: false, labels: '' }));
+    await engine.run({
+      userInput: 'x', history: [],
+      config: { max_tool_rounds: 10, thinking_mode: 'auto' }, backend: backend as any,
+    });
+    expect(backend.calls[3].thinking).toBe('disabled');  // 第一次失败(尚不升级)
+    expect(backend.calls[4].thinking).toBe('enabled');   // 连续失败 → RECOVER 全思考
   });
 });
