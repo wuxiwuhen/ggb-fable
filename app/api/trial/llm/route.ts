@@ -140,6 +140,9 @@ export async function POST(req: Request) {
   // 6) 流式回传, 透传上游 SSE
   const headers = new Headers(upstream.headers);
   headers.set('x-trial-token', newToken);
+  // 本路由的输入累计上限: 前端引擎据此放宽/收紧自己的 90K 默认收手线(留 5% 余量),
+  // 否则本地调大 TRIAL_MAX_TOKENS 后引擎仍在 90K 误停(抛物线题实测: 收尾阶段被掐)
+  headers.set('x-trial-budget', String(MAX_TOKENS));
   headers.set('x-remaining', String(deductResult ? deductResult.trial_limit - deductResult.used : ''));
   // 移除可能干扰的编码头
   headers.delete('content-encoding');

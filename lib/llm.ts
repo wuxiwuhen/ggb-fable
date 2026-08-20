@@ -245,6 +245,10 @@ export async function chatByok({ messages, tools, config, onToken, onThinking, t
 export interface TrialContext {
   token: string | null;
   setToken: (t: string) => void;
+  // 路由输入累计上限(x-trial-budget 响应头): 前端引擎据此跟随路由预算收手。
+  // 可选——旧调用方只传 token/setToken 也能用。
+  budget?: number | null;
+  setBudget?: (n: number) => void;
 }
 
 interface TrialChatParams extends Omit<ChatParams, 'config'> {
@@ -296,6 +300,9 @@ export async function chatTrial({
   // 后端在响应头回传 trial_token(首次签发或续期)
   const newToken = resp.headers.get('x-trial-token');
   if (newToken && newToken !== trialCtx.token) trialCtx.setToken(newToken);
+  // 路由输入累计上限: 交给引擎跟随(引擎的收手线从此跟着路由真实预算走)
+  const budget = Number(resp.headers.get('x-trial-budget'));
+  if (budget > 0 && trialCtx.budget !== budget) trialCtx.setBudget?.(budget);
 
   if (!resp.body) throw new Error('试用响应不支持流式读取');
   return parseSSE(resp.body as any, onToken, onThinking);

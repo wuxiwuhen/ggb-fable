@@ -273,6 +273,23 @@ describe('AgentEngine — BYOK 预算放宽', () => {
     expect(backend.calls[2].messages[0].content).not.toContain('上下文预算提示');
     expect(backend.calls[3].messages[0].content).toContain('上下文预算提示');
   });
+
+  it('input_budget_tokens 支持函数: trial 路由预算首轮响应头才知, 每轮重新解析(未知时走默认 90K)', async () => {
+    const narrated = () => ({ role: 'assistant' as const, content: '', tool_calls: [toolCall('execute_command', { command: 'A=(1,1)' })] });
+    // 每轮 ~28K(用户输入 100K 字符≈25K + system/tools), 4 轮累计 > 90K:
+    // 第 1 次解析返回 undefined(默认 90K), 之后放宽 400K → 不得在 90K 误停
+    let reads = 0;
+    const budgetFn = () => (++reads <= 1 ? undefined : 400000);
+    const backend = new ScriptBackend([narrated(), narrated(), narrated(), narrated(), finalTurn]);
+    const r = await new AgentEngine(makeDeps()).run({
+      userInput: 'x'.repeat(100000), history: [],
+      config: { max_tool_rounds: 8, thinking_mode: 'never', input_budget_tokens: budgetFn },
+      backend: backend as any,
+    });
+    expect(backend.calls.length).toBe(5);       // 跑满 5 轮, 没被默认 90K 掐断
+    expect(r.stopped).toBe(false);
+    expect(r.finalText).toBe('做好了');
+  });
 });
 
 describe('AgentEngine — ⟨deep⟩ 复杂度自判接线', () => {

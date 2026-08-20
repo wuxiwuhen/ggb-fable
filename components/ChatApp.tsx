@@ -265,6 +265,7 @@ export default function ChatApp() {
 
   const [history, setHistory] = useState<any[]>([]);     // Agent 上下文(截断 8 条)
   const trialTokenRef = useRef<string | null>(null);
+  const trialBudgetRef = useRef<number | null>(null);    // 路由输入累计上限(x-trial-budget, 首轮响应头才知)
   const abortRef = useRef<AbortController | null>(null);
 
   // ── 画布 XML 快照持久化 ──
@@ -351,10 +352,12 @@ export default function ChatApp() {
     if (rafRef.current == null) rafRef.current = requestAnimationFrame(flushStream);
   }, [flushStream]);
 
-  // trial context(getter 实时读 ref, setToken 写 ref)
+  // trial context(getter 实时读 ref, setToken/setBudget 写 ref)
   const trialCtx = useMemo<TrialContext>(() => ({
     get token() { return trialTokenRef.current; },
     setToken: (t) => { trialTokenRef.current = t; },
+    get budget() { return trialBudgetRef.current; },
+    setBudget: (n) => { trialBudgetRef.current = n; },
   }), []);
 
   // ── 导出菜单:点外部关闭 ──
@@ -801,9 +804,13 @@ export default function ChatApp() {
           thinking_mode: config.thinkingMode ?? (config.mode === 'byok' ? config.getActiveByok()?.thinking_mode : undefined),
           // 视觉核验开关(设置页「高级」): off = 引擎从工具列表移除 inspect_render, 模型无法调用
           vision_verify: config.visionVerify,
-          // BYOK 直连厂商, 无 trial 路由 100K 累计上限 → 放宽引擎预算硬停,
-          // 长构造(20+ 轮)不再被 90K 误掐; 250K 仍是防失控护栏, 且受 50 轮上限双重保护
-          input_budget_tokens: config.mode === 'byok' ? 250000 : undefined,
+          // BYOK 直连厂商, 无 trial 路由累计上限 → 放宽引擎预算硬停, 长构造(20+ 轮)不再被
+          // 90K 误掐; 250K 仍是防失控护栏, 且受 50 轮上限双重保护。
+          // trial: 跟随路由真实预算(x-trial-budget 响应头, 首轮后才知 → 函数形式每轮重解析;
+          // 留 5% 余量防路由 429)。本地调大 TRIAL_MAX_TOKENS 后引擎不再卡死在默认 90K
+          input_budget_tokens: config.mode === 'byok'
+            ? 250000
+            : () => (trialBudgetRef.current ? Math.floor(trialBudgetRef.current * 0.95) : undefined),
         },
         backend,
         signal: controller.signal,

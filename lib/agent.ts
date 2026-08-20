@@ -320,7 +320,7 @@ ${focusStep}
   }: {
     userInput: string;
     history: any[];
-    config: { max_tool_rounds?: number; thinking_mode?: ThinkingMode; vision_verify?: 'auto' | 'off'; input_budget_tokens?: number };
+    config: { max_tool_rounds?: number; thinking_mode?: ThinkingMode; vision_verify?: 'auto' | 'off'; input_budget_tokens?: number | (() => number | undefined) };
     backend: AgentBackend;
     hooks?: AgentHooks;
     signal?: AbortSignal;
@@ -340,9 +340,11 @@ ${focusStep}
     let tokensUsed = 0;        // 本意图累计输入(与 trial 路由同一把尺子累加, 供 80% 收敛提示/90K 硬顶)
     let budgetStopped = false; // 90K 硬顶触发: 优雅收手, 不让路由 429 在循环中途炸掉整个 turn
     // 预算上限可覆盖: 90K 硬停只为预判 trial 路由 100K 累计上限; BYOK 直连厂商无路由限制,
-    // 长构造(20+ 轮)在 90K 下会被误掐 —— 调用方传 input_budget_tokens 放宽, 提示阈值随之取 80%
-    const stopTokens = config.input_budget_tokens ?? LOOP_STOP_TOKENS;
-    const hintTokens = config.input_budget_tokens ? Math.floor(config.input_budget_tokens * 0.8) : BUDGET_HINT_TOKENS;
+    // 长构造(20+ 轮)在 90K 下会被误掐 —— 调用方传 input_budget_tokens 放宽, 提示阈值随之取 80%。
+    // 支持函数形式: trial 的路由真实上限要等首轮响应头(x-trial-budget)才知道, 每轮重新解析
+    const resolveBudget = () => (typeof config.input_budget_tokens === 'function'
+      ? config.input_budget_tokens()
+      : config.input_budget_tokens);
     let idleStreak = 0;        // 连续"只感知不执行"轮数(get_canvas_context/search_command 空转检测)
 
     for (let round = 0; round < maxRounds; round++) {
@@ -350,8 +352,11 @@ ${focusStep}
       if (signal?.aborted) throw new Error('已中止');
 
       // 阶段指令以本轮 system 临时后缀注入(浅拷贝, 不写入 messages 历史) —— prompt v2 本体不动
-      // 累计输入逼近 trial 预算 80% 时附加收敛指令, 抢在路由 429("上下文过大")之前让模型收尾
+      // 累计输入逼近预算 80% 时附加收敛指令, 抢在路由 429("上下文过大")之前让模型收尾
       tokensUsed += estimateInputTokens({ messages, tools });
+      const budget = resolveBudget();
+      const stopTokens = budget ?? LOOP_STOP_TOKENS;
+      const hintTokens = budget ? Math.floor(budget * 0.8) : BUDGET_HINT_TOKENS;
       if (tokensUsed >= stopTokens) { budgetStopped = true; break; }
       // 空转提醒: 连续 3+ 轮只读画布/搜命令没执行构造 → 逼模型收敛, 省无谓轮次(关思考时高发)
       const idleHint = idleStreak >= 3

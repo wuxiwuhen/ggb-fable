@@ -192,6 +192,27 @@ describe('chatTrial — thinking 透传到代理请求体', () => {
     expect(bodyOf(0).max_tokens).toBe(131072);
     expect(bodyOf(1).max_tokens).toBe(8192);
   });
+
+  it('x-trial-budget 响应头 → trialCtx.setBudget 回传(引擎预算跟随路由); 无头不回调', async () => {
+    fetchMock.mockResolvedValue(new Response('data: [DONE]\n\n', {
+      status: 200, headers: { 'x-trial-token': 't1', 'x-trial-budget': '200000' },
+    }));
+    let got: number | null = null;
+    await chatTrial({
+      messages: [{ role: 'user', content: 'hi' }],
+      trialCtx: { token: null, setToken: () => {}, budget: null, setBudget: (n) => { got = n; } },
+    });
+    expect(got).toBe(200000);
+
+    fetchMock.mockReset();
+    fetchMock.mockResolvedValue(trialResp());          // 无 budget 头
+    let got2: number | null = null;
+    await chatTrial({
+      messages: [{ role: 'user', content: 'hi' }],
+      trialCtx: { token: null, setToken: () => {}, budget: null, setBudget: (n) => { got2 = n; } },
+    });
+    expect(got2).toBeNull();
+  });
 });
 
 describe('withRcPlaceholders — 零思考轮占位回传(trial 400 根因修复)', () => {
