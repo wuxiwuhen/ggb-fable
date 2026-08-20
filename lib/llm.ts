@@ -198,8 +198,8 @@ export async function chatByok({ messages, tools, config, onToken, onThinking, t
     temperature: config.temperature ?? 0.2,
     stream: true,
     // 思考 token 计入 max_tokens(deepseek 实测): 抛物线题单轮思考实测 25K-33K 且有波动,
-    // 32K 池子仍会被纯推理吃空(content/tool_calls 双零)→ 升 64K; 关思考轮 8192 够用且兼容面广
-    max_tokens: thinking === 'enabled' ? 65536 : 8192,
+    // 32K 池子仍会被纯推理吃空(content/tool_calls 双零)→ 升 128K(探针实测 deepseek 收 256K); 关思考轮 8192 够用且兼容面广
+    max_tokens: thinking === 'enabled' ? 131072 : 8192,
   };
   if (tools && tools.length) {
     body.tools = tools.map(normalizeTool);
@@ -261,8 +261,8 @@ export async function chatTrial({
     temperature: 0.2,
     stream: true,
     trial_token: trialCtx.token || null,
-    // 思考 token 计入 max_tokens: 开思考轮 64K(32K 实测仍会被纯推理吃空), 关思考轮 8192
-    max_tokens: thinking === 'enabled' ? 65536 : 8192,
+    // 思考 token 计入 max_tokens: 开思考轮 128K(探针实测 deepseek 接受 256K), 关思考轮 8192
+    max_tokens: thinking === 'enabled' ? 131072 : 8192,
   };
   if (thinking) body.thinking = { type: thinking };
   if (reasoningEffort) body.reasoning_effort = reasoningEffort;
