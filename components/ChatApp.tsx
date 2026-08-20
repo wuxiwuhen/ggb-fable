@@ -799,6 +799,8 @@ export default function ChatApp() {
           max_tool_rounds: config.maxToolRounds,
           // 全局思考模式(设置页「高级」)优先, 试用/BYOK 均生效; 未选则 byok profile(eval 注入)兜底, 再缺省引擎 auto
           thinking_mode: config.thinkingMode ?? (config.mode === 'byok' ? config.getActiveByok()?.thinking_mode : undefined),
+          // 视觉核验开关(设置页「高级」): off = 引擎从工具列表移除 inspect_render, 模型无法调用
+          vision_verify: config.visionVerify,
         },
         backend,
         signal: controller.signal,

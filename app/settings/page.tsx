@@ -21,6 +21,12 @@ const THINKING_OPTIONS: Array<{ value: ThinkingMode | undefined; label: string }
   { value: 'never', label: '关闭思考' },
 ];
 
+// 视觉核验选项(undefined=auto, 模型自行判断何时截图核验)
+const VISION_OPTIONS: Array<{ value: 'auto' | 'off' | undefined; label: string }> = [
+  { value: undefined, label: '自动（默认）' },
+  { value: 'off', label: '关闭' },
+];
+
 export default function SettingsPage() {
   const { user } = useAuth();
   const config = useConfigStore();
@@ -197,6 +203,19 @@ export default function SettingsPage() {
                     ))}
                   </div>
                   <p style={S.note}>执行轮是否思考及强度：自动=仅规划与纠错轮思考（默认）；自动·轻思考=执行轮加低强度思考，复杂作图更稳；全程思考=每轮全强度思考；关闭=最快，复杂题易错。试用与自带 Key 模式均生效，改完即生效。</p>
+                </div>
+
+                <div style={{ marginTop: 28 }}>
+                  <label style={S.label}>视觉核验</label>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    {VISION_OPTIONS.map((o) => (
+                      <button key={o.label} style={config.visionVerify === o.value ? S.modeActive : S.modeBtn}
+                        onClick={() => config.setVisionVerify(o.value)}>
+                        {o.label}
+                      </button>
+                    ))}
+                  </div>
+                  <p style={S.note}>作图完成后是否用视觉模型截图核验（遮挡、贴边、比例等）：自动=主构造后核验一次，微调不重复核验（默认）；关闭=不调视觉模型，省额度与 10–50 秒延迟，适合纯微调场景。改完即生效。</p>
                 </div>
               </>
             )}

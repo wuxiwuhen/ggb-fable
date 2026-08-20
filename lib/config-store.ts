@@ -28,6 +28,8 @@ interface ConfigState {
   maxToolRounds: number;
   // 全局思考模式覆盖(设置页「高级」, 试用/BYOK 均生效); 未选(undefined)=跟随 profile/引擎默认 auto
   thinkingMode?: ThinkingMode;
+  // 视觉核验(inspect_render)开关(设置页「高级」): 未选/auto=模型自行判断; off=移除工具, 省视觉 API 花费+延迟
+  visionVerify?: 'auto' | 'off';
 
   setMode: (m: AppMode) => void;
   addOrUpdateProfile: (p: ByokProfile) => void;
@@ -37,6 +39,7 @@ interface ConfigState {
   setEmbedding: (v: Partial<LLMConfig>) => void;
   setMaxToolRounds: (n: number) => void;
   setThinkingMode: (m: ThinkingMode | undefined) => void;
+  setVisionVerify: (v: 'auto' | 'off' | undefined) => void;
 
   // 当前激活的 BYOK 配置
   getActiveByok: () => ByokProfile | null;
@@ -66,6 +69,7 @@ export const useConfigStore = create<ConfigState>()(
       embedding: {},
       maxToolRounds: 50,
       thinkingMode: undefined,
+      visionVerify: undefined,
 
       setMode: (m) => set({ mode: m }),
       addOrUpdateProfile: (p) => set((s) => {
@@ -84,6 +88,7 @@ export const useConfigStore = create<ConfigState>()(
       setEmbedding: (v) => set((s) => ({ embedding: { ...s.embedding, ...v } })),
       setMaxToolRounds: (n) => set({ maxToolRounds: n }),
       setThinkingMode: (m) => set({ thinkingMode: m }),
+      setVisionVerify: (v) => set({ visionVerify: v }),
 
       getActiveByok: () => {
         const { byokProfiles, activeProfileName } = get();

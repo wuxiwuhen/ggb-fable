@@ -320,7 +320,7 @@ ${focusStep}
   }: {
     userInput: string;
     history: any[];
-    config: { max_tool_rounds?: number; thinking_mode?: ThinkingMode };
+    config: { max_tool_rounds?: number; thinking_mode?: ThinkingMode; vision_verify?: 'auto' | 'off' };
     backend: AgentBackend;
     hooks?: AgentHooks;
     signal?: AbortSignal;
@@ -332,6 +332,11 @@ ${focusStep}
     ];
     const maxRounds = config.max_tool_rounds || 50;
     const tc = new ThinkingController(config.thinking_mode || 'auto');
+    // 视觉核验开关(设置页「高级」): off = 移除 inspect_render, 模型物理上无法调用
+    // (省视觉模型 API 花费 + 每次触发 10-50s 延迟); 缺省/auto = 模型自行判断
+    const tools = config.vision_verify === 'off'
+      ? TOOLS.filter((t) => t.name !== 'inspect_render')
+      : TOOLS;
     let tokensUsed = 0;        // 本意图累计输入(与 trial 路由同一把尺子累加, 供 80% 收敛提示/90K 硬顶)
     let budgetStopped = false; // 90K 硬顶触发: 优雅收手, 不让路由 429 在循环中途炸掉整个 turn
 
@@ -341,7 +346,7 @@ ${focusStep}
 
       // 阶段指令以本轮 system 临时后缀注入(浅拷贝, 不写入 messages 历史) —— prompt v2 本体不动
       // 累计输入逼近 trial 预算 80% 时附加收敛指令, 抢在路由 429("上下文过大")之前让模型收尾
-      tokensUsed += estimateInputTokens({ messages, tools: TOOLS });
+      tokensUsed += estimateInputTokens({ messages, tools });
       if (tokensUsed >= LOOP_STOP_TOKENS) { budgetStopped = true; break; }
       const suffix = [tc.systemSuffix(), tokensUsed >= BUDGET_HINT_TOKENS ? BUDGET_HINT_SUFFIX : '']
         .filter(Boolean).join('\n\n');
@@ -352,7 +357,7 @@ ${focusStep}
 
       const plan = tc.planFor(tc.currentStage);
       const assistant = await backend.chat({
-        messages: chatMessages, tools: TOOLS, onToken: hooks.onToken,
+        messages: chatMessages, tools, onToken: hooks.onToken,
         onThinking: hooks.onThinking, thinking: plan.thinking,
         reasoningEffort: plan.reasoningEffort, signal,
       });

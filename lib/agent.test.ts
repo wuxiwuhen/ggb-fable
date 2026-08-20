@@ -27,7 +27,7 @@ const makeDeps = (over: { execOk?: boolean; labels?: string } = {}) => {
 
 // 脚本化 backend: 依次吐出预设 assistant 消息, 记录每次 chat 的入参
 class ScriptBackend implements AgentBackend {
-  calls: Array<{ messages: any[]; thinking?: string; reasoningEffort?: string }> = [];
+  calls: Array<{ messages: any[]; tools?: any[]; thinking?: string; reasoningEffort?: string }> = [];
   constructor(private script: AssistantMessage[]) {}
   async chat(p: any) {
     // messages 切片快照: 引擎的循环内压缩是原地 splice, 直接存引用会看到"最终状态"
@@ -216,5 +216,30 @@ describe('AgentEngine — 循环内上下文压缩 + 预算收敛提示', () => 
     });
     const tools = backend.calls[2].messages.filter((m: any) => m.role === 'tool');
     for (const t of tools) expect(t.content).not.toContain('已省略');
+  });
+});
+
+describe('AgentEngine — 视觉核验开关', () => {
+  it("vision_verify='off': inspect_render 从工具列表移除(模型无法调用), 其余工具保留", async () => {
+    const backend = new ScriptBackend([finalTurn]);
+    await new AgentEngine(makeDeps()).run({
+      userInput: 'x', history: [],
+      config: { max_tool_rounds: 5, thinking_mode: 'never', vision_verify: 'off' },
+      backend: backend as any,
+    });
+    const names = backend.calls[0]!.tools!.map((t: any) => t.name);
+    expect(names).not.toContain('inspect_render');
+    expect(names).toContain('execute_command');
+    expect(names).toContain('get_canvas_context');
+  });
+
+  it("vision_verify='auto'(默认/未设置): inspect_render 保留", async () => {
+    const backend = new ScriptBackend([finalTurn]);
+    await new AgentEngine(makeDeps()).run({
+      userInput: 'x', history: [],
+      config: { max_tool_rounds: 5, thinking_mode: 'never' },
+      backend: backend as any,
+    });
+    expect(backend.calls[0]!.tools!.map((t: any) => t.name)).toContain('inspect_render');
   });
 });
