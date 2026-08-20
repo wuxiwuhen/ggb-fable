@@ -370,16 +370,28 @@ ${focusStep}
         onThinking: hooks.onThinking, thinking: plan.thinking,
         reasoningEffort: plan.reasoningEffort, signal,
       });
-      // ⟨deep⟩ 复杂度自判: PLAN 轮命中标记 → 本题执行轮升全思考; 标记本身不进历史
+      // ⟨deep⟩ 复杂度自判: PLAN 轮命中标记 → 本题执行轮升全思考; 标记本身不进历史。
+      // 正文与思考流都扫: deepseek 思考完常直接发工具调用, 标记可能只出现在 reasoning 里
       const cleanedContent = tc.absorbDeepFlag(assistant.content || '');
       if (cleanedContent !== assistant.content) assistant = { ...assistant, content: cleanedContent };
+      if (assistant.reasoning_content) {
+        const cleanedRc = tc.absorbDeepFromReasoning(assistant.reasoning_content);
+        if (cleanedRc !== assistant.reasoning_content) assistant = { ...assistant, reasoning_content: cleanedRc };
+      }
       // assistant 原样入历史(含 reasoning_content): enabled 轮的思考随历史回传, 避免端点 400-strip 静默降级
       messages.push(assistant);
 
       if (!assistant.tool_calls || !assistant.tool_calls.length) {
+        const rawFinal = cleanFinalText(assistant.content || '');
+        // 空回复护栏: 开思考轮的输出被推理耗尽时 content/tool_calls 双空(deepseek 思考 token
+        // 计入 max_tokens, 实测 8192/8192 全是 reasoning)。全程零工具 + 空文本 = 截断, 抛错让
+        // 用户重试, 不再无声空白结束; 跑过工具的空总结用占位文案收尾(画布已有成果)
+        if (!rawFinal && collectTools(messages).length === 0) {
+          throw new Error('模型返回空回复(思考耗尽输出上限被截断), 请重试');
+        }
         const r: AgentRunResult = {
           messages,
-          finalText: cleanFinalText(assistant.content || ''),
+          finalText: rawFinal || '（模型未给出总结，画布已保留构造结果）',
           toolHistory: collectTools(messages),
           stopped: false,
         };

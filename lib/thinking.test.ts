@@ -172,6 +172,15 @@ describe('ThinkingController — ⟨deep⟩ 复杂度自判', () => {
     expect(c.planFor('EXECUTE')).toEqual({ thinking: 'enabled' });
   });
 
+  it('absorbDeepFromReasoning: 思考流里出现 ⟨deep⟩ 也置位(deepseek 思考完直接发工具, 正文可能为空)', () => {
+    const c = new ThinkingController('auto');
+    const rc = c.absorbDeepFromReasoning('分析: 这是轨迹定值问题, 复杂。\n⟨deep⟩');
+    expect(rc).not.toContain('⟨deep⟩');
+    expect(c.isDeep).toBe(true);
+    c.observeRound(sig());
+    expect(c.planFor('EXECUTE')).toEqual({ thinking: 'enabled' });
+  });
+
   it('always/never: 不注入自判指令, 标记只被清除', () => {
     const never = new ThinkingController('never');
     expect(never.systemSuffix()).toBeNull();

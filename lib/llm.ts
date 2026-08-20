@@ -191,7 +191,9 @@ export async function chatByok({ messages, tools, config, onToken, onThinking, t
     messages: withRcPlaceholders(messages),
     temperature: config.temperature ?? 0.2,
     stream: true,
-    max_tokens: 8192,   // 不传走厂商默认(deepseek 4096/GLM 1024), 长推导会被掐断; 8192 主流厂商均支持
+    // 思考 token 计入 max_tokens(deepseek 实测): 开思考的轮给 32K 池子, 否则复杂题
+    // 推理独占 8192 后 content/tool_calls 全被切空; 关思考轮 8192 足够且兼容面广
+    max_tokens: thinking === 'enabled' ? 32768 : 8192,
   };
   if (tools && tools.length) {
     body.tools = tools.map(normalizeTool);
@@ -211,9 +213,10 @@ export async function chatByok({ messages, tools, config, onToken, onThinking, t
   });
 
   let resp = await doFetch(body);
-  // 端点不认 thinking/reasoning_effort 字段(部分 OpenAI 兼容端点 400) → 去掉这两个字段原样重试一次, 降级为厂商默认行为
+  // 端点不认 thinking/reasoning_effort 字段(部分 OpenAI 兼容端点 400) → 去掉这两个字段原样重试一次, 降级为厂商默认行为;
+  // max_tokens 同步降回 8192(兼容输出上限低于 32K 的厂商, 如 gpt-4o 系 16K)
   if (resp.status === 400 && (body.thinking || body.reasoning_effort)) {
-    const fallback = { ...body };
+    const fallback = { ...body, max_tokens: 8192 };
     delete fallback.thinking;
     delete fallback.reasoning_effort;
     resp = await doFetch(fallback);
@@ -252,7 +255,8 @@ export async function chatTrial({
     temperature: 0.2,
     stream: true,
     trial_token: trialCtx.token || null,
-    max_tokens: 8192,   // 不传走厂商默认(deepseek 4096), 长推导会在半截公式处被掐断
+    // 思考 token 计入 max_tokens: 开思考轮 32K(防推理独占池子后 content 被切空), 关思考轮 8192
+    max_tokens: thinking === 'enabled' ? 32768 : 8192,
   };
   if (thinking) body.thinking = { type: thinking };
   if (reasoningEffort) body.reasoning_effort = reasoningEffort;

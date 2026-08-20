@@ -299,6 +299,28 @@ describe('AgentEngine — ⟨deep⟩ 复杂度自判接线', () => {
   });
 });
 
+describe('AgentEngine — 空回复护栏', () => {
+  it('content 空 + 无 tool_calls + 全程零工具 → 抛错(思考耗尽输出上限的截断, 不再无声空白结束)', async () => {
+    const empty = { role: 'assistant' as const, content: '', tool_calls: undefined };
+    const backend = new ScriptBackend([empty]);
+    await expect(new AgentEngine(makeDeps()).run({
+      userInput: '画图', history: [],
+      config: { max_tool_rounds: 5, thinking_mode: 'auto' }, backend: backend as any,
+    })).rejects.toThrow(/空回复/);
+  });
+
+  it('跑过工具后最终轮 content 空 → 兜底占位文案, 不抛错(画布已有成果)', async () => {
+    const empty = { role: 'assistant' as const, content: '', tool_calls: undefined };
+    const backend = new ScriptBackend([execTurn('A=(1,1)'), empty]);
+    const r = await new AgentEngine(makeDeps()).run({
+      userInput: '画图', history: [],
+      config: { max_tool_rounds: 5, thinking_mode: 'auto' }, backend: backend as any,
+    });
+    expect(r.finalText).toContain('画布已保留');
+    expect(r.stopped).toBe(false);
+  });
+});
+
 describe('AgentEngine — 视觉核验开关', () => {
   it("vision_verify='off': inspect_render 从工具列表移除(模型无法调用), 其余工具保留", async () => {
     const backend = new ScriptBackend([finalTurn]);

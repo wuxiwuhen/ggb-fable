@@ -69,7 +69,16 @@ export class ThinkingController {
   // PLAN 阶段(auto/autolow)命中 → 置 deep; 其余阶段/档位只清除不置位(防标记漏进历史污染下游)
   absorbDeepFlag(content: string): string {
     const cleaned = content.replace(/\n*\s*⟨deep⟩\s*/g, '').trim();
-    if (cleaned !== content && this.stage === 'PLAN'
+    if (/⟨deep⟩/.test(content) && this.stage === 'PLAN'
+        && (this.mode === 'auto' || this.mode === 'autolow')) this.deep = true;
+    return cleaned;
+  }
+
+  // 同上, 但扫思考流(reasoning_content): deepseek 思考完常直接发工具调用, 正文为空——
+  // 复杂题的 ⟨deep⟩ 标记更可能出现在思考里而非正文(抛物线空回复案实测)
+  absorbDeepFromReasoning(reasoning: string): string {
+    const cleaned = reasoning.replace(/\n*\s*⟨deep⟩\s*/g, '').trim();
+    if (/⟨deep⟩/.test(reasoning) && this.stage === 'PLAN'
         && (this.mode === 'auto' || this.mode === 'autolow')) this.deep = true;
     return cleaned;
   }
