@@ -30,7 +30,8 @@ class ScriptBackend implements AgentBackend {
   calls: Array<{ messages: any[]; thinking?: string; reasoningEffort?: string }> = [];
   constructor(private script: AssistantMessage[]) {}
   async chat(p: any) {
-    this.calls.push(p);
+    // messages 切片快照: 引擎的循环内压缩是原地 splice, 直接存引用会看到"最终状态"
+    this.calls.push({ ...p, messages: p.messages.slice() });
     p.onThinking?.('思考增量');   // 模拟上游思考流, 验证引擎把它透传给 hooks
     const next = this.script.shift();
     return next ?? { role: 'assistant' as const, content: '完成', tool_calls: undefined };
@@ -165,5 +166,43 @@ describe('AgentEngine — autolow 轻思考接线', () => {
     expect(histAssistant.reasoning_content).toBe('我在想内切圆画法');
     // 最终 messages 同样保留
     expect(r.messages.find((m) => m.role === 'assistant')?.reasoning_content).toBe('我在想内切圆画法');
+  });
+});
+
+describe('AgentEngine — 循环内上下文压缩 + 预算收敛提示', () => {
+  it('第 5 轮起, 旧于最近 3 轮的工具结果被占位符替换, 最近 3 轮原样', async () => {
+    const backend = new ScriptBackend([execTurn('A1'), execTurn('A2'), execTurn('A3'), execTurn('A4'), execTurn('A5'), finalTurn]);
+    await new AgentEngine(makeDeps()).run({
+      userInput: '画图', history: [], config: { max_tool_rounds: 10, thinking_mode: 'never' }, backend: backend as any,
+    });
+    // 第 5 次 chat(第 5 轮) 时, 末轮压缩已把轮1 占位(4 块 → 保留 2/3/4)
+    const tools5 = backend.calls[4].messages.filter((m: any) => m.role === 'tool');
+    expect(tools5.length).toBe(4);
+    expect(tools5[0].content).toContain('已省略');
+    for (const t of tools5.slice(1)) expect(t.content).not.toContain('已省略');
+    // 结构字段保留
+    expect(tools5[0].tool_call_id).toBeTruthy();
+    expect(tools5[0]._toolName).toBe('execute_command');
+  });
+
+  it('累计输入 ≥ 80K 时 system 临时后缀注入收敛指令, 且不污染 messages 历史', async () => {
+    const backend = new ScriptBackend([execTurn(), finalTurn]);
+    const r = await new AgentEngine(makeDeps()).run({
+      userInput: 'x'.repeat(340000), history: [], config: { max_tool_rounds: 5, thinking_mode: 'never' }, backend: backend as any,
+    });
+    // 第 1 轮估算即 ~85K ≥ 80K → 后缀已在, 且越线后每轮持续提醒
+    expect(backend.calls[0].messages[0].content).toContain('上下文预算提示');
+    expect(backend.calls[1].messages[0].content).toContain('上下文预算提示');
+    // 后缀是浅拷贝注入, 引擎内部历史(最终返回的 messages)不受污染
+    expect(r.messages[0].content).toBe('SYS');
+  });
+
+  it('短循环(≤3 轮)不触发压缩: 所有工具结果原样回传', async () => {
+    const backend = new ScriptBackend([execTurn('A1'), execTurn('A2'), finalTurn]);
+    await new AgentEngine(makeDeps()).run({
+      userInput: '画图', history: [], config: { max_tool_rounds: 5, thinking_mode: 'never' }, backend: backend as any,
+    });
+    const tools = backend.calls[2].messages.filter((m: any) => m.role === 'tool');
+    for (const t of tools) expect(t.content).not.toContain('已省略');
   });
 });

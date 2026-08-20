@@ -10,6 +10,7 @@
 import type { GGB } from './ggb';
 import type { CommandSearch } from './command-search';
 import type { Logger } from './logger';
+import { estimateInputTokens, compactLoopHistory, BUDGET_HINT_TOKENS, BUDGET_HINT_SUFFIX } from './loop-context';
 import type { AssistantMessage, ToolDef, LLMConfig } from './llm';
 import { ThinkingController, EMPTY_SIGNAL, type RoundSignal, type ThinkingMode } from './thinking';
 
@@ -331,13 +332,17 @@ ${focusStep}
     ];
     const maxRounds = config.max_tool_rounds || 50;
     const tc = new ThinkingController(config.thinking_mode || 'auto');
+    let tokensUsed = 0;   // 本意图累计输入(与 trial 路由同一把尺子累加, 供 80% 收敛提示)
 
     for (let round = 0; round < maxRounds; round++) {
       hooks.onRound?.(round + 1);
       if (signal?.aborted) throw new Error('已中止');
 
       // 阶段指令以本轮 system 临时后缀注入(浅拷贝, 不写入 messages 历史) —— prompt v2 本体不动
-      const suffix = tc.systemSuffix();
+      // 累计输入逼近 trial 预算 80% 时附加收敛指令, 抢在路由 429("上下文过大")之前让模型收尾
+      tokensUsed += estimateInputTokens({ messages, tools: TOOLS });
+      const suffix = [tc.systemSuffix(), tokensUsed >= BUDGET_HINT_TOKENS ? BUDGET_HINT_SUFFIX : '']
+        .filter(Boolean).join('\n\n');
       const chatMessages = suffix
         ? [{ ...messages[0], content: `${messages[0].content}\n\n${suffix}` }, ...messages.slice(1)]
         : messages;
@@ -386,6 +391,10 @@ ${focusStep}
         }
       }
       tc.observeRound(roundSignal);
+      // 循环内压缩: 中间轮工具结果换占位符(头/尾保留), 抑制全量重发的二次膨胀;
+      // 不动本轮结果与结构字段, toolHistory/日志不受影响(前者只读 assistant.tool_calls)
+      const compacted = compactLoopHistory(messages);
+      if (compacted !== messages) messages.splice(0, messages.length, ...compacted);
     }
 
     hooks.onRound?.(maxRounds, true);

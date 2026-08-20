@@ -7,6 +7,7 @@ import { getUserFromCookie } from '@/lib/supabase';
 import { getSupabaseAdmin } from '@/lib/supabase';
 import { signToken, verifyToken, newIntentId } from '@/lib/trial-token';
 import { thinkingFromBody, reasoningEffortFromBody } from '@/lib/llm';
+import { estimateInputTokens } from '@/lib/loop-context';
 
 export const runtime = 'edge';
 
@@ -37,18 +38,6 @@ function joinUrl(base: string, path: string): string {
   const b = base.replace(/\/+$/, '');
   if (/\/v\d+$/.test(b)) return b + path;
   return b + '/v1' + path;
-}
-
-// 粗估输入 token: 消息内容 + 工具定义, 每 4 字符约 1 token
-function estimateInputTokens(body: any): number {
-  let chars = 0;
-  for (const m of body.messages || []) {
-    const c = typeof m.content === 'string' ? m.content : JSON.stringify(m.content || '');
-    chars += c.length;
-    if (m.tool_calls) chars += JSON.stringify(m.tool_calls).length;
-  }
-  if (body.tools) chars += JSON.stringify(body.tools).length;
-  return Math.ceil(chars / 4);
 }
 
 export async function POST(req: Request) {
