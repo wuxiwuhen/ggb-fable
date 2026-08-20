@@ -36,6 +36,8 @@ export interface AssistantMessage {
     type: 'function';
     function: { name: string; arguments: string };
   }>;
+  // 上游结束原因(stop=正常结束 / length=输出上限截断): 诊断空回复的关键信号
+  finish_reason?: string;
 }
 
 export type ReasoningEffort = 'low' | 'medium' | 'high';
@@ -108,6 +110,7 @@ async function parseSSE(
   let buffer = '';
   let content = '';
   let reasoning = '';
+  let finishReason: string | null = null;
   const toolCalls: Record<number, { id: string; type: 'function'; function: { name: string; arguments: string } }> = {};
   let finishByStream = false;
 
@@ -129,6 +132,8 @@ async function parseSSE(
       try { json = JSON.parse(data); } catch { continue; }
 
       const delta = json.choices?.[0]?.delta;
+      const fr = json.choices?.[0]?.finish_reason;
+      if (fr) finishReason = fr;
       if (!delta) continue;
 
       // 思考增量: 流给 onThinking 展示, 同时累积进返回消息的 reasoning_content(随历史回传, 不进 content)
@@ -171,6 +176,7 @@ async function parseSSE(
     content: content || null,
     reasoning_content: reasoning || undefined,
     tool_calls: tcList.length ? tcList : undefined,
+    finish_reason: finishReason || undefined,
   };
 }
 
@@ -191,9 +197,9 @@ export async function chatByok({ messages, tools, config, onToken, onThinking, t
     messages: withRcPlaceholders(messages),
     temperature: config.temperature ?? 0.2,
     stream: true,
-    // 思考 token 计入 max_tokens(deepseek 实测): 开思考的轮给 32K 池子, 否则复杂题
-    // 推理独占 8192 后 content/tool_calls 全被切空; 关思考轮 8192 足够且兼容面广
-    max_tokens: thinking === 'enabled' ? 32768 : 8192,
+    // 思考 token 计入 max_tokens(deepseek 实测): 抛物线题单轮思考实测 25K-33K 且有波动,
+    // 32K 池子仍会被纯推理吃空(content/tool_calls 双零)→ 升 64K; 关思考轮 8192 够用且兼容面广
+    max_tokens: thinking === 'enabled' ? 65536 : 8192,
   };
   if (tools && tools.length) {
     body.tools = tools.map(normalizeTool);
@@ -255,8 +261,8 @@ export async function chatTrial({
     temperature: 0.2,
     stream: true,
     trial_token: trialCtx.token || null,
-    // 思考 token 计入 max_tokens: 开思考轮 32K(防推理独占池子后 content 被切空), 关思考轮 8192
-    max_tokens: thinking === 'enabled' ? 32768 : 8192,
+    // 思考 token 计入 max_tokens: 开思考轮 64K(32K 实测仍会被纯推理吃空), 关思考轮 8192
+    max_tokens: thinking === 'enabled' ? 65536 : 8192,
   };
   if (thinking) body.thinking = { type: thinking };
   if (reasoningEffort) body.reasoning_effort = reasoningEffort;

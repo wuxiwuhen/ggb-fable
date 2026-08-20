@@ -387,7 +387,7 @@ ${focusStep}
         // 计入 max_tokens, 实测 8192/8192 全是 reasoning)。全程零工具 + 空文本 = 截断, 抛错让
         // 用户重试, 不再无声空白结束; 跑过工具的空总结用占位文案收尾(画布已有成果)
         if (!rawFinal && collectTools(messages).length === 0) {
-          throw new Error('模型返回空回复(思考耗尽输出上限被截断), 请重试');
+          throw new Error(`模型返回空回复(思考耗尽输出上限被截断, finish_reason=${assistant.finish_reason || '未知'}), 请重试`);
         }
         const r: AgentRunResult = {
           messages,

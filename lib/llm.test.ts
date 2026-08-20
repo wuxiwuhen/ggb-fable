@@ -60,6 +60,21 @@ describe('parseSSE — reasoning_content 捕获(经 chatByok 驱动)', () => {
     expect(r.reasoning_content).toBeUndefined();
   });
 
+  it('finish_reason 从末块捕获(空回复截断的诊断信号); 无则不带', async () => {
+    const body = 'data: ' + JSON.stringify({ choices: [{ delta: { content: 'x' } }] })
+      + '\n\ndata: ' + JSON.stringify({ choices: [{ delta: {}, finish_reason: 'length' }] })
+      + '\n\ndata: [DONE]\n\n';
+    fetchMock.mockResolvedValue(new Response(body));
+    const r = await chatByok({ messages: [{ role: 'user', content: 'hi' }], config: cfg });
+    expect(r.content).toBe('x');
+    expect(r.finish_reason).toBe('length');
+
+    fetchMock.mockReset();
+    fetchMock.mockResolvedValue(new Response('data: [DONE]\n\n'));
+    const r2 = await chatByok({ messages: [{ role: 'user', content: 'hi' }], config: cfg });
+    expect(r2.finish_reason).toBeUndefined();
+  });
+
   it('历史 assistant.reasoning_content 恒回传(Step 0 探针: disabled/enabled 均接受, 不过滤)', async () => {
     fetchMock.mockResolvedValue(sseResp([{ content: 'ok' }]));
     const histMsgs = [
@@ -142,13 +157,13 @@ describe('chatTrial — thinking 透传到代理请求体', () => {
     expect(bodyOf(0).reasoning_effort).toBeUndefined();
   });
 
-  it('max_tokens 按思考分档: 开思考 32768(推理不吃正文池), 关思考 8192(trial/byok 同)', async () => {
+  it('max_tokens 按思考分档: 开思考 65536(推理不吃正文池), 关思考 8192(trial/byok 同)', async () => {
     fetchMock.mockResolvedValue(trialResp());
     await chatTrial({
       messages: [{ role: 'user', content: 'hi' }], trialCtx: { token: null, setToken: () => {} },
       thinking: 'enabled',
     });
-    expect(bodyOf(0).max_tokens).toBe(32768);
+    expect(bodyOf(0).max_tokens).toBe(65536);
 
     fetchMock.mockReset();
     fetchMock.mockResolvedValue(trialResp());
@@ -161,7 +176,7 @@ describe('chatTrial — thinking 透传到代理请求体', () => {
     fetchMock.mockReset();
     fetchMock.mockResolvedValue(sseResp([{ content: 'ok' }]));
     await chatByok({ messages: [{ role: 'user', content: 'hi' }], config: cfg, thinking: 'enabled' });
-    expect(bodyOf(0).max_tokens).toBe(32768);
+    expect(bodyOf(0).max_tokens).toBe(65536);
 
     fetchMock.mockReset();
     fetchMock.mockResolvedValue(sseResp([{ content: 'ok' }]));
@@ -174,7 +189,7 @@ describe('chatTrial — thinking 透传到代理请求体', () => {
       .mockResolvedValueOnce(new Response('max_tokens too large', { status: 400 }))
       .mockResolvedValueOnce(sseResp([{ content: 'ok' }]));
     await chatByok({ messages: [{ role: 'user', content: 'hi' }], config: cfg, thinking: 'enabled' });
-    expect(bodyOf(0).max_tokens).toBe(32768);
+    expect(bodyOf(0).max_tokens).toBe(65536);
     expect(bodyOf(1).max_tokens).toBe(8192);
   });
 });
