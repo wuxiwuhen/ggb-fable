@@ -803,6 +803,12 @@ export default function ChatApp() {
         backend,
         signal: controller.signal,
         hooks: {
+          onRound: (_n, final) => {
+            // 每轮开始清空气泡文本: 只显示当前轮叙述, 而非全部轮次叙述的累计
+            // (多轮微调时气泡曾堆到几十 K 字; 也让完成时气泡内容=finalText 不再"缩水")。
+            // final=true(轮数上限收尾)不清, 避免抹掉最后一轮文本。
+            if (!final && streamBuf.current) { streamBuf.current.text = ''; scheduleFlush(); }
+          },
           onToken: (delta) => {
             if (streamBuf.current) { streamBuf.current.text += delta; scheduleFlush(); }
           },
@@ -841,8 +847,9 @@ export default function ChatApp() {
       flushStream();
       setMessages((prev) => prev.map((m) => (m.id === assistantMsg.id ? { ...m, content: result.finalText, streaming: false } : m)));
 
-      // history 累积(截断 8 条, 只存文本)
-      const newHistory = [...history, { role: 'user', content: finalText }, { role: 'assistant', content: result.finalText }].slice(-20);
+      // history 累积(截 20 条, 只存文本; 单条截 800 字——超长回复全量回传会把每轮输入头部撑爆)
+      const cap = (s: string) => s.slice(0, 800);
+      const newHistory = [...history, { role: 'user', content: cap(finalText) }, { role: 'assistant', content: cap(result.finalText) }].slice(-20);
       setHistory(newHistory);
 
       // AI 全部完成后立即持久化画布

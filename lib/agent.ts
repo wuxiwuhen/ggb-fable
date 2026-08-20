@@ -10,7 +10,7 @@
 import type { GGB } from './ggb';
 import type { CommandSearch } from './command-search';
 import type { Logger } from './logger';
-import { estimateInputTokens, compactLoopHistory, BUDGET_HINT_TOKENS, BUDGET_HINT_SUFFIX } from './loop-context';
+import { estimateInputTokens, compactLoopHistory, BUDGET_HINT_TOKENS, BUDGET_HINT_SUFFIX, LOOP_STOP_TOKENS, LOOP_STOP_NOTICE } from './loop-context';
 import type { AssistantMessage, ToolDef, LLMConfig } from './llm';
 import { ThinkingController, EMPTY_SIGNAL, type RoundSignal, type ThinkingMode } from './thinking';
 
@@ -332,7 +332,8 @@ ${focusStep}
     ];
     const maxRounds = config.max_tool_rounds || 50;
     const tc = new ThinkingController(config.thinking_mode || 'auto');
-    let tokensUsed = 0;   // 本意图累计输入(与 trial 路由同一把尺子累加, 供 80% 收敛提示)
+    let tokensUsed = 0;        // 本意图累计输入(与 trial 路由同一把尺子累加, 供 80% 收敛提示/90K 硬顶)
+    let budgetStopped = false; // 90K 硬顶触发: 优雅收手, 不让路由 429 在循环中途炸掉整个 turn
 
     for (let round = 0; round < maxRounds; round++) {
       hooks.onRound?.(round + 1);
@@ -341,6 +342,7 @@ ${focusStep}
       // 阶段指令以本轮 system 临时后缀注入(浅拷贝, 不写入 messages 历史) —— prompt v2 本体不动
       // 累计输入逼近 trial 预算 80% 时附加收敛指令, 抢在路由 429("上下文过大")之前让模型收尾
       tokensUsed += estimateInputTokens({ messages, tools: TOOLS });
+      if (tokensUsed >= LOOP_STOP_TOKENS) { budgetStopped = true; break; }
       const suffix = [tc.systemSuffix(), tokensUsed >= BUDGET_HINT_TOKENS ? BUDGET_HINT_SUFFIX : '']
         .filter(Boolean).join('\n\n');
       const chatMessages = suffix
@@ -397,10 +399,15 @@ ${focusStep}
       if (compacted !== messages) messages.splice(0, messages.length, ...compacted);
     }
 
+    // 循环退出: 轮数上限或预算硬顶。预算硬顶保留最近叙述 + 停止说明(正常收尾路径,
+    // turn_end 照常落库, 刷新后消息不丢 —— 与路由 429 的报错路径本质不同)
     hooks.onRound?.(maxRounds, true);
+    const lastNarration = [...messages].reverse().find((m) => m.role === 'assistant' && m.content)?.content || '';
     const r: AgentRunResult = {
       messages,
-      finalText: '(达到工具调用轮数上限, 已停止)',
+      finalText: budgetStopped
+        ? (lastNarration ? `${lastNarration}\n\n${LOOP_STOP_NOTICE}` : LOOP_STOP_NOTICE)
+        : '(达到工具调用轮数上限, 已停止)',
       toolHistory: collectTools(messages),
       stopped: true,
     };

@@ -20,9 +20,10 @@ export function rebuildChatMessages(apiMsgs: ApiMessage[]): ChatMsg[] {
     .map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content as string }));
 }
 
-// 重建 history(user/assistant 文本, 截 8 条, 给 agent 上下文)
+// 重建 history(user/assistant 文本, 截 20 条, 单条截 800 字, 给 agent 上下文)
+// 单条截断与 ChatApp 的 history 累积口径一致: 超长回复全量回传会撑爆每轮输入头部
 export function rebuildHistory(apiMsgs: ApiMessage[]): Array<{ role: string; content: string }> {
-  return rebuildChatMessages(apiMsgs).slice(-20).map((m) => ({ role: m.role, content: m.content }));
+  return rebuildChatMessages(apiMsgs).slice(-20).map((m) => ({ role: m.role, content: m.content.slice(0, 800) }));
 }
 
 // 重建 trace(从 tool 消息)

@@ -186,15 +186,27 @@ describe('AgentEngine — 循环内上下文压缩 + 预算收敛提示', () => 
   });
 
   it('累计输入 ≥ 80K 时 system 临时后缀注入收敛指令, 且不污染 messages 历史', async () => {
+    // 两轮各 ~41K(160K 字符): 第 1 轮未越线, 第 2 轮累计 ≥80K 注入提示(< 90K 硬顶, 循环继续)
     const backend = new ScriptBackend([execTurn(), finalTurn]);
     const r = await new AgentEngine(makeDeps()).run({
-      userInput: 'x'.repeat(340000), history: [], config: { max_tool_rounds: 5, thinking_mode: 'never' }, backend: backend as any,
+      userInput: 'x'.repeat(160000), history: [], config: { max_tool_rounds: 5, thinking_mode: 'never' }, backend: backend as any,
     });
-    // 第 1 轮估算即 ~85K ≥ 80K → 后缀已在, 且越线后每轮持续提醒
-    expect(backend.calls[0].messages[0].content).toContain('上下文预算提示');
+    expect(backend.calls[0].messages[0].content).not.toContain('上下文预算提示');
     expect(backend.calls[1].messages[0].content).toContain('上下文预算提示');
     // 后缀是浅拷贝注入, 引擎内部历史(最终返回的 messages)不受污染
     expect(r.messages[0].content).toBe('SYS');
+  });
+
+  it('累计输入 ≥ 90K 时优雅收手: 不再发请求, finalText 带最近叙述+停止说明', async () => {
+    const narrated = { role: 'assistant' as const, content: '正在画螺线', tool_calls: [toolCall('execute_command', { command: 'A=(1,1)' })] };
+    const backend = new ScriptBackend([narrated, execTurn(), finalTurn]);
+    const r = await new AgentEngine(makeDeps()).run({
+      userInput: 'x'.repeat(340000), history: [], config: { max_tool_rounds: 5, thinking_mode: 'never' }, backend: backend as any,
+    });
+    expect(backend.calls.length).toBe(1);   // 第 2 轮累计 ≥90K, 循环在 chat 前收手
+    expect(r.stopped).toBe(true);
+    expect(r.finalText).toContain('正在画螺线');
+    expect(r.finalText).toContain('预算上限');
   });
 
   it('短循环(≤3 轮)不触发压缩: 所有工具结果原样回传', async () => {

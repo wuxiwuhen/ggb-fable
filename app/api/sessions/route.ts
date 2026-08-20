@@ -103,7 +103,13 @@ export async function POST(req: Request) {
     // events → messages 行
     const rows = events.map((ev) => eventToRow(sessionId, user.id, ev));
     if (rows.length) {
-      await admin.from('messages').insert(rows);
+      const { error: insErr } = await admin.from('messages').insert(rows);
+      // supabase-js 失败不抛异常: 不检查就返回 200, 客户端清空缓冲 → 行静默丢失
+      // ("报错后刷新丢最后一条 AI 消息"的服务端根因)。失败返 500, 客户端 Logger 会回填缓冲重试。
+      if (insErr) {
+        console.error(`[sessions append] insert 失败 sid=${sessionId} rows=${rows.length}:`, insErr.message);
+        return json(500, { error: '消息落库失败, 将重试' });
+      }
     }
     // 更新会话 updated_at
     await admin.from('sessions').update({ updated_at: new Date().toISOString() }).eq('id', sessionId);
@@ -162,7 +168,9 @@ function eventToRow(sessionId: string, userId: string, ev: any) {
     case 'user_input':
       return { ...base, role: 'user', content: ev.text || '', round: null };
     case 'turn_end':
-      return { ...base, role: 'assistant', content: ev.finalText || '', round: null };
+      // finalText 封顶 10000 字: 多轮叙述累计可达几十 K, 超大行会触发 insert 约束失败
+      // 连累同批事件全部丢弃。12000 字已验证可落库, 10000 留安全边际。
+      return { ...base, role: 'assistant', content: (ev.finalText || '').slice(0, 10000), round: null };
     case 'tool_call':
       return {
         ...base, role: 'tool', tool_name: ev.name, tool_args: ev.args,

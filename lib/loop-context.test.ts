@@ -44,7 +44,7 @@ describe('compactLoopHistory — 头保留/尾保留/中间占位', () => {
     { role: 'user', content: '画个复杂的图' },
   ];
   // 6 个工具轮块, 每块 = 1 条 assistant(tool_calls) + 1~2 条 tool 消息
-  const rounds = [
+  const rounds: any[] = [
     [asstTool('轮1'), toolMsg('get_canvas_context', { elementCount: 3, elements: [{ label: 'A', definition: 'x'.repeat(400) }] })],
     [asstTool('轮2'), toolMsg('search_command', { hits: [{ cmd: 'Polygon', doc: 'y'.repeat(300) }] })],
     [asstTool('轮3'), toolMsg('execute_command', { rows: [{ cmd: 'A=(1,1)', ok: true }] })],
@@ -63,7 +63,7 @@ describe('compactLoopHistory — 头保留/尾保留/中间占位', () => {
     expect(tail).toEqual(rounds.slice(3).flat());
   });
 
-  it('中间轮工具结果按工具名换占位符, 中间 assistant 原样', () => {
+  it('中间轮工具结果按工具名换占位符; 中间 assistant 叙述换短占位, 结构保留', () => {
     const out = compactLoopHistory(msgs());
     // 轮1: get_canvas_context 占位
     expect(out[5]._toolName).toBe('get_canvas_context');
@@ -72,9 +72,10 @@ describe('compactLoopHistory — 头保留/尾保留/中间占位', () => {
     expect(out[7].content).toContain('历史命令检索结果已省略');
     // 轮3: 其他工具默认占位
     expect(out[9].content).toContain('历史工具结果已省略');
-    // 中间 assistant 的内容/结构不动
-    expect(out[4]).toEqual(rounds[0][0]);
-    expect(out[6]).toEqual(rounds[1][0]);
+    // 中间 assistant: content 换占位(长叙述是膨胀主力), tool_calls 原样保留(配对必需)
+    expect(out[4].content).toContain('中间轮叙述已省略');
+    expect(out[4].tool_calls).toEqual(rounds[0][0].tool_calls);
+    expect(out[6].content).toContain('中间轮叙述已省略');
   });
 
   it('占位后保留 role/tool_call_id/_toolName(结构不变)', () => {

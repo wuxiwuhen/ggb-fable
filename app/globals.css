@@ -106,6 +106,9 @@ button { font-family: inherit; cursor: pointer; }
 .msg-content ul, .msg-content ol { margin: 4px 0 8px; padding-left: 22px; }
 .msg-content strong { color: #111; }
 .msg-content code { background: #eee; padding: 1px 5px; border-radius: 4px; font-size: 0.9em; }
+/* 长命令串/公式/URL 无断点, 会撑破气泡导致对话区横向滚动 —— 强制可断行 */
+.msg-content { overflow-wrap: anywhere; }
+.msg-content code, .msg-content pre { word-break: break-all; white-space: pre-wrap; }
 
 /* 用户图片气泡(单独一条): 点击放大, 气泡收缩到图宽 */
 .msg-image { display: block; max-width: 240px; max-height: 240px; border-radius: 8px; border: 1px solid rgba(0, 0, 0, 0.08); object-fit: contain; cursor: zoom-in; }

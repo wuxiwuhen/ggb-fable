@@ -11,6 +11,12 @@
 // 注入收敛指令让模型停止探索、用画布现状收尾, 抢在路由 429 之前。
 export const BUDGET_HINT_TOKENS = 80000;
 
+// 硬顶(90K < 生产 100K, 留单轮余量): 收敛指令不奏效时引擎主动收手, 干净结束并落
+// turn_end, 不让路由 429 在循环中途炸掉整个 turn(报错路径会丢最后一条消息)。
+export const LOOP_STOP_TOKENS = 90000;
+export const LOOP_STOP_NOTICE =
+  '（已接近上下文预算上限，停止调用工具。画布保留全部已执行结果，可基于现状继续微调，或开启新会话。）';
+
 export const BUDGET_HINT_SUFFIX =
   '【上下文预算提示】本意图累计输入已接近上限。立即停止新的探索与重试，基于画布现状完成收尾，尽快输出最终回复。';
 
@@ -35,9 +41,12 @@ const PLACEHOLDER: Record<string, string> = {
 const placeholderFor = (toolName?: string) =>
   (toolName && PLACEHOLDER[toolName]) || '（历史工具结果已省略）';
 
-// 把 messages 中"头部之后、最近 keepRounds 个工具轮块之前"的工具结果换占位符。
+// 把 messages 中"头部之后、最近 keepRounds 个工具轮块之前"的中间轮瘦身:
+//   工具结果 → 按工具名占位符; assistant 叙述 → 短占位符(长叙述是输入膨胀主力)。
 // 轮块 = 1 条 assistant(带 tool_calls) + 其后连续的 tool 消息。头部 = 首个带
 // tool_calls 的 assistant 之前的所有消息(system/跨轮历史/当前目标)。
+// assistant 的 tool_calls / reasoning_content 原样保留(前者配对 tool_call_id 必需,
+// 后者涉及端点对思考回传的要求); 只动 content。
 // 纯函数: 返回新数组, 不改入参; 幂等: 已是占位符的内容不再处理。
 export function compactLoopHistory(messages: any[], opts: { keepRounds?: number } = {}): any[] {
   const keepRounds = opts.keepRounds ?? 3;
@@ -52,12 +61,17 @@ export function compactLoopHistory(messages: any[], opts: { keepRounds?: number 
 
   const headEnd = blockStarts[0];                       // 头部不动
   const keepFrom = blockStarts[blockStarts.length - keepRounds]; // 尾部 keepRounds 块不动
-  // 块间的空隙消息(理论上无, 防御性归入中段)
 
   return messages.map((m, i) => {
     if (i < headEnd || i >= keepFrom) return m;
-    if (m?.role !== 'tool') return m;
-    if (typeof m.content === 'string' && m.content.includes('已省略')) return m; // 幂等
-    return { ...m, content: placeholderFor(m._toolName) };
+    if (m?.role === 'tool') {
+      if (typeof m.content === 'string' && m.content.includes('已省略')) return m; // 幂等
+      return { ...m, content: placeholderFor(m._toolName) };
+    }
+    if (m?.role === 'assistant') {
+      if (typeof m.content !== 'string' || !m.content || m.content.includes('已省略')) return m;
+      return { ...m, content: '（中间轮叙述已省略，决策见工具调用记录）' };
+    }
+    return m;
   });
 }
