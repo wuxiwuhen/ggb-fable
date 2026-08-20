@@ -279,3 +279,16 @@ describe('ThinkingController — 收尾修正轮关思考(inspect 已跑过)', (
     expect(c.currentStage).toBe('RECOVER');
   });
 });
+
+describe('ThinkingController — enterSolve(PLAN 纯文本直接切 SOLVE)', () => {
+  it('PLAN+deep 时切入 SOLVE; 非 deep 不动(防误触发)', () => {
+    const c = new ThinkingController('auto');
+    c.absorbDeepFlag('⟨deep⟩');
+    c.enterSolve();
+    expect(c.currentStage).toBe('SOLVE');
+    expect(c.systemSuffix()).toMatch(/解题阶段/);
+    const plain = new ThinkingController('auto');
+    plain.enterSolve();
+    expect(plain.currentStage).toBe('PLAN');
+  });
+});

@@ -112,6 +112,12 @@ export class ThinkingController {
     if (this.stage === 'SOLVE') this.stage = 'EXECUTE';
   }
 
+  // PLAN 轮纯文本即宣告复杂(未调任何工具, observeRound 不会发生) → 直接切入 SOLVE。
+  // 否则"本轮只列要点, 下一轮解题"的回复会被当成最终回复, 整个对话提前结束(实测踩坑)
+  enterSolve(): void {
+    if (this.stage === 'PLAN' && this.deep) this.stage = 'SOLVE';
+  }
+
   // 工具跑完后回报本轮信号, 推进状态机(每轮 dispatchTool 全部结束后调用)
   observeRound(s: RoundSignal): void {
     if (s.inspectFailed) this.inspectFails++;

@@ -423,3 +423,32 @@ describe('AgentEngine — 收尾修正轮关思考(inspect 之后)', () => {
     expect(backend.calls[4].thinking).toBe('enabled');   // 连续失败 → RECOVER 全思考
   });
 });
+
+describe('AgentEngine — PLAN 轮纯文本不提前结束', () => {
+  it('PLAN 轮纯文本+⟨deep⟩(未调任何工具) → 不作为最终回复: 注入解题指令直接进 SOLVE, 后续照常', async () => {
+    const planText = { role: 'assistant' as const, content: '本题涉及角度最值与多对象联动约束，属复杂题，本轮先列要点。\n⟨deep⟩', tool_calls: undefined };
+    const solution = { role: 'assistant' as const, content: '完整解答：第一问 45°；第二问 定值 2。', tool_calls: undefined };
+    const backend = new ScriptBackend([planText, solution, execTurn(), finalTurn]);
+    const r = await new AgentEngine(makeDeps()).run({
+      userInput: 'x', history: [],
+      config: { max_tool_rounds: 6, thinking_mode: 'auto' }, backend: backend as any,
+    });
+    expect(backend.calls.length).toBe(4);                              // 没有在第 1 轮提前结束
+    expect(backend.calls[1].tools).toBeUndefined();                    // SOLVE 轮无工具
+    expect(backend.calls[1].messages[0].content).toContain('解题阶段');
+    expect(backend.calls[1].messages.at(-1).content).toContain('开始解题');  // 解题触发指令已注入
+    expect(backend.calls[2].thinking).toBe('enabled');                 // deep 执行轮全思考
+    expect(r.finalText).toBe('做好了');
+  });
+
+  it('PLAN 轮纯文本但无 ⟨deep⟩ → 仍按最终回复正常结束(简单题直答不受影响)', async () => {
+    const planText = { role: 'assistant' as const, content: '这是一道简单题的直答。', tool_calls: undefined };
+    const backend = new ScriptBackend([planText]);
+    const r = await new AgentEngine(makeDeps()).run({
+      userInput: 'x', history: [],
+      config: { max_tool_rounds: 5, thinking_mode: 'auto' }, backend: backend as any,
+    });
+    expect(backend.calls.length).toBe(1);
+    expect(r.finalText).toBe('这是一道简单题的直答。');
+  });
+});

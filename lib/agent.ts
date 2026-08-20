@@ -52,6 +52,10 @@ const INSPECT_CAP = 2;
 // SOLVE 轮(先解后画)结束后的续作指令(引擎注入的 user 消息): 把已给出的解答翻译成构造, 不重新推导
 const SOLVE_ACK = '【解答已收到】接下来把上述解答翻译成 GeoGebra 构造：按解答里的坐标/方程/结论逐步建对象，不要重新推导数学。先简列构造顺序，然后优先批量提交成组命令；每问完成后用文本标注要凸显的结论。';
 
+// PLAN 轮纯文本宣告复杂(未调工具)时的解题触发指令(引擎注入的 user 消息):
+// 纯文本 assistant 之后必须补一条 user 才能继续下一轮请求
+const SOLVE_KICKOFF = '【开始解题】请现在完整解题：先用思考把整道题从头到尾解出来（每一问的推导、关键坐标/方程/数值结论一步不省），然后在正文输出完整解答。本轮不画图、不调用工具。';
+
 const TOOLS: ToolDef[] = [
   {
     name: 'get_canvas_context',
@@ -404,6 +408,13 @@ ${focusStep}
           }
           tc.solveDone();
           messages.push({ role: 'user', content: SOLVE_ACK });
+          continue;
+        }
+        // PLAN 轮纯文本且已判 ⟨deep⟩(未调任何工具): 不是最终回复——切 SOLVE 专门解题,
+        // 防止"本轮只列要点, 下一轮解题"的回复把整个对话提前结束
+        if (tc.currentStage === 'PLAN' && tc.isDeep) {
+          tc.enterSolve();
+          messages.push({ role: 'user', content: SOLVE_KICKOFF });
           continue;
         }
         const rawFinal = cleanFinalText(assistant.content || '');
