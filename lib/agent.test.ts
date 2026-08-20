@@ -219,6 +219,61 @@ describe('AgentEngine — 循环内上下文压缩 + 预算收敛提示', () => 
   });
 });
 
+describe('AgentEngine — 空转轮收敛提示', () => {
+  const ctxTurn = () => ({ role: 'assistant' as const, content: '', tool_calls: [toolCall('get_canvas_context', {})] });
+
+  it('连续 3 轮只感知不执行 → 第 4 轮 system 注入空转提醒; streak<3 不注入', async () => {
+    const backend = new ScriptBackend([ctxTurn(), ctxTurn(), ctxTurn(), ctxTurn(), finalTurn]);
+    await new AgentEngine(makeDeps()).run({
+      userInput: 'x', history: [], config: { max_tool_rounds: 8, thinking_mode: 'never' }, backend: backend as any,
+    });
+    // 轮1-3 进入时 streak 分别为 0/1/2 → 无提醒; 轮4 进入时 streak=3 → 注入
+    expect(backend.calls[0].messages[0].content).not.toContain('空转提醒');
+    expect(backend.calls[2].messages[0].content).not.toContain('空转提醒');
+    expect(backend.calls[3].messages[0].content).toContain('空转提醒');
+  });
+
+  it('execute_command 打断计数: 空转重新累计, 提醒不重复出现在 streak<3 的轮', async () => {
+    const backend = new ScriptBackend([ctxTurn(), ctxTurn(), ctxTurn(), ctxTurn(), execTurn(), ctxTurn(), ctxTurn(), finalTurn]);
+    await new AgentEngine(makeDeps()).run({
+      userInput: 'x', history: [], config: { max_tool_rounds: 10, thinking_mode: 'never' }, backend: backend as any,
+    });
+    // 轮4 注入(streak=3), 轮5 执行命令归零, 轮6/7(streak=1/2)不再注入
+    expect(backend.calls[3].messages[0].content).toContain('空转提醒');
+    expect(backend.calls[5].messages[0].content).not.toContain('空转提醒');
+    expect(backend.calls[6].messages[0].content).not.toContain('空转提醒');
+  });
+});
+
+describe('AgentEngine — BYOK 预算放宽', () => {
+  it('input_budget_tokens 覆盖默认 90K 硬停: 同样输入不再中途收手', async () => {
+    const narrated = { role: 'assistant' as const, content: '正在画', tool_calls: [toolCall('execute_command', { command: 'A=(1,1)' })] };
+    const backend = new ScriptBackend([narrated, execTurn(), finalTurn]);
+    const r = await new AgentEngine(makeDeps()).run({
+      // 每轮 ~85K: 默认 90K 会在第 2 轮前收手; 放宽到 400K 后 3 轮全部发出并正常完结
+      userInput: 'x'.repeat(340000), history: [],
+      config: { max_tool_rounds: 5, thinking_mode: 'never', input_budget_tokens: 400000 },
+      backend: backend as any,
+    });
+    expect(backend.calls.length).toBe(3);
+    expect(r.stopped).toBe(false);
+    expect(r.finalText).toBe('做好了');
+  });
+
+  it('80% 收敛提示随自定义预算缩放(400K 预算 → 320K 触发), 不再用固定 80K', async () => {
+    const narrated = () => ({ role: 'assistant' as const, content: '', tool_calls: [toolCall('execute_command', { command: 'A=(1,1)' })] });
+    const backend = new ScriptBackend([narrated(), narrated(), narrated(), finalTurn]);
+    await new AgentEngine(makeDeps()).run({
+      // 累计: 轮1 85K, 轮2 170K, 轮3 255K, 轮4 340K ≥ 320K → 轮4 注入预算提示(< 400K 不收手)
+      userInput: 'x'.repeat(340000), history: [],
+      config: { max_tool_rounds: 6, thinking_mode: 'never', input_budget_tokens: 400000 },
+      backend: backend as any,
+    });
+    expect(backend.calls[2].messages[0].content).not.toContain('上下文预算提示');
+    expect(backend.calls[3].messages[0].content).toContain('上下文预算提示');
+  });
+});
+
 describe('AgentEngine — 视觉核验开关', () => {
   it("vision_verify='off': inspect_render 从工具列表移除(模型无法调用), 其余工具保留", async () => {
     const backend = new ScriptBackend([finalTurn]);

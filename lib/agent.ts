@@ -320,7 +320,7 @@ ${focusStep}
   }: {
     userInput: string;
     history: any[];
-    config: { max_tool_rounds?: number; thinking_mode?: ThinkingMode; vision_verify?: 'auto' | 'off' };
+    config: { max_tool_rounds?: number; thinking_mode?: ThinkingMode; vision_verify?: 'auto' | 'off'; input_budget_tokens?: number };
     backend: AgentBackend;
     hooks?: AgentHooks;
     signal?: AbortSignal;
@@ -339,6 +339,11 @@ ${focusStep}
       : TOOLS;
     let tokensUsed = 0;        // 本意图累计输入(与 trial 路由同一把尺子累加, 供 80% 收敛提示/90K 硬顶)
     let budgetStopped = false; // 90K 硬顶触发: 优雅收手, 不让路由 429 在循环中途炸掉整个 turn
+    // 预算上限可覆盖: 90K 硬停只为预判 trial 路由 100K 累计上限; BYOK 直连厂商无路由限制,
+    // 长构造(20+ 轮)在 90K 下会被误掐 —— 调用方传 input_budget_tokens 放宽, 提示阈值随之取 80%
+    const stopTokens = config.input_budget_tokens ?? LOOP_STOP_TOKENS;
+    const hintTokens = config.input_budget_tokens ? Math.floor(config.input_budget_tokens * 0.8) : BUDGET_HINT_TOKENS;
+    let idleStreak = 0;        // 连续"只感知不执行"轮数(get_canvas_context/search_command 空转检测)
 
     for (let round = 0; round < maxRounds; round++) {
       hooks.onRound?.(round + 1);
@@ -347,8 +352,12 @@ ${focusStep}
       // 阶段指令以本轮 system 临时后缀注入(浅拷贝, 不写入 messages 历史) —— prompt v2 本体不动
       // 累计输入逼近 trial 预算 80% 时附加收敛指令, 抢在路由 429("上下文过大")之前让模型收尾
       tokensUsed += estimateInputTokens({ messages, tools });
-      if (tokensUsed >= LOOP_STOP_TOKENS) { budgetStopped = true; break; }
-      const suffix = [tc.systemSuffix(), tokensUsed >= BUDGET_HINT_TOKENS ? BUDGET_HINT_SUFFIX : '']
+      if (tokensUsed >= stopTokens) { budgetStopped = true; break; }
+      // 空转提醒: 连续 3+ 轮只读画布/搜命令没执行构造 → 逼模型收敛, 省无谓轮次(关思考时高发)
+      const idleHint = idleStreak >= 3
+        ? `【空转提醒】你已连续 ${idleStreak} 轮只读取画布/检索命令而未执行任何构造命令。不要再重复感知：基于画布现状直接批量执行最终构造命令，或立即给出最终回复说明无法继续的原因。`
+        : '';
+      const suffix = [tc.systemSuffix(), tokensUsed >= hintTokens ? BUDGET_HINT_SUFFIX : '', idleHint]
         .filter(Boolean).join('\n\n');
       const chatMessages = suffix
         ? [{ ...messages[0], content: `${messages[0].content}\n\n${suffix}` }, ...messages.slice(1)]
@@ -398,6 +407,8 @@ ${focusStep}
         }
       }
       tc.observeRound(roundSignal);
+      // 空转计数: 本轮执行过构造命令即归零, 否则累加(供下一轮的空转提醒判定)
+      idleStreak = roundSignal.execRan ? 0 : idleStreak + 1;
       // 循环内压缩: 中间轮工具结果换占位符(头/尾保留), 抑制全量重发的二次膨胀;
       // 不动本轮结果与结构字段, toolHistory/日志不受影响(前者只读 assistant.tool_calls)
       const compacted = compactLoopHistory(messages);

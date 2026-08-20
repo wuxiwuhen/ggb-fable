@@ -801,6 +801,9 @@ export default function ChatApp() {
           thinking_mode: config.thinkingMode ?? (config.mode === 'byok' ? config.getActiveByok()?.thinking_mode : undefined),
           // 视觉核验开关(设置页「高级」): off = 引擎从工具列表移除 inspect_render, 模型无法调用
           vision_verify: config.visionVerify,
+          // BYOK 直连厂商, 无 trial 路由 100K 累计上限 → 放宽引擎预算硬停,
+          // 长构造(20+ 轮)不再被 90K 误掐; 250K 仍是防失控护栏, 且受 50 轮上限双重保护
+          input_budget_tokens: config.mode === 'byok' ? 250000 : undefined,
         },
         backend,
         signal: controller.signal,
