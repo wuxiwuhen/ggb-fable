@@ -92,6 +92,11 @@ const TOOLS: ToolDef[] = [
     description: '清空画布。仅在用户明确要求重置时调用。',
     parameters: { type: 'object', properties: {}, required: [] },
   },
+  {
+    name: 'request_solve',
+    description: '标记本题为复杂题，请求进入专门解题阶段。判定标准：立体几何、轨迹/最值/定值、多对象联动约束、或需要长推导。调用后下一轮将不带画图工具、专心把整道题完整解出来。仅在规划轮调用一次；简单题不要调用。',
+    parameters: { type: 'object', properties: {}, required: [] },
+  },
 ];
 
 const GGB_RESERVED = new Set([
@@ -309,6 +314,9 @@ ${focusStep}
           await this.deps.ggb.clearAll();
           result = { ok: true, cleared: true };
           break;
+        case 'request_solve':
+          result = { ok: true, granted: true, note: '已确认复杂题。下一轮进入解题阶段（无画图工具），请把整道题完整解出来。' };
+          break;
         default:
           result = { error: `未知工具: ${name}` };
       }
@@ -455,6 +463,8 @@ ${focusStep}
         } else if (fnName === 'inspect_render') {
           roundSignal.inspectRan = true;                    // 无论过没过: 主构造已完成, 进入收尾阶段
           if (result?.passed === false) roundSignal.inspectFailed = true;
+        } else if (fnName === 'request_solve') {
+          tc.markDeep();   // 复杂度主信号(结构化工具调用), 先于 observeRound 置位 → PLAN 轮后落 SOLVE
         }
       }
       // 空转计数: 本轮执行过构造命令即归零, 否则累加(供下一轮空转提醒与触发⑤升级共用)

@@ -292,3 +292,20 @@ describe('ThinkingController — enterSolve(PLAN 纯文本直接切 SOLVE)', () 
     expect(plain.currentStage).toBe('PLAN');
   });
 });
+
+describe('ThinkingController — markDeep(request_solve 工具信号)', () => {
+  it('PLAN 轮 markDeep 与 ⟨deep⟩ 标记同效; 非 PLAN 轮或 always/never 档不置位', () => {
+    const c = new ThinkingController('auto');
+    c.markDeep();
+    expect(c.isDeep).toBe(true);
+    c.observeRound(sig());
+    expect(c.currentStage).toBe('SOLVE');
+    const late = new ThinkingController('auto');
+    late.observeRound(sig());          // → EXECUTE
+    late.markDeep();                    // 非 PLAN 轮: 不置位(与 absorb 语义一致)
+    expect(late.isDeep).toBe(false);
+    const nv = new ThinkingController('never');
+    nv.markDeep();                      // never 档: 置位被档位守卫忽略
+    expect(nv.isDeep).toBe(false);
+  });
+});

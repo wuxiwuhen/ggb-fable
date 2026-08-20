@@ -452,3 +452,32 @@ describe('AgentEngine — PLAN 轮纯文本不提前结束', () => {
     expect(r.finalText).toBe('这是一道简单题的直答。');
   });
 });
+
+describe('AgentEngine — request_solve 工具为主复杂度信号', () => {
+  it('规划轮调用 request_solve(不带 ⟨deep⟩ 标记) → 照样进 SOLVE; 工具结果可读', async () => {
+    const solveReq = { role: 'assistant' as const, content: '要点: 三对象联动。', tool_calls: [toolCall('request_solve', {})] };
+    const solution = { role: 'assistant' as const, content: '完整解答：略。', tool_calls: undefined };
+    const backend = new ScriptBackend([solveReq, solution, execTurn(), finalTurn]);
+    const r = await new AgentEngine(makeDeps()).run({
+      userInput: 'x', history: [],
+      config: { max_tool_rounds: 6, thinking_mode: 'auto' }, backend: backend as any,
+    });
+    expect(backend.calls[1].tools).toBeUndefined();                    // SOLVE 轮
+    expect(backend.calls[1].messages[0].content).toContain('解题阶段');
+    expect(backend.calls[2].thinking).toBe('enabled');                 // deep 执行轮
+    const req = r.messages.find((m: any) => m._toolName === 'request_solve');
+    expect(JSON.parse(req.content).granted).toBe(true);
+    expect(r.finalText).toBe('做好了');
+  });
+
+  it('request_solve 与其他工具同轮混用: 感知照常执行, 仍进 SOLVE', async () => {
+    const mixed = { role: 'assistant' as const, content: '', tool_calls: [toolCall('set_perspective', { view: 'AG' }), toolCall('request_solve', {})] };
+    const solution = { role: 'assistant' as const, content: '完整解答：略。', tool_calls: undefined };
+    const backend = new ScriptBackend([mixed, solution, execTurn(), finalTurn]);
+    await new AgentEngine(makeDeps()).run({
+      userInput: 'x', history: [],
+      config: { max_tool_rounds: 6, thinking_mode: 'auto' }, backend: backend as any,
+    });
+    expect(backend.calls[1].messages[0].content).toContain('解题阶段');
+  });
+});

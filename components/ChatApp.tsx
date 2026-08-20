@@ -60,6 +60,7 @@ const PHASE_LABEL: Record<string, string> = {
   verify_geometry: '几何验证',
   inspect_render: '视觉核验',
   reset_canvas: '清空画布',
+  request_solve: '判定复杂题',
 };
 
 const STAGE_LABEL: Record<'PLAN' | 'SOLVE' | 'EXECUTE' | 'RECOVER', string> = {
