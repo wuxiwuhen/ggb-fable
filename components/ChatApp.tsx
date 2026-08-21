@@ -114,6 +114,35 @@ function AssistantProgress({ msg, trace, stage }: {
   );
 }
 
+// 结束后的过程折叠行: 一行汇总(已思考 Ns · 查看过程), 展开显示思考过程 + 执行叙述两段。
+// 数据来自 turn 收尾的 process 快照(内存态), 刷新后消失——历史轮只剩最终气泡(与旧思考流行为一致)。
+function ProcessTail({ process }: { process: NonNullable<Msg['process']> }) {
+  const [open, setOpen] = useState(false);
+  const arrow = open ? '▲' : '▾';
+  const head = process.thinkSecs ? `已思考 ${process.thinkSecs}s · 查看过程 ${arrow}` : `查看过程 ${arrow}`;
+  return (
+    <div className="thinking-block">
+      <button type="button" className="ocr-toggle" onClick={() => setOpen((v) => !v)}>{head}</button>
+      {open && (
+        <>
+          {process.thinking && (
+            <>
+              <div className="process-label">思考过程</div>
+              <pre className="thinking-text">{process.thinking.slice(-2000)}</pre>
+            </>
+          )}
+          {process.narrative && (
+            <>
+              <div className="process-label">执行叙述</div>
+              <pre className="thinking-text">{process.narrative.slice(-2000)}</pre>
+            </>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
 function fallbackCopy(text: string) {
   const ta = document.createElement('textarea');
   ta.value = text;
@@ -224,7 +253,6 @@ export default function ChatApp() {
   const [narrText, setNarrText] = useState('');   // 流式叙述过程区文本(与 thinkingText 平行, 挂 thinkMsgId 消息)
   const [thinkMsgId, setThinkMsgId] = useState<number | null>(null);   // 思考块挂在哪个 assistant 气泡
   const [thinkOpen, setThinkOpen] = useState(false);
-  const [thinkSecs, setThinkSecs] = useState<number | null>(null);     // 回合结束后的"已思考 Ns"
   const thinkBufRef = useRef('');
   const thinkRafRef = useRef<number | null>(null);
   const thinkStartRef = useRef<number | null>(null);
@@ -769,7 +797,6 @@ export default function ChatApp() {
     thinkStartRef.current = null;
     setThinkingText('');
     setNarrText('');
-    setThinkSecs(null);
     setThinkOpen(false);
     trialTokenRef.current = null;   // 新意图, 首次扣 1 次
 
@@ -959,7 +986,6 @@ export default function ChatApp() {
       // 思考流收尾: 折叠为"已思考 Ns"
       if (thinkRafRef.current != null) { cancelAnimationFrame(thinkRafRef.current); thinkRafRef.current = null; }
       flushThink();
-      if (thinkStartRef.current != null) setThinkSecs(Math.max(1, Math.round((Date.now() - thinkStartRef.current) / 1000)));
       setThinkOpen(false);
       setStage(null);
       setNarrText('');
@@ -1219,12 +1245,10 @@ export default function ChatApp() {
                         )}
                       </div>
                     )}
-                    {m.id === thinkMsgId && thinkingText && (
+                    {m.streaming && m.id === thinkMsgId && thinkingText && (
                       <div className="thinking-block">
                         <button type="button" className="ocr-toggle" onClick={() => setThinkOpen((v) => !v)}>
-                          {m.streaming
-                            ? `思考中…（点击${thinkOpen ? '收起' : '展开'}）`
-                            : `已思考 ${thinkSecs ?? '—'}s ▾`}
+                          {`思考中…（点击${thinkOpen ? '收起' : '展开'}）`}
                         </button>
                         {thinkOpen && <pre className="thinking-text">{thinkingText.slice(-2000)}</pre>}
                       </div>
@@ -1237,7 +1261,10 @@ export default function ChatApp() {
                         )}
                       </>
                     ) : (
-                      <MessageContent content={m.content || ''} />
+                      <>
+                        {m.process && <ProcessTail process={m.process} />}
+                        <MessageContent content={m.content || ''} />
+                      </>
                     )}
                   </>
                 );
