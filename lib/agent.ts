@@ -64,8 +64,11 @@ const TOOLS: ToolDef[] = [
   },
   {
     name: 'search_command',
-    description: '检索 GeoGebra 命令的真实签名、示例与陷阱。使用不熟悉的命令前务必先查, 避免用错重载。',
-    parameters: { type: 'object', properties: { query: { type: 'string', description: '命令名或功能关键词, 如 Circle / 切线 / 滑块' } }, required: ['query'] },
+    description: '检索 GeoGebra 命令的真实签名、示例与陷阱。使用不熟悉的命令前务必先查, 避免用错重载。推荐一次把本题需要的所有命令查完(queries 传数组), 不要每轮查一个。',
+    parameters: { type: 'object', properties: {
+      queries: { type: 'array', items: { type: 'string' }, description: '命令名或功能关键词列表, 如 ["Cone", "Curve", "Circle"] —— 推荐用法: 规划后一次查齐再动手' },
+      query: { type: 'string', description: '单个命令名或功能关键词(兼容旧用法; 新调用优先用 queries)' },
+    }, required: [] },
   },
   {
     name: 'execute_command',
@@ -217,8 +220,19 @@ export class AgentEngine {
           result = await this.deps.ggb.getCanvasContext();
           break;
         case 'search_command': {
-          const hits = await this.deps.commandSearch.search(args.query, 4);
-          result = { query: args.query, results: this.deps.commandSearch.format(hits) };
+          // 批量优先: 一次查齐本题所需命令(串行单查曾把简单题磨成 10+ 轮纯 search 打转)
+          const queries: string[] = Array.isArray(args.queries) && args.queries.length
+            ? args.queries.map((q: unknown) => String(q)).filter(Boolean)
+            : [args.query].filter(Boolean);
+          if (!queries.length) {
+            result = { error: 'queries 与 query 至少提供一个' };
+            break;
+          }
+          const entries = await Promise.all(queries.map(async (q) => ({
+            query: q,
+            results: this.deps.commandSearch.format(await this.deps.commandSearch.search(q, 4)),
+          })));
+          result = entries.length === 1 ? entries[0] : { results: entries };
           break;
         }
         case 'execute_command': {

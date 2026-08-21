@@ -481,3 +481,37 @@ describe('AgentEngine — request_solve 工具为主复杂度信号', () => {
     expect(backend.calls[1].messages[0].content).toContain('解题阶段');
   });
 });
+
+describe('search_command 批量查询(治串行 search 打转)', () => {
+  const searchTurn = (args: object) => ({ role: 'assistant' as const, content: '', tool_calls: [toolCall('search_command', args)] });
+
+  it('queries 数组: 一次往返查齐, 逐词检索并聚合返回', async () => {
+    const seen: string[] = [];
+    const deps = { ...makeDeps(), commandSearch: {
+      search: async (q: string) => { seen.push(q); return [{ name: q }]; },
+      format: (hits: any[]) => hits.map((h) => `[${h.name} 签名]`).join('\n'),
+    } };
+    const backend = new ScriptBackend([searchTurn({ queries: ['Cone', 'Curve', 'Circle'] }), finalTurn]);
+    const engine = new AgentEngine(deps as any);
+    await engine.run({ userInput: '圆锥螺线', history: [], config: { max_tool_rounds: 5, thinking_mode: 'auto' }, backend: backend as any });
+    expect(seen).toEqual(['Cone', 'Curve', 'Circle']);          // 单次调用内逐词查
+    const toolMsg = backend.calls[1].messages.find((m: any) => m.role === 'tool');
+    const parsed = JSON.parse(toolMsg.content);
+    expect(parsed.results.map((r: any) => r.query)).toEqual(['Cone', 'Curve', 'Circle']);
+    expect(parsed.results[0].results).toContain('Cone 签名');
+  });
+
+  it('单 query 旧路径: 返回形态不变(兼容)', async () => {
+    const deps = { ...makeDeps(), commandSearch: {
+      search: async (q: string) => [{ name: q }],
+      format: (hits: any[]) => hits.map((h) => `[${h.name}]`).join(''),
+    } };
+    const backend = new ScriptBackend([searchTurn({ query: 'Cone' }), finalTurn]);
+    const engine = new AgentEngine(deps as any);
+    await engine.run({ userInput: 'x', history: [], config: { max_tool_rounds: 5, thinking_mode: 'auto' }, backend: backend as any });
+    const toolMsg = backend.calls[1].messages.find((m: any) => m.role === 'tool');
+    const parsed = JSON.parse(toolMsg.content);
+    expect(parsed.query).toBe('Cone');
+    expect(parsed.results).toContain('[Cone]');
+  });
+});

@@ -44,6 +44,7 @@ const RECOVERY_CAP = 2;
 export class ThinkingController {
   private stage: Stage = 'PLAN';
   private recoveries = 0;
+  private idleRecovery = false;                     // 当前 RECOVER 由空转触发(search 打转): 保持思考直到真正执行
   private lastSignal: RoundSignal | null = null;   // 上一轮信号(observeRound 时作为 prev)
   private inspectFails = 0;
   private inspectSeen = false;                       // inspect_render 已跑过 → 进入收尾阶段
@@ -131,24 +132,39 @@ export class ThinkingController {
     if (this.mode !== 'auto' && this.mode !== 'autolow') return;   // always/never: 状态机不推进
     const prev = this.lastSignal;                            // 上一轮信号(s = 刚结束的这轮)
     this.lastSignal = s;
-    if (this.stage === 'RECOVER') { this.stage = 'EXECUTE'; return; }  // 恢复一轮即回执行
-    if (this.shouldEscalate(s, prev)) this.escalate();
+    if (this.stage === 'RECOVER') {
+      // 空转型恢复(search 打转): 一轮即回会让思考只开 1 轮就被关掉, 打转救不回来
+      // (圆锥螺线案: 10 轮 search 打转, RECOVER 只闪了 ≤2 轮)。保持思考直到模型真正执行构造。
+      if (this.idleRecovery && !s.execRan) return;
+      this.idleRecovery = false;
+      this.stage = 'EXECUTE'; return;                        // 恢复(或已执行)后回执行
+    }
+    const reason = this.escalateReason(s, prev);
+    if (reason) this.escalate(reason);
     // PLAN 轮观察后: 复杂题先进 SOLVE 专门解题(先解后画), 简单题直接执行
     else if (this.stage === 'PLAN') this.stage = this.deep ? 'SOLVE' : 'EXECUTE';
   }
 
   // 升级判定(spec §3.1 四触发 + ⑤ 空转): s=刚结束的这轮, prev=上一轮
-  private shouldEscalate(s: RoundSignal, prev: RoundSignal | null): boolean {
-    if (s.verifyFailed) return true;                          // ② verify 不达预期(单轮即触发)
-    if (this.inspectFails >= 2) return true;                  // ③ 二次 inspect 仍有 issues
-    if (s.execFailed && prev?.execFailed) return true;        // ① 连续 2 轮批失败
+  private escalateReason(s: RoundSignal, prev: RoundSignal | null): 'verify' | 'inspect' | 'execfail' | 'stall' | 'idle' | null {
+    if (s.verifyFailed) return 'verify';                     // ② verify 不达预期(单轮即触发)
+    if (this.inspectFails >= 2) return 'inspect';            // ③ 二次 inspect 仍有 issues
+    if (s.execFailed && prev?.execFailed) return 'execfail'; // ① 连续 2 轮批失败
     if (s.execRan && s.createdLabels === 0
-        && prev?.execRan && prev.createdLabels === 0) return true;   // ④ 连续 2 轮零新建空转
-    if (s.idleRounds >= 3) return true;                       // ⑤ 连续 3 轮只感知不执行(关思考高发)
-    return false;
+        && prev?.execRan && prev.createdLabels === 0) return 'stall';   // ④ 连续 2 轮零新建空转
+    if (s.idleRounds >= 3) return 'idle';                    // ⑤ 连续 3 轮只感知不执行(关思考高发)
+    return null;
   }
 
-  private escalate(): void {
+  private escalate(reason: 'verify' | 'inspect' | 'execfail' | 'stall' | 'idle'): void {
+    if (reason === 'idle') {
+      // 空转升级不烧 RECOVERY_CAP: 它是"拿不准就该思考"的模式切换而非修复尝试,
+      // 不该把失败恢复的安全阀名额吃掉; 打转本身由 maxRounds/预算兜底
+      this.idleRecovery = true;
+      this.stage = 'RECOVER';
+      return;
+    }
+    this.idleRecovery = false;
     if (this.recoveries >= RECOVERY_CAP) return;             // 达上限: 按现状 best-effort 收尾
     this.recoveries++;
     this.stage = 'RECOVER';

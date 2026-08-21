@@ -209,6 +209,54 @@ describe('ThinkingController — 触发⑤ 空转升级', () => {
     c.observeRound(sig({ idleRounds: 1 }));
     expect(c.currentStage).toBe('EXECUTE');
   });
+
+  it('空转升级后: 未执行前 RECOVER 持续(思考保持), 首次执行才回 EXECUTE', () => {
+    const c = new ThinkingController('auto');
+    c.observeRound(sig());
+    c.observeRound(sig({ idleRounds: 1 }));
+    c.observeRound(sig({ idleRounds: 2 }));
+    c.observeRound(sig({ idleRounds: 3 }));                  // → RECOVER(空转)
+    c.observeRound(sig({ idleRounds: 4 }));                  // 仍在打转: 维持 RECOVER
+    expect(c.currentStage).toBe('RECOVER');
+    expect(c.thinkingFor()).toBe('enabled');
+    c.observeRound(sig({ idleRounds: 5 }));                  // 再打转一轮仍维持
+    expect(c.currentStage).toBe('RECOVER');
+    c.observeRound(sig({ execRan: true, idleRounds: 0 }));   // 真正执行了
+    expect(c.currentStage).toBe('EXECUTE');
+    expect(c.thinkingFor()).toBe('disabled');
+  });
+
+  it('空转升级不烧 RECOVERY_CAP: 连续多次空转升级后, 失败触发仍可恢复', () => {
+    const c = new ThinkingController('auto');
+    c.observeRound(sig());
+    // 第一轮空转升级
+    c.observeRound(sig({ idleRounds: 1 }));
+    c.observeRound(sig({ idleRounds: 2 }));
+    c.observeRound(sig({ idleRounds: 3 }));                  // RECOVER #1(空转, 不计数)
+    c.observeRound(sig({ execRan: true, idleRounds: 0 }));   // 回 EXECUTE
+    // 第二轮空转升级
+    c.observeRound(sig({ idleRounds: 1 }));
+    c.observeRound(sig({ idleRounds: 2 }));
+    c.observeRound(sig({ idleRounds: 3 }));                  // RECOVER #2(空转, 不计数)
+    expect(c.recoveryCount).toBe(0);                         // 两次空转升级都没烧 cap
+    c.observeRound(sig({ execRan: true, idleRounds: 0 }));   // 回 EXECUTE
+    // 失败触发仍可用满 2 次 cap
+    c.observeRound(sig({ verifyFailed: true }));
+    c.observeRound(sig());
+    c.observeRound(sig({ verifyFailed: true }));
+    expect(c.currentStage).toBe('RECOVER');
+    expect(c.recoveryCount).toBe(2);
+    c.observeRound(sig({ verifyFailed: true }));             // 已达上限, 不再升级
+    expect(c.currentStage).toBe('EXECUTE');
+  });
+
+  it('失败触发的 RECOVER 仍是一轮即回(原语义不变)', () => {
+    const c = new ThinkingController('auto');
+    c.observeRound(sig());
+    c.observeRound(sig({ verifyFailed: true }));             // RECOVER(失败)
+    c.observeRound(sig({ idleRounds: 1 }));                  // 恢复轮后即回 EXECUTE
+    expect(c.currentStage).toBe('EXECUTE');
+  });
 });
 
 describe('ThinkingController — SOLVE 先解后画(deep 触发)', () => {
