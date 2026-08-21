@@ -1,6 +1,6 @@
 // 三段式思考策略状态机(spec: docs/superpowers/specs/2026-08-19-speed-optimization-design.md §3.1)
 // 纯逻辑无 IO: 引擎每轮 chat 前调 planFor(stage)/systemSuffix(), 工具跑完后调 observeRound() 回报信号。
-//   PLAN(第 1 轮, 思考开) → [deep? SOLVE(纯文本完整解题, 先解后画)] → EXECUTE --触发--> RECOVER(思考开, 上限 2) --一轮--> EXECUTE
+//   PLAN(第 1 轮, auto 思考关/autolow 开) → [deep? SOLVE(纯文本完整解题, 先解后画)] → EXECUTE --触发--> RECOVER(思考开, 上限 2) --一轮--> EXECUTE
 // thinking_mode: auto=三段式(默认) / autolow=三段式但 EXECUTE 轻思考(enabled+reasoning_effort:low)
 //                / always=全程思考(v1 基线语义) / never=全程关(fast 臂)。
 
@@ -60,6 +60,13 @@ export class ThinkingController {
   planFor(stage: Stage): StagePlan {
     if (this.mode === 'always') return { thinking: 'enabled' };
     if (this.mode === 'never') return { thinking: 'disabled' };
+    if (stage === 'PLAN') {
+      // auto: PLAN 关思考——复杂度自判是关键词级模式识别(立体几何/轨迹最值/联动约束/长推导), 无需推理;
+      // 开思考反诱发"谨慎模式": 对命令语法不确定→搜索强制→惯性带进执行期打转(圆锥螺线案 22 轮)。
+      // 判错有兜底: 漏判复杂题必然表现为批失败/verify 败/空转 → RECOVER 开思考接住。
+      // autolow 不动: 卖点是全程保留思考(仅 EXECUTE 压低力度)。
+      return this.mode === 'autolow' ? { thinking: 'enabled' } : { thinking: 'disabled' };
+    }
     if (stage === 'EXECUTE') {
       // 收尾修正轮(inspect 已跑过): 主构造完成, 只剩挪文本/补标签等视觉微调,
       // 关思考(实测开思考时挪四个文本也要重推全题 60-100s/轮, 839s 案收尾段烧 345s);

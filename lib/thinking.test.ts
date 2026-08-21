@@ -5,10 +5,10 @@ import { ThinkingController, EMPTY_SIGNAL } from './thinking';
 const sig = (o: Partial<typeof EMPTY_SIGNAL> = {}) => ({ ...EMPTY_SIGNAL, ...o });
 
 describe('ThinkingController — auto 默认三段式', () => {
-  it('第 1 轮 PLAN 思考开; 观察后落 EXECUTE 思考关', () => {
+  it('第 1 轮 PLAN 思考关(自判是模式识别, 不需推理); 观察后落 EXECUTE 思考关', () => {
     const c = new ThinkingController('auto');
     expect(c.currentStage).toBe('PLAN');
-    expect(c.thinkingFor()).toBe('enabled');
+    expect(c.thinkingFor()).toBe('disabled');
     c.observeRound(sig());
     expect(c.currentStage).toBe('EXECUTE');
     expect(c.thinkingFor()).toBe('disabled');
@@ -89,8 +89,8 @@ describe('ThinkingController — always / never 覆盖', () => {
     expect(c.thinkingFor()).toBe('disabled');
   });
 
-  it('缺省构造 = auto', () => {
-    expect(new ThinkingController().thinkingFor()).toBe('enabled');
+  it('缺省构造 = auto(PLAN 轮思考关)', () => {
+    expect(new ThinkingController().thinkingFor()).toBe('disabled');
   });
 });
 
@@ -126,7 +126,9 @@ describe('ThinkingController — autolow 轻思考档(PLAN 全思考/EXECUTE 轻
 });
 
 describe('planFor — 各档位对照', () => {
-  it('auto: EXECUTE 关思考且无 effort; always/never 任意阶段恒定', () => {
+  it('auto: PLAN 与 EXECUTE 关思考且无 effort; autolow PLAN 保持开; always/never 任意阶段恒定', () => {
+    expect(new ThinkingController('auto').planFor('PLAN')).toEqual({ thinking: 'disabled' });
+    expect(new ThinkingController('autolow').planFor('PLAN')).toEqual({ thinking: 'enabled' });
     expect(new ThinkingController('auto').planFor('EXECUTE')).toEqual({ thinking: 'disabled' });
     expect(new ThinkingController('auto').planFor('RECOVER')).toEqual({ thinking: 'enabled' });
     const always = new ThinkingController('always');

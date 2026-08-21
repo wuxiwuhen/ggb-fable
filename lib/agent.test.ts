@@ -48,14 +48,14 @@ const execTurn = (cmd = 'A=(1,1)') => ({ role: 'assistant' as const, content: ''
 const finalTurn = { role: 'assistant' as const, content: '做好了', tool_calls: undefined };
 
 describe('AgentEngine — 三段式思考策略', () => {
-  it('auto: 第 1 轮 enabled + ⟨deep⟩ 自判后缀; 第 2 轮 disabled 且 system 临时后缀, 历史不被污染', async () => {
+  it('auto: 第 1 轮 disabled + ⟨deep⟩ 自判后缀; 第 2 轮 disabled 且 system 临时后缀, 历史不被污染', async () => {
     const backend = new ScriptBackend([execTurn(), finalTurn]);
     const engine = new AgentEngine(makeDeps());
     const r = await engine.run({
       userInput: '画个点', history: [],
       config: { max_tool_rounds: 5, thinking_mode: 'auto' }, backend: backend as any,
     });
-    expect(backend.calls[0].thinking).toBe('enabled');
+    expect(backend.calls[0].thinking).toBe('disabled');
     expect(backend.calls[0].messages[0].content).toMatch(/^SYS/);        // PLAN 轮带自判后缀
     expect(backend.calls[0].messages[0].content).toContain('⟨deep⟩');
     expect(backend.calls[1].thinking).toBe('disabled');
@@ -129,7 +129,7 @@ describe('AgentEngine — autolow 轻思考接线', () => {
     await new AgentEngine(makeDeps()).run({
       userInput: 'x', history: [], config: { max_tool_rounds: 6, thinking_mode: 'auto' }, backend: bAuto as any,
     });
-    expect(bAuto.calls[0].thinking).toBe('enabled');           // PLAN
+    expect(bAuto.calls[0].thinking).toBe('disabled');          // PLAN(auto): 关思考
     expect(bAuto.calls[0].reasoningEffort).toBeUndefined();
     expect(bAuto.calls[1].thinking).toBe('disabled');          // EXECUTE(auto): 关思考
     expect(bAuto.calls[1].reasoningEffort).toBeUndefined();
