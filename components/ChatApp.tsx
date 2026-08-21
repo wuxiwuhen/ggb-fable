@@ -41,6 +41,8 @@ interface Msg {
   streaming?: boolean;
   image?: string;   // user 附图(data URL), 仅当轮显示, 不持久化(重载后以识别文本回显)
   ocr?: { state: 'loading' | 'done' | 'error'; text?: string; error?: string; expanded?: boolean };
+  // 生成过程快照(turn 结束时从 ref 一次性写入; 仅内存态不进 DB, 刷新后历史轮只显示最终气泡)
+  process?: { thinking?: string; narrative?: string; thinkSecs?: number };
 }
 
 const EXAMPLES = [
@@ -219,6 +221,7 @@ export default function ChatApp() {
   // ── 三段式思考策略的 UI 态(spec §3.3): 阶段状态行 + 思考流折叠块 ──
   const [stage, setStage] = useState<{ stage: 'PLAN' | 'SOLVE' | 'EXECUTE' | 'RECOVER'; round: number } | null>(null);
   const [thinkingText, setThinkingText] = useState('');
+  const [narrText, setNarrText] = useState('');   // 流式叙述过程区文本(与 thinkingText 平行, 挂 thinkMsgId 消息)
   const [thinkMsgId, setThinkMsgId] = useState<number | null>(null);   // 思考块挂在哪个 assistant 气泡
   const [thinkOpen, setThinkOpen] = useState(false);
   const [thinkSecs, setThinkSecs] = useState<number | null>(null);     // 回合结束后的"已思考 Ns"
@@ -360,7 +363,7 @@ export default function ChatApp() {
     rafRef.current = null;
     const buf = streamBuf.current;
     if (!buf) return;
-    setMessages((prev) => prev.map((m) => (m.id === buf.id ? { ...m, content: buf.text } : m)));
+    setNarrText(buf.text);
   }, []);
   const scheduleFlush = useCallback(() => {
     if (rafRef.current == null) rafRef.current = requestAnimationFrame(flushStream);
@@ -765,12 +768,21 @@ export default function ChatApp() {
     thinkBufRef.current = '';
     thinkStartRef.current = null;
     setThinkingText('');
+    setNarrText('');
     setThinkSecs(null);
     setThinkOpen(false);
     trialTokenRef.current = null;   // 新意图, 首次扣 1 次
 
     // 整个 send(含 OCR 阶段)共用一个 abort controller, 点"停止"可中断 OCR
     const controller = new AbortController();
+    // 过程快照: 收尾 setMessages 时读 ref——setState 异步, 读 narrText/thinkingText 会拿到未 flush 的旧值
+    const snapshotProcess = () => ({
+      thinking: thinkBufRef.current || undefined,
+      narrative: streamBuf.current?.text || undefined,
+      thinkSecs: thinkStartRef.current
+        ? Math.max(1, Math.round((Date.now() - thinkStartRef.current) / 1000))
+        : undefined,
+    });
     abortRef.current = controller;
     setSending(true);
 
@@ -849,10 +861,9 @@ export default function ChatApp() {
         signal: controller.signal,
         hooks: {
           onRound: (_n, final) => {
-            // 每轮开始清空气泡文本: 只显示当前轮叙述, 而非全部轮次叙述的累计
-            // (多轮微调时气泡曾堆到几十 K 字; 也让完成时气泡内容=finalText 不再"缩水")。
-            // final=true(轮数上限收尾)不清, 避免抹掉最后一轮文本。
-            if (!final && streamBuf.current) { streamBuf.current.text = ''; scheduleFlush(); }
+            // 轮间分隔(累加制): 新一轮与上一轮叙述之间加空行, 过程区保留完整时间线;
+            // 旧版每轮清空是"气泡文字跳变"的根因。final=true(轮数上限收尾)不加, 避免末尾悬空分隔。
+            if (!final && streamBuf.current && streamBuf.current.text) { streamBuf.current.text += '\n\n'; scheduleFlush(); }
           },
           onToken: (delta) => {
             if (streamBuf.current) { streamBuf.current.text += delta; scheduleFlush(); }
@@ -890,7 +901,9 @@ export default function ChatApp() {
       // 完成: 更新 assistant 消息
       if (rafRef.current != null) { cancelAnimationFrame(rafRef.current); rafRef.current = null; }
       flushStream();
-      setMessages((prev) => prev.map((m) => (m.id === assistantMsg.id ? { ...m, content: result.finalText, streaming: false } : m)));
+      setMessages((prev) => prev.map((m) => (m.id === assistantMsg.id
+        ? { ...m, content: result.finalText, streaming: false, process: snapshotProcess() }
+        : m)));
 
       // history 累积(截 20 条, 只存文本; 单条截 800 字——超长回复全量回传会把每轮输入头部撑爆)
       const cap = (s: string) => s.slice(0, 800);
@@ -931,12 +944,13 @@ export default function ChatApp() {
       }
       setMessages((prev) => {
         const cur = prev.find((m) => m.id === assistantMsg.id);
-        // 取消时若还没有文字内容, 直接移除空气泡
-        if (aborted && cur && !cur.content.trim()) {
+        const narr = streamBuf.current?.text || '';
+        // 取消时若既无正文也无叙述, 直接移除空气泡(生成期 content 恒空, 叙述是唯一内容来源)
+        if (aborted && cur && !cur.content.trim() && !narr.trim()) {
           return prev.filter((m) => m.id !== assistantMsg.id);
         }
         return prev.map((m) => (m.id === assistantMsg.id
-          ? { ...m, streaming: false, content: m.content || '（出错）' }
+          ? { ...m, streaming: false, content: m.content || narr || '（出错）', process: snapshotProcess() }
           : m));
       });
     } finally {
@@ -948,6 +962,7 @@ export default function ChatApp() {
       if (thinkStartRef.current != null) setThinkSecs(Math.max(1, Math.round((Date.now() - thinkStartRef.current) / 1000)));
       setThinkOpen(false);
       setStage(null);
+      setNarrText('');
       setSending(false);
       streamBuf.current = null;
     }
@@ -1192,7 +1207,6 @@ export default function ChatApp() {
                   <img src={m.image} className="msg-image" alt="题目图片（点击放大）" onClick={() => setLightbox(m.image!)} />
                 );
               } else if (m.role === 'assistant') {
-                const preText = m.streaming && !m.content.trim();
                 body = (
                   <>
                     {m.ocr?.state === 'done' && (
@@ -1215,7 +1229,16 @@ export default function ChatApp() {
                         {thinkOpen && <pre className="thinking-text">{thinkingText.slice(-2000)}</pre>}
                       </div>
                     )}
-                    {preText ? <AssistantProgress msg={m} trace={trace} stage={stage} /> : <MessageContent content={m.content || ''} />}
+                    {m.streaming ? (
+                      <>
+                        <AssistantProgress msg={m} trace={trace} stage={stage} />
+                        {m.id === thinkMsgId && narrText && (
+                          <pre className="thinking-text">{narrText.slice(-2000)}</pre>
+                        )}
+                      </>
+                    ) : (
+                      <MessageContent content={m.content || ''} />
+                    )}
                   </>
                 );
               } else {
