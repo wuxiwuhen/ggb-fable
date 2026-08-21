@@ -7,11 +7,8 @@
 
 // 把一批事件按 ev.sessionId 分组。跳过无 sessionId 的(如 setSession('') 后的 ggb_exec——无会话态不入库)。
 // 事件在 push 时已 stamp sessionId, flush/flushNow 据此分组各自 append, 保证归属正确。
-// 把一批事件按 ev.sessionId 分组。跳过无 sessionId 的(如 setSession('') 后的 ggb_exec——无会话态不入库)。
-// 事件在 push 时已 stamp sessionId, flush/flushNow 据此分组各自 append, 保证归属正确。
-// 静默丢弃曾是"会话切换后 AI 回复消失"的帮凶: sid='' 事件无任何痕迹地消失, 故告警一次留排查线索。
-let warnedDropped = false;
-function groupBySession(batch: any[]): Map<string, any[]> {
+// 返回 dropped 计数, 告警交给实例上报(每实例一次): 静默丢弃曾是"会话切换后 AI 回复消失"的帮凶。
+function groupBySession(batch: any[]): { groups: Map<string, any[]>; dropped: number } {
   const groups = new Map<string, any[]>();
   let dropped = 0;
   for (const ev of batch) {
@@ -20,19 +17,30 @@ function groupBySession(batch: any[]): Map<string, any[]> {
     if (arr) arr.push(ev);
     else groups.set(ev.sessionId, [ev]);
   }
-  if (dropped > 0 && !warnedDropped) {
-    warnedDropped = true;
-    console.warn(`[logger] 丢弃 ${dropped} 条无会话事件(重挂载后 Logger 未回绑? 运行态将不入库)`);
-  }
-  return groups;
+  return { groups, dropped };
 }
 
 export class Logger {
-  private sessionId = '';
+  private sessionId: string;
   private buffer: any[] = [];
   private flushTimer: ReturnType<typeof setTimeout> | null = null;
   private readonly MAX_BUFFER = 3000;
   private enabled = true;
+  private warnedDropped = false;   // 告警按实例计(非模块级): 重挂载的新实例丢事件时也要能喊出声
+
+  // initialSessionId: SPA 重挂载时用 store 存活的会话预绑定, 消灭 sid='' 未绑定窗口——
+  // 否则运行事件被 groupBySession 静默丢弃, 表现为整轮生成成功但零落库(实测)。
+  constructor(initialSessionId: string = '') {
+    this.sessionId = initialSessionId;
+  }
+
+  // 本实例首次丢弃时告警(累计计数进消息), 之后静默——命令面板无会话绘图的正常丢弃不刷屏
+  private reportDrop(dropped: number): void {
+    if (dropped > 0 && !this.warnedDropped) {
+      this.warnedDropped = true;
+      console.warn(`[logger] 丢弃 ${dropped} 条无会话事件(重挂载后 Logger 未回绑? 运行态将不入库)`);
+    }
+  }
 
   // 同步设置当前会话(不落库)。仅作标记: 初始绑定 / clearWorkspace 后置 '' 表示"无会话"。
   // 切换会话请用 switchTo(先 flush 再切)——旧的 setSession→flushNow(sendBeacon) 路径已废弃
@@ -53,7 +61,9 @@ export class Logger {
   flushNow(): void {
     if (!this.buffer.length) return;
     const batch = this.buffer.splice(0, this.buffer.length);
-    for (const [sid, events] of groupBySession(batch)) {
+    const { groups, dropped } = groupBySession(batch);
+    this.reportDrop(dropped);
+    for (const [sid, events] of groups) {
       try {
         const ok = navigator.sendBeacon('/api/sessions', new Blob(
           [JSON.stringify({ action: 'append', sessionId: sid, events })],
@@ -97,7 +107,8 @@ export class Logger {
     // 不再用"统一发到当前 sessionId + alien filter 丢弃"——后者与失败回填组合会形成黑洞:
     // flush 失败回填的事件(带旧 sid)在 sessionId 切换后会被 alien filter 永久丢弃。
     // 分组发送让每条事件始终归属它产生时的会话, abort 后迟到的 straggler 也不会丢/污染。
-    const groups = groupBySession(batch);
+    const { groups, dropped } = groupBySession(batch);
+    this.reportDrop(dropped);
     if (!groups.size) return;
     await Promise.all([...groups.entries()].map(async ([sid, events]) => {
       try {

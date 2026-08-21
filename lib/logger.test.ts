@@ -37,4 +37,30 @@ describe('Logger 会话绑定', () => {
     expect(body.sessionId).toBe('s1');
     expect(body.events[0].type).toBe('user_input');
   });
+
+  it('带初始 sid 构造: 事件立即归属该会话, 无未绑定窗口(SPA 重挂载防丢)', async () => {
+    const l = new Logger('s1');
+    expect(l.getSessionId()).toBe('s1');
+    l.userTurn('你好');
+    await l.flush();
+    expect((fetch as any).mock.calls.length).toBe(1);
+    expect(JSON.parse((fetch as any).mock.calls[0][1].body).sessionId).toBe('s1');
+  });
+
+  it('未绑定事件被丢时告警按实例计: 换新实例(重挂载)会再次告警, 不被模块级标记吞掉', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const droppedWarns = () => warn.mock.calls.filter((c) => String(c[0]).includes('丢弃')).length;
+    const l1 = new Logger();
+    l1.userTurn('a');
+    await l1.flush();
+    l1.userTurn('b');
+    await l1.flush();
+    const afterL1 = droppedWarns();
+    expect(afterL1).toBeGreaterThanOrEqual(1);        // 本实例至少告警过
+    const l2 = new Logger();                          // 重挂载后的新实例
+    l2.userTurn('c');
+    await l2.flush();
+    expect(droppedWarns()).toBeGreaterThan(afterL1);  // 新实例同样告警(模块级 once 会吞掉这声)
+    warn.mockRestore();
+  });
 });

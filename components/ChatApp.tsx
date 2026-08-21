@@ -144,7 +144,9 @@ export default function ChatApp() {
   const switchingCountRef = useRef(0); // 活跃切换计数(快速连点时 loading 不被先完成的那个误关)
 
   // ── 引擎实例(单例) ──
-  const loggerRef = useRef<Logger>(new Logger());
+  // 构造即用 store 存活的会话预绑定: SPA 重挂载(设置页往返)时新 Logger 不再有 sid='' 未绑定窗口,
+  // 否则整轮运行事件被 groupBySession 静默丢弃(实测生成成功但零落库)。完整刷新 store 为 null → 从 '' 开始。
+  const loggerRef = useRef<Logger>(new Logger(useSessionStore.getState().currentSessionId || ''));
   const { containerRef, ggb: ggbRef, ready: ggbReady, error: ggbError } = useGeogebra(loggerRef.current);
 
   const csRef = useRef<CommandSearch | null>(null);
@@ -271,12 +273,19 @@ export default function ChatApp() {
 
   // ── 画布 XML 快照持久化 ──
   const restoringRef = useRef(false);                                   // restore 期间抑制捕获
+  // 写保护: 画布当前内容所属会话。重挂载后画布空白但 store 存活旧 id —— 无归属校验时,
+  // 切走/beforeunload 都会把空白画布(3.7KB 空 XML)覆盖写进旧会话, 毁掉已保存的图(实测多会话受损)。
+  const canvasOwnerRef = useRef<string | null>(null);
+  // 本次挂载实际加载完成的会话(switchSession 早退判据): store 的 currentSessionId 跨挂载存活,
+  // 重挂载后点"当前会话"被陈旧 store 值早退挡住 → 切不回来。以挂载内实际加载为准。
+  const loadedSessionRef = useRef<string | null>(null);
   const persistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // NOTE: 不在此处检查 restoringRef —— switchSession 的老会话自愈路径故意在 restoringRef=true 时调用本函数;
   // 防止过渡期误写的正确做法是 cancelPersist()(在 clearAll 前清掉待触发的防抖定时器), 而非在此 guard。
   const persistCanvasXml = useCallback(async () => {
     const sid = useSessionStore.getState().currentSessionId;
     if (!sid || !ggbRef.current) return;
+    if (canvasOwnerRef.current !== sid) return;   // 画布非该会话加载的内容(重挂载空白态)不落库
     const xml = ggbRef.current.getXML();
     if (!xml) return;
     try {
@@ -313,15 +322,19 @@ export default function ChatApp() {
         }
       });
     } catch {}
-    return () => { cancelPersist(); };
+    return () => {
+      cancelPersist();
+      // SPA 导航(如去设置页)不触发 beforeunload: 卸载时主动 flush, 防缓冲事件随实例被回收而丢失
+      void loggerRef.current.flush();
+    };
   }, [ggbReady, schedulePersist, cancelPersist]);
 
   // 离开页面兜底: sendBeacon 同步落当前画布 XML
   useEffect(() => {
     const onUnload = () => {
       const sid = useSessionStore.getState().currentSessionId;
-      // 画布 XML 兜底
-      if (sid && ggbRef.current) {
+      // 画布 XML 兜底(canvasOwnerRef 写保护同 persistCanvasXml: 空白重挂载态不覆盖旧会话)
+      if (sid && ggbRef.current && canvasOwnerRef.current === sid) {
         const xml = ggbRef.current.getXML();
         if (xml) {
           try {
@@ -490,6 +503,8 @@ export default function ChatApp() {
       const now = new Date().toISOString();
       upsert({ id, title: null, mode: config.mode, model: null, pinned: false, created_at: now, updated_at: now });
       setCurrent(id);
+      loadedSessionRef.current = id;            // 本次挂载已加载(新建即加载)
+      canvasOwnerRef.current = id;              // 画布刚 clearAll, 空内容归属新会话
       // 切换前先把旧会话(curId)的消息可靠落库(分组 fetch), 再切到新会话——与 persistCanvasXml 对称。
       // 替代旧的 setSession→flushNow(sendBeacon): sendBeacon 不保证送达, 是消息丢失根因。
       await loggerRef.current.switchTo(id);
@@ -568,13 +583,17 @@ export default function ChatApp() {
     setHistory([]);
     await ggbRef.current?.clearAll();
     setCurrent(null);   // 解除侧边栏选中(旧会话已清空, 不算当前)
+    loadedSessionRef.current = null;            // 本次挂载不再持有已加载会话(可重新加载任意会话)
+    canvasOwnerRef.current = null;              // 画布已清空, 无归属(空白态不得写任何会话)
     loggerRef.current.setSession('');  // 标记无会话: 防止后续 ggb.execCommand 内部 ggbExec 把无会话态画图事件 stamp 到旧会话造成污染
     setCanvasPerspective(null);
   }, [messages, execLines, cancelPersist, persistCanvasXml, setCurrent, upsert, ggbRef]);
 
   // 切换会话: 先持久化离开的会话 → 加载 → 重建 chat/trace/history → setXML 还原画布 → 设为当前
   const switchSession = useCallback(async (id: string) => {
-    if (id === useSessionStore.getState().currentSessionId) return;   // 读 fresh 值, 避免闭包陈旧导致保护失效
+    // 早退判据 = 本次挂载已实际加载的会话(ref 恒 fresh): 重挂载后运行态已重置而 store 存活旧 id,
+    // 若比对 store 值会把"重新加载当前会话"也挡掉 → 空白视图切不回来(实测)。重复点击仍正常早退。
+    if (id === loadedSessionRef.current) return;
     cancelPersist();
     abortRef.current?.abort();
     setError('');
@@ -592,6 +611,7 @@ export default function ChatApp() {
       setHistory(rebuildHistory(messages));
       setExecLines(rebuildExecLines(messages));
       setCurrent(id);                      // 切到新会话(后续自愈 persistCanvasXml 用新 id)
+      loadedSessionRef.current = id;       // 本次挂载已加载该会话(后续重复点击可早退)
       // 切换前先把离开会话的消息可靠落库(分组 fetch), 再切到新会话——与 persistCanvasXml 对称。
       // 替代旧的 setSession→flushNow(sendBeacon): sendBeacon 不保证送达, 是消息丢失根因。
       await loggerRef.current.switchTo(id);
@@ -609,6 +629,7 @@ export default function ChatApp() {
       } finally {
         restoringRef.current = false;
       }
+      canvasOwnerRef.current = id;         // 画布已替换为该会话内容(或已为其清空), 后续编辑可安全持久化
       // 恢复视角; 全屏模式下补开代数区
       const base = session?.perspective || 'G';
       const p = chatCollapsed ? (base === 'T' ? 'AT' : 'AG') : base;
@@ -636,6 +657,17 @@ export default function ChatApp() {
   useEffect(() => {
     if (currentSessionId && !loggerRef.current.getSessionId()) loggerRef.current.setSession(currentSessionId);
   }, [currentSessionId]);
+
+  // SPA 重挂载自动恢复(设置页往返实测丢状态): store 的 currentSessionId 存活而运行态已重置,
+  // 旧逻辑挂载不恢复 → 空白"新建"视图, 点当前会话又被早退挡住, 再点别会话触发空画布覆盖写。
+  // 此处主动恢复上次会话; 完整刷新 store 为 null → 不恢复(保持"刷新后空白画布"原决策)。
+  const restoredRef = useRef(false);
+  useEffect(() => {
+    if (!ggbReady || restoredRef.current) return;
+    restoredRef.current = true;            // 只试一次: 失败(如网络)留空白态, 用户可从侧栏手动重试
+    const sid = useSessionStore.getState().currentSessionId;
+    if (sid && loadedSessionRef.current !== sid) void switchSession(sid);
+  }, [ggbReady, switchSession]);
 
   // 加载会话列表:递增超时重试 [8s,16s,30s] + 退避 [1.5s,3s],抗慢网络/冷启动。
   // 自动重试与手动重试(侧栏按钮)共用;StrictMode 复挂载靠首行 abort 互斥。
