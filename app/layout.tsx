@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import 'katex/dist/katex.min.css';
 import './globals.css';
 import { AuthProvider } from '@/lib/auth';
+import DomainMigrationNotice from '@/components/DomainMigrationNotice';
 
 export const metadata: Metadata = {
   title: 'GGB Fable · GeoGebra AI 画布助手',
@@ -14,7 +15,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="zh-CN">
       <body>
-        <AuthProvider>{children}</AuthProvider>
+        <AuthProvider>
+          {children}
+          {/* 域名迁移公告: 挂在 children 之后, 同级同 z-index 时 DOM 靠后者盖上层 */}
+          <DomainMigrationNotice />
+        </AuthProvider>
       </body>
     </html>
   );

@@ -362,6 +362,11 @@ button { font-family: inherit; cursor: pointer; }
 .xhs-modal-value.mono { font-family: 'SF Mono', 'Fira Code', monospace; letter-spacing: 0.5px; }
 .xhs-modal-btn { padding: 10px 48px !important; font-size: 15px !important; border-radius: 10px !important; }
 
+/* 域名迁移公告: 新网址展示行(地址 + 复制按钮); 弹窗加宽避免长网址换行 */
+.domain-notice-modal { max-width: 480px; }
+.domain-notice-url { flex-direction: row; align-items: center; justify-content: space-between; gap: 8px; padding: 14px 18px; }
+.domain-notice-url .domain-notice-new { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 14px; font-weight: 700; color: #4f46e5; word-break: break-all; }
+
 .fade-up { animation: fadeInUp 0.7s ease both; }
 .fade-up.d1 { animation-delay: 0.1s; }
 .fade-up.d2 { animation-delay: 0.2s; }
