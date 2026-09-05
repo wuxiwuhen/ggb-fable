@@ -159,7 +159,7 @@ function fallbackCopy(text: string) {
 export default function ChatApp() {
   const { user, isAdmin, adminLoading, signOut } = useAuth();
   const config = useConfigStore();
-  const { sessions, currentSessionId, loadState, setSessions, setLoadState, setCurrent, upsert, patchCurrent } = useSessionStore();
+  const { sessions, currentSessionId, loadState, mergeSessions, setLoadState, setCurrent, upsert, patchCurrent } = useSessionStore();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [chatCollapsed, setChatCollapsed] = useState(false);
   const [commandPanelOpen, setCommandPanelOpen] = useState(false);
@@ -550,7 +550,7 @@ export default function ChatApp() {
     } finally {
       creatingSessionRef.current = false;
     }
-  }, [config, setSessions, setCurrent, upsert, cancelPersist, persistCanvasXml]);
+  }, [config, setCurrent, upsert, cancelPersist, persistCanvasXml]);
 
   const clearWorkspace = useCallback(async () => {
     // 重置命令面板（保持在命令面板模式，仅清空输入）
@@ -633,7 +633,7 @@ export default function ChatApp() {
     try {
       await persistCanvasXml();
       const res = await fetch(`/api/sessions?id=${id}`, { cache: 'no-store' });
-      if (!res.ok) return;
+      if (!res.ok) { setError(`会话加载失败 (${res.status}), 请稍后重试`); return; }  // 原为静默 return: 空白画布无提示, 像数据丢了
       const { session, messages }: { session: any; messages: ApiMessage[] } = await res.json();
       // 重建运行态
       const chatMsgs = rebuildChatMessages(messages);
@@ -706,14 +706,22 @@ export default function ChatApp() {
     sessionsLoadAbortRef.current?.abort();            // 覆盖:中断上一次 in-flight
     const controller = new AbortController();
     sessionsLoadAbortRef.current = controller;
-    setLoadState('loading');
+    // 静默刷新: 已就绪且本地有数据时不重置 loading(整页 loading 态会把现有条目闪没了)
+    const st = useSessionStore.getState();
+    if (st.loadState !== 'ready' || st.sessions.length === 0) setLoadState('loading');
     try {
       const res = await fetchWithRetry('/api/sessions', { signal: controller.signal });
-      if (controller.signal.aborted) return;          // 防:await 后再核
+      if (controller.signal.aborted) return;          // 防:await 后再核(新调用已接管状态)
+      if (res.status === 401) {
+        // token 过期(SPA 停留过久错过 middleware 刷新): 整页 reload 让 middleware 重建 cookie,
+        // 比停在错误态可用; 若确已登出会被送到 /login。fetchWithRetry 对 4xx 不重试, 401 等不到自愈。
+        window.location.reload();
+        return;
+      }
       if (!res.ok) { setLoadState('error'); return; } // 非 2xx(5xx 末次/4xx)→ 错误态,让用户点重试
       const data = await res.json();
       if (controller.signal.aborted) return;
-      setSessions(data.sessions || []);
+      mergeSessions(data.sessions || []);             // 合并非覆盖: 本地新建、服务端快照还没有的会话不被冲掉
       setLoadState('ready');
     } catch (e) {
       if (controller.signal.aborted) return;          // 被 abort → 静默,不写 error 污染后到者
@@ -722,16 +730,22 @@ export default function ChatApp() {
     } finally {
       if (sessionsLoadAbortRef.current === controller) sessionsLoadAbortRef.current = null;
     }
-  }, [setSessions, setLoadState]);
+  }, [mergeSessions, setLoadState]);
 
-  // 首次进入: 加载会话列表供侧边栏展示, 不自动恢复会话(刷新后直接空白画布)
+  // 首次进入: 加载会话列表供侧边栏展示, 不自动恢复会话(刷新后直接空白画布)。
+  // 挂载即拉, 不等画布就绪——列表与画布无依赖; 之前挂在 ggbReady 上: 画布初始化慢时侧栏
+  // 长时间停"加载中", 且 ggbReady 的 effect cleanup 会中止在途请求、重挂后不重拉, 卡死 loading 态。
   useEffect(() => {
-    if (!ggbReady) return;
-    autoStartIfDue();
     loadSessions();
     return () => { sessionsLoadAbortRef.current?.abort(); };  // 真正中断 fetch+退避(旧代码只置 cancelled,白跑一次跨区请求)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ggbReady]);
+  }, []);
+
+  // 画布就绪后仅负责新手引导的自动触发(列表加载已上移至挂载)
+  useEffect(() => {
+    if (!ggbReady) return;
+    autoStartIfDue();
+  }, [ggbReady, autoStartIfDue]);
 
   // 当前会话被删除(如在侧边栏删除) → 清空画布与消息, 恢复到初始空白态
   // loadState !== 'loading' 守卫: 避免初始加载期(currentSessionId 尚未赋值)误清空

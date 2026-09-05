@@ -27,6 +27,7 @@ interface SessionState {
   currentSessionId: string | null;     // 始终从 null 开始(避免与 switchSession 的 id===current 早退冲突)
   loadState: SessionLoadState;         // 列表加载状态:加载中/就绪/失败(sidebar 四态 + 清空守卫共用,单一数据源)
   setSessions: (s: SessionMeta[]) => void;
+  mergeSessions: (s: SessionMeta[]) => void;                 // 服务端列表与本地合并(不覆盖本地新会话)
   setLoadState: (s: SessionLoadState) => void;
   setCurrent: (id: string | null) => void;
   upsert: (s: SessionMeta) => void;                          // 新建或更新一条元数据
@@ -41,6 +42,13 @@ export const useSessionStore = create<SessionState>()((set) => ({
   currentSessionId: null,
   loadState: 'loading',                    // 初始即 loading:首帧 sidebar 显示加载态,清空守卫阻塞
   setSessions: (sessions) => set({ sessions }),
+  // 按 id 合并: 服务端行覆盖同 id 本地行(服务端为权威), 服务端快照里没有的本地条目保留——
+  // 挂载加载/晚到响应若直接 setSessions 覆盖, 会把"已惰性创建但快照后于创建"的当前会话冲出列表(实测丢失)。
+  mergeSessions: (incoming) => set((st) => {
+    const byId = new Map(st.sessions.map((s) => [s.id, s]));
+    for (const s of incoming) byId.set(s.id, { ...byId.get(s.id), ...s });
+    return { sessions: [...byId.values()] };
+  }),
   setLoadState: (loadState) => set({ loadState }),
   setCurrent: (currentSessionId) => {
     if (typeof window !== 'undefined') {
